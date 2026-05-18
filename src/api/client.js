@@ -12,7 +12,7 @@ export async function fetchMoList(params = {}) {
   if (params.status) qs.set('status', params.status)
   if (params.factory) qs.set('factory', params.factory)
   if (params.month) qs.set('month', params.month)
-  if (params.perPage) qs.set('per_page', params.perPage)
+  if (params.perPage) qs.set('max_records', params.perPage)
   return apiFetch(`/api/mo-list?${qs}`)
 }
 

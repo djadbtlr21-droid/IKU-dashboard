@@ -3,10 +3,10 @@ import { getAccessToken, zohoBase } from './_zoho.js';
 export default async function handler(req, res) {
   try {
     const token = await getAccessToken();
-    const perPage = req.query?.per_page || '200';
+    const maxRecords = req.query?.max_records || '200';
 
-    // Build URL — per_page only, NO page param (causes error 1060)
-    let url = `${zohoBase()}/report/All_MO?per_page=${perPage}`;
+    // Build URL — max_records param (per_page causes Zoho error 1060)
+    let url = `${zohoBase()}/report/All_MO?max_records=${maxRecords}`;
 
     const zres = await fetch(url, {
       headers: {

@@ -9,7 +9,7 @@ export default async function handler(req, res) {
 
     // Search by SKU using criteria filter
     const criteria = `(Style_SKU:equals:${sku})`;
-    const url = `${zohoBase()}/report/All_Styles?criteria=${encodeURIComponent(criteria)}&per_page=1`;
+    const url = `${zohoBase()}/report/All_Styles?criteria=${encodeURIComponent(criteria)}&max_records=1`;
 
     const zres = await fetch(url, {
       headers: {
