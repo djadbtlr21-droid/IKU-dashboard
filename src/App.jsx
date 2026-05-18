@@ -4,6 +4,7 @@ import ProtectedRoute from './contexts/ProtectedRoute'
 import Login from './pages/Login'
 import MoView from './pages/MoView'
 import Layout from './components/Layout'
+import ErrorBoundary from './components/ErrorBoundary'
 
 export default function App() {
   return (
@@ -13,7 +14,11 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Navigate to="/mo" replace />} />
-            <Route path="mo" element={<MoView />} />
+            <Route path="mo" element={
+              <ErrorBoundary>
+                <MoView />
+              </ErrorBoundary>
+            } />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

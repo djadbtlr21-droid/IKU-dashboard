@@ -7,8 +7,8 @@ import MoDetailModal from '../components/MoDetailModal'
 import { SkeletonCard, SkeletonTable } from '../components/SkeletonLoader'
 import {
   getMoNumber, getMoSku, getMoFactory, getMoStatus,
-  getPlanQty, getActualQty, getEndDate, getProgress, isOverdue,
-  STATUS_COLORS, getMonthKey,
+  getPlanQty, getActualQty, getEndDate, getProgress,
+  isDelayed, isOverdue, STATUS_COLORS, getMonthKey, getChartBucket,
 } from '../utils/moHelpers'
 
 const PAGE_SIZE = 50
@@ -23,8 +23,8 @@ function StatusBadge({ status }) {
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
       style={{ background: c.bg, color: c.text }}>
-      <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: c.dot }} />
-      {status || '—'}
+      <span className="w-1.5 h-1.5 rounded-full inline-block flex-shrink-0" style={{ background: c.dot }} />
+      <span className="truncate max-w-[120px]">{status || '—'}</span>
     </span>
   )
 }
@@ -34,7 +34,7 @@ function SummaryCard({ number, label, icon, color = '#C9A86E', loading }) {
   return (
     <div className="rounded-xl p-5 flex flex-col gap-2" style={{ background: '#252B3D' }}>
       <div className="flex items-center justify-between">
-        <span style={{ color: color, fontSize: 28, fontWeight: 700, fontFamily: 'Inter' }}>
+        <span style={{ color, fontSize: 28, fontWeight: 700, fontFamily: 'Inter' }}>
           {number}
         </span>
         <span>{icon}</span>
@@ -99,13 +99,9 @@ export default function MoView() {
     setError(null)
     fetchMoList({ perPage: 200 })
       .then((data) => {
-        console.log('[MoView] raw response:', JSON.stringify(data).slice(0, 1000))
+        console.log('[MoView] raw response keys:', data ? Object.keys(data) : null)
         const rows = data?.data || data?.records || data?.result || []
-        console.log('[MoView] parsed rows count:', rows.length)
-        if (rows.length > 0) {
-          console.log('[MoView] first record keys:', Object.keys(rows[0]))
-          console.log('[MoView] first record sample:', JSON.stringify(rows[0]).slice(0, 500))
-        }
+        console.log('[MoView] rows count:', rows.length)
         setMoList(rows)
       })
       .catch((err) => {
@@ -121,24 +117,24 @@ export default function MoView() {
     return () => window.removeEventListener('iku:refresh', loadData)
   }, [loadData])
 
-  // Months from data (last 4)
+  // Months derived from Plan_Year + Plan_Month
   const months = useMemo(() => {
     const keys = [...new Set(moList.map(getMonthKey).filter(Boolean))].sort().reverse()
-    return keys.slice(0, 4)
+    return keys.slice(0, 6)
   }, [moList])
 
-  // Default to current month if exists
+  // Default to current month
   useEffect(() => {
     if (months.length && selectedMonth === null) {
       const now = new Date()
       const yy = String(now.getFullYear()).slice(-2)
       const mm = String(now.getMonth() + 1).padStart(2, '0')
       const cur = `${yy}.${mm}`
-      if (months.includes(cur)) setSelectedMonth(cur)
+      setSelectedMonth(months.includes(cur) ? cur : months[0])
     }
   }, [months])
 
-  // Filtered by month + factory
+  // Filtered list
   const filtered = useMemo(() => {
     return moList.filter((mo) => {
       if (selectedMonth && getMonthKey(mo) !== selectedMonth) return false
@@ -147,32 +143,31 @@ export default function MoView() {
     })
   }, [moList, selectedMonth, selectedFactory])
 
-  // Summary stats (from full list, not filtered)
+  // Summary cards — computed from full list
   const stats = useMemo(() => {
     const total = moList.length
-    const inProgress = moList.filter((m) => /progress|진행/i.test(getMoStatus(m))).length
-    const completed = moList.filter((m) => /complet/i.test(getMoStatus(m))).length
-    const notStarted = moList.filter((m) => /not.start|미시작/i.test(getMoStatus(m))).length
-    const delayed = moList.filter((m) => isOverdue(m)).length
+    // In Progress: has Production_Status value and not delayed/completed
+    const inProgress = moList.filter((m) => {
+      const s = getMoStatus(m)
+      return s && !/complet/i.test(s) && !isDelayed(m)
+    }).length
+    const completed = moList.filter((m) => /complet|shipped/i.test(getMoStatus(m))).length
+    const notStarted = moList.filter((m) => !getMoStatus(m)).length
+    const delayed = moList.filter((m) => isDelayed(m)).length
     return { total, inProgress, completed, notStarted, delayed }
   }, [moList])
 
-  // Chart data: by factory
+  // Chart by factory
   const chartData = useMemo(() => {
     const factoryMap = {}
     filtered.forEach((mo) => {
       const f = getMoFactory(mo)
       if (!factoryMap[f]) factoryMap[f] = { factory: f, Completed: 0, 'In Progress': 0, 'Not Started': 0, Overdue: 0 }
-      if (isOverdue(mo)) { factoryMap[f].Overdue += 1; return }
-      const s = getMoStatus(mo)
-      if (/complet/i.test(s)) factoryMap[f].Completed += 1
-      else if (/progress/i.test(s)) factoryMap[f]['In Progress'] += 1
-      else factoryMap[f]['Not Started'] += 1
+      factoryMap[f][getChartBucket(mo)] += 1
     })
     return Object.values(factoryMap)
   }, [filtered])
 
-  // Sorting
   function handleSort(key) {
     if (sortKey === key) setSortDir((d) => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
@@ -202,22 +197,37 @@ export default function MoView() {
   const paged = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const CARDS = [
-    { label: '총 MO · 总MO', number: stats.total, color: '#C9A86E', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#C9A86E"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
-    { label: '진행중 · 进行中', number: stats.inProgress, color: '#C9A86E', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#C9A86E"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
-    { label: '완료 · 完成', number: stats.completed, color: '#10B981', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#10B981"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
-    { label: '미시작 · 未开始', number: stats.notStarted, color: '#94A3B8', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#94A3B8"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
-    { label: '지연 · 延误', number: stats.delayed, color: '#EF4444', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#EF4444"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg> },
+    {
+      label: '총 MO · 总MO', number: stats.total, color: '#C9A86E',
+      icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#C9A86E"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>,
+    },
+    {
+      label: '진행중 · 进行中', number: stats.inProgress, color: '#C9A86E',
+      icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#C9A86E"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+    },
+    {
+      label: '완료 · 完成', number: stats.completed, color: '#10B981',
+      icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#10B981"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+    },
+    {
+      label: '미시작 · 未开始', number: stats.notStarted, color: '#94A3B8',
+      icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#94A3B8"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+    },
+    {
+      label: '지연 · 延误', number: stats.delayed, color: '#EF4444',
+      icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#EF4444"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>,
+    },
   ]
 
   const COL = [
     { key: 'mo', label: 'MO#' },
     { key: 'sku', label: 'Style SKU · 款号' },
     { key: 'factory', label: '공장 · 工厂' },
-    { key: 'plan', label: '계획수량 · 计划' },
-    { key: 'actual', label: '실적수량 · 实际' },
+    { key: 'plan', label: '계획 · 计划' },
+    { key: 'actual', label: '실적 · 实际' },
     { key: 'progress', label: '진행률 · 进度' },
-    { key: 'endDate', label: '마감일 · 截止日' },
-    { key: 'status', label: '상태 · 状态' },
+    { key: 'endDate', label: '출하일 · 出货日' },
+    { key: 'status', label: '생산상태 · 生产状态' },
   ]
 
   return (
@@ -237,7 +247,7 @@ export default function MoView() {
       )}
 
       {/* Month tabs */}
-      {!loading && (
+      {!loading && months.length > 0 && (
         <div className="mb-4">
           <MonthTabs months={months} selected={selectedMonth} onChange={(m) => { setSelectedMonth(m); setPage(1) }} />
         </div>
@@ -253,7 +263,7 @@ export default function MoView() {
             <BarChart
               data={chartData}
               layout="vertical"
-              margin={{ top: 0, right: 20, bottom: 0, left: 80 }}
+              margin={{ top: 0, right: 20, bottom: 0, left: 90 }}
               onClick={(d) => {
                 if (d?.activePayload?.[0]) {
                   const f = d.activePayload[0].payload.factory
@@ -268,7 +278,7 @@ export default function MoView() {
                 dataKey="factory"
                 stroke="#3A4268"
                 tick={{ fill: '#8896B3', fontSize: 11 }}
-                width={76}
+                width={86}
               />
               <Tooltip
                 contentStyle={{ background: '#252B3D', border: '1px solid rgba(201,168,110,0.3)', borderRadius: 8, fontSize: 12 }}
@@ -339,6 +349,7 @@ export default function MoView() {
                   const progress = getProgress(mo)
                   const overdue = isOverdue(mo)
                   const endDate = getEndDate(mo)
+                  const status = getMoStatus(mo)
                   return (
                     <tr
                       key={moId || i}
@@ -348,8 +359,8 @@ export default function MoView() {
                         borderBottom: '1px solid rgba(201,168,110,0.06)',
                         background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)',
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(201,168,110,0.06)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)'}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(201,168,110,0.06)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
                     >
                       <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: '#C9A86E' }}>
                         {getMoNumber(mo)}
@@ -360,10 +371,10 @@ export default function MoView() {
                       <td className="px-4 py-3 whitespace-nowrap" style={{ color: '#F5F1E8' }}>
                         {getMoFactory(mo)}
                       </td>
-                      <td className="px-4 py-3 text-right" style={{ color: '#8896B3' }}>
+                      <td className="px-4 py-3 text-right whitespace-nowrap" style={{ color: '#8896B3' }}>
                         {getPlanQty(mo).toLocaleString()}
                       </td>
-                      <td className="px-4 py-3 text-right" style={{ color: '#F5F1E8' }}>
+                      <td className="px-4 py-3 text-right whitespace-nowrap" style={{ color: '#F5F1E8' }}>
                         {getActualQty(mo).toLocaleString()}
                       </td>
                       <td className="px-4 py-3" style={{ minWidth: 120 }}>
@@ -377,13 +388,11 @@ export default function MoView() {
                           <span className="text-xs w-8 text-right" style={{ color: '#C9A86E' }}>{progress}%</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap"
-                        style={{ color: overdue ? '#EF4444' : '#8896B3' }}>
-                        {endDate || '—'}
-                        {overdue && <span className="ml-1 text-xs">⚠</span>}
+                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: overdue ? '#EF4444' : '#8896B3' }}>
+                        {endDate || '—'}{overdue && <span className="ml-1">⚠</span>}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <StatusBadge status={getMoStatus(mo)} />
+                      <td className="px-4 py-3">
+                        <StatusBadge status={status} />
                       </td>
                     </tr>
                   )
@@ -405,26 +414,16 @@ export default function MoView() {
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
                 className="px-3 py-1 rounded-lg text-xs"
-                style={{
-                  background: 'rgba(201,168,110,0.1)',
-                  color: page === 1 ? '#3A4268' : '#C9A86E',
-                  cursor: page === 1 ? 'not-allowed' : 'pointer',
-                }}
+                style={{ background: 'rgba(201,168,110,0.1)', color: page === 1 ? '#3A4268' : '#C9A86E', cursor: page === 1 ? 'not-allowed' : 'pointer' }}
               >
                 ← 이전
               </button>
-              <span className="px-3 py-1 text-xs" style={{ color: '#8896B3' }}>
-                {page} / {totalPages}
-              </span>
+              <span className="px-3 py-1 text-xs" style={{ color: '#8896B3' }}>{page} / {totalPages}</span>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
                 className="px-3 py-1 rounded-lg text-xs"
-                style={{
-                  background: 'rgba(201,168,110,0.1)',
-                  color: page === totalPages ? '#3A4268' : '#C9A86E',
-                  cursor: page === totalPages ? 'not-allowed' : 'pointer',
-                }}
+                style={{ background: 'rgba(201,168,110,0.1)', color: page === totalPages ? '#3A4268' : '#C9A86E', cursor: page === totalPages ? 'not-allowed' : 'pointer' }}
               >
                 다음 →
               </button>
@@ -433,7 +432,6 @@ export default function MoView() {
         )}
       </div>
 
-      {/* MO Detail Modal */}
       {selectedMo && (
         <MoDetailModal
           moId={selectedMo.id}
