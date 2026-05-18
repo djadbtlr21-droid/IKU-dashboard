@@ -1,0 +1,48 @@
+import { getAccessToken, zohoBase } from './_zoho.js';
+
+export default async function handler(req, res) {
+  try {
+    const token = await getAccessToken();
+    const perPage = req.query?.per_page || '200';
+
+    // Build URL — per_page only, NO page param (causes error 1060)
+    let url = `${zohoBase()}/report/All_MO?per_page=${perPage}`;
+
+    const zres = await fetch(url, {
+      headers: {
+        Authorization: `Zoho-oauthtoken ${token}`,
+        Accept: 'application/json',
+      },
+    });
+
+    const raw = await zres.text();
+    let body = null;
+    try { body = raw ? JSON.parse(raw) : null; } catch { body = { raw }; }
+
+    // DIAGNOSTIC: log raw response to discover actual field names
+    console.log('[mo-list] status:', zres.status);
+    console.log('[mo-list] response keys:', body ? Object.keys(body) : 'null');
+    if (body?.data?.length) {
+      console.log('[mo-list] first record keys:', Object.keys(body.data[0]));
+      console.log('[mo-list] first record:', JSON.stringify(body.data[0]).slice(0, 800));
+    }
+
+    if (!zres.ok) {
+      if (zres.status === 400) {
+        console.log('[mo-list] 400 — treating as empty:', raw.slice(0, 200));
+        return res.status(200).json({ code: 3000, data: [], message: 'Empty result' });
+      }
+      console.error('[mo-list] upstream error', { status: zres.status, url, body });
+      return res.status(zres.status).json({ error: 'Zoho API ' + zres.status, upstream: body });
+    }
+
+    return res.status(200).json(body);
+  } catch (err) {
+    console.error('[mo-list] error', err);
+    return res.status(500).json({
+      error: err.message || String(err),
+      upstream: err.upstream || null,
+      tokenUrl: err.tokenUrl || null,
+    });
+  }
+}
