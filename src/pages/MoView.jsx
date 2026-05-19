@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { fetchMoList } from '../api/client'
 import MoDetailModal from '../components/MoDetailModal'
+import ZohoImage from '../components/ZohoImage'
 import { SkeletonCard } from '../components/SkeletonLoader'
 import {
   getMoNumber, getMoSku, getMoFactory,
@@ -61,16 +62,6 @@ function statusOverlayColor(mo, G) {
 }
 
 // ──────────────────────────────────────────────────────────
-// Image URL helper — proxies through /api/zoho-image
-// ──────────────────────────────────────────────────────────
-function getMoImageUrl(mo, idx = 0) {
-  if (!mo?.ID) return null
-  const arr = Array.isArray(mo.Style_Image) ? mo.Style_Image : (mo.Style_Image ? [mo.Style_Image] : [])
-  if (!arr.length) return null
-  return `/api/zoho-image?report=All_MO&recordId=${encodeURIComponent(mo.ID)}&field=Style_Image&index=${idx}`
-}
-
-// ──────────────────────────────────────────────────────────
 // Circular progress
 // ──────────────────────────────────────────────────────────
 function CircularProgress({ G, value, size = 80, stroke = 9 }) {
@@ -119,7 +110,7 @@ function LegendDot({ color, label }) {
 // ──────────────────────────────────────────────────────────
 // Timeline gantt row
 // ──────────────────────────────────────────────────────────
-function TimelineGrid({ G, mos, monthStart, monthEnd }) {
+function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
   const totalDays = Math.ceil((monthEnd - monthStart) / 86400000)
   const today = new Date()
   const todayPct = Math.max(0, Math.min(1, (today - monthStart) / (monthEnd - monthStart)))
@@ -172,17 +163,22 @@ function TimelineGrid({ G, mos, monthStart, monthEnd }) {
           const progress = getProgress(mo)
           const actualWidth = bars.length ? `${progress}%` : "0%"
 
-          const img = getMoImageUrl(mo)
-
           return (
-            <div key={mo.ID || i} style={{ display: "flex", alignItems: "center", borderBottom: `1px solid ${G.hair}`, padding: "8px 0", minHeight: 44 }}>
-              {/* Left: meta */}
-              <div style={{ width: 220, display: "flex", alignItems: "center", gap: 8, paddingRight: 8, minWidth: 220 }}>
+            <div key={mo.ID || i} style={{ display: "flex", alignItems: "center", borderBottom: `1px solid ${G.hair}`, minHeight: 52 }}>
+              {/* Left: meta (clickable) */}
+              <div
+                onClick={() => onClickMo && onClickMo(mo)}
+                title={`${getMoNumber(mo)} — 클릭하여 상세 보기 / 点击查看详情`}
+                style={{
+                  width: 220, minWidth: 220, display: "flex", alignItems: "center", gap: 8,
+                  padding: "8px 10px 8px 4px", cursor: "pointer", borderRadius: 6,
+                  transition: "background .15s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = G.nh }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent" }}
+              >
                 <div style={{ width: 32, height: 40, borderRadius: 4, background: G.cardAlt, overflow: "hidden", flexShrink: 0, border: `1px solid ${G.hair}` }}>
-                  {img && (
-                    <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                      onError={e => { e.currentTarget.style.display = "none" }} />
-                  )}
+                  <ZohoImage record={mo} field="Style_Image" report="All_MO" G={G} iconSize={14} placeholderText="" />
                 </div>
                 <div style={{ overflow: "hidden", flex: 1 }}>
                   <div className="num" style={{ fontSize: 11, fontWeight: 700, color: G.accent, lineHeight: 1.2 }}>{getMoNumber(mo)}</div>
@@ -228,8 +224,6 @@ function TimelineGrid({ G, mos, monthStart, monthEnd }) {
 // MOCard for grid
 // ──────────────────────────────────────────────────────────
 function MOCard({ G, mo, onClick }) {
-  const [imgError, setImgError] = useState(false)
-  const img = getMoImageUrl(mo)
   const overlay = statusOverlayColor(mo, G)
   const planQ = getPlanQty(mo)
   const actQ = getActualQty(mo)
@@ -249,15 +243,7 @@ function MOCard({ G, mo, onClick }) {
     >
       {/* Image */}
       <div style={{ aspectRatio: "3/4", background: G.cardAlt, position: "relative" }}>
-        {img && !imgError ? (
-          <img src={img} alt={getMoNumber(mo)} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-            onError={() => setImgError(true)} />
-        ) : (
-          <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: G.fa, fontSize: 10 }}>
-            <Package size={28} strokeWidth={1.4} />
-            <span style={{ marginTop: 4 }}>No Image</span>
-          </div>
-        )}
+        <ZohoImage record={mo} field="Style_Image" report="All_MO" G={G} alt={getMoNumber(mo)} iconSize={28} />
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "5px 10px", background: overlay.bg, color: overlay.color, fontSize: 11, textAlign: "center", fontWeight: 600, letterSpacing: ".3px" }}>
           {overlay.stage}
         </div>
@@ -642,7 +628,7 @@ export default function MoView({ G }) {
         ) : filteredMOs.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: G.fa, fontSize: 12 }}>일치하는 MO 없음 · 无匹配MO</div>
         ) : (
-          <TimelineGrid G={G} mos={filteredMOs} monthStart={monthRange.start} monthEnd={monthRange.end} />
+          <TimelineGrid G={G} mos={filteredMOs} monthStart={monthRange.start} monthEnd={monthRange.end} onClickMo={(m) => setSelectedMo({ id: m.ID, row: m })} />
         )}
       </div>
 

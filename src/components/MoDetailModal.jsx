@@ -3,6 +3,9 @@ import { X, Shirt, Package, Truck, Scissors, ChevronRight, ChevronDown, ZoomIn, 
 import QRCode from 'qrcode'
 import { fetchMoDetail } from '../api/client'
 import { parseSpecJSON, parseZohoDate, isOverdue, isDelayed } from '../utils/moHelpers'
+import { getColorHex, getTextColorOnBg } from '../utils/colorMap'
+import { getImageUrl, getMoImageCandidates } from '../utils/imageUrl'
+import ZohoImage from './ZohoImage'
 
 // ──────────────────────────────────────────────────────────
 // Helpers
@@ -27,40 +30,9 @@ function fmtMoney(v, prefix = '¥') {
   return `${prefix}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-const COLOR_HEX = {
-  BLACK: '#1A1A1A', BLK: '#1A1A1A', "검정": '#1A1A1A', "黑": '#1A1A1A',
-  NAVY: '#1B2A4A', NVY: '#1B2A4A', "네이비": '#1B2A4A', "深蓝": '#1B2A4A',
-  WHITE: '#FAFAF7', WHT: '#FAFAF7', "흰색": '#FAFAF7', "白": '#FAFAF7',
-  'W/C': '#F5F5F0', WC: '#F5F5F0',
-  GRAY: '#8E8E93', GREY: '#8E8E93', "회색": '#8E8E93',
-  CREAM: '#F5E6C8', BEIGE: '#D4BFA0', IVORY: '#F0EAD6',
-  RED: '#D32F2F', BLUE: '#1976D2', GREEN: '#388E3C',
-  PINK: '#F48FB1', YELLOW: '#FBC02D', ORANGE: '#F57C00',
-  BROWN: '#795548', PURPLE: '#7B1FA2',
-}
-
-function colorHash(name) {
-  let h = 0
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0
-  const r = (h & 0xFF), g = ((h >> 8) & 0xFF), b = ((h >> 16) & 0xFF)
-  return `rgb(${r},${g},${b})`
-}
-
-function colorFor(name) {
-  if (!name) return '#C8C0B2'
-  const upper = String(name).toUpperCase().replace(/\s/g, '')
-  return COLOR_HEX[upper] || colorHash(upper)
-}
-
-// White-or-black text on color disc
-function readableText(hex) {
-  if (!hex || !hex.startsWith('#')) return '#FFFFFF'
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-  return lum > 0.55 ? '#1A1714' : '#FFFFFF'
-}
+// Color helpers come from src/utils/colorMap.js — single source of truth
+const colorFor = getColorHex
+const readableText = getTextColorOnBg
 
 // ──────────────────────────────────────────────────────────
 // Sub-components
@@ -92,28 +64,23 @@ function Field({ G, label, value, badge, badgeColor }) {
   )
 }
 
-function ImageCell({ G, label, sublabel, src, onZoom }) {
-  const [err, setErr] = useState(false)
+function ImageCell({ G, label, sublabel, record, field, report = 'All_MO', onZoom, hasImage }) {
   return (
     <div style={{ background: G.cardAlt, border: `1px solid ${G.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '8px 12px', borderBottom: `1px solid ${G.hair}` }}>
         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', color: G.accent, textTransform: 'uppercase' }}>{label}</div>
         {sublabel && <div style={{ fontSize: 10, color: G.mu, marginTop: 1 }}>{sublabel}</div>}
       </div>
-      <div style={{ aspectRatio: '3/4', position: 'relative', cursor: src && !err ? 'zoom-in' : 'default' }}
-        onClick={() => src && !err && onZoom && onZoom(src)}>
-        {src && !err ? (
-          <>
-            <img src={src} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-              onError={() => setErr(true)} />
-            <div style={{ position: 'absolute', top: 6, right: 6, padding: 4, borderRadius: 6, background: 'rgba(26,23,20,0.55)', color: '#FFF', display: 'flex' }}>
-              <ZoomIn size={11} />
-            </div>
-          </>
-        ) : (
-          <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: G.fa, fontSize: 10, gap: 6 }}>
-            <Package size={28} strokeWidth={1.4} />
-            <span>이미지 없음 · 无图片</span>
+      <div style={{ aspectRatio: '3/4', position: 'relative', cursor: hasImage ? 'zoom-in' : 'default' }}
+        onClick={() => {
+          if (!hasImage || !onZoom) return
+          const url = getImageUrl(record, field, report, 0)
+          if (url) onZoom(url)
+        }}>
+        <ZohoImage record={record} field={field} report={report} G={G} alt={label} iconSize={28} />
+        {hasImage && (
+          <div style={{ position: 'absolute', top: 6, right: 6, padding: 4, borderRadius: 6, background: 'rgba(26,23,20,0.55)', color: '#FFF', display: 'flex' }}>
+            <ZoomIn size={11} />
           </div>
         )}
       </div>
@@ -147,20 +114,30 @@ function QRCell({ G, mo, sku, factory }) {
   )
 }
 
-function ColorDisc({ G, name, code, ptone, size = 110 }) {
+function ColorDisc({ G, name, code, ptone, swatchUrl, size = 110 }) {
+  const [imgFailed, setImgFailed] = useState(false)
   const hex = colorFor(name)
   const textColor = readableText(hex)
+  const useImage = swatchUrl && !imgFailed
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 130 }}>
       <div style={{
         width: size, height: size, borderRadius: '50%',
-        background: hex, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: useImage ? `${G.cardAlt}` : hex,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: G.dk ? '0 4px 16px rgba(0,0,0,0.4)' : '0 4px 16px rgba(26,23,20,0.12)',
         border: `2px solid ${G.dk ? G.hair : '#FFFFFF'}`,
+        overflow: 'hidden', position: 'relative',
       }}>
-        <span className="syne" style={{ fontSize: 13, fontWeight: 700, color: textColor, letterSpacing: '1px', textTransform: 'uppercase' }}>
-          {String(name || '').slice(0, 6)}
-        </span>
+        {useImage ? (
+          <img src={swatchUrl} alt={name || ''}
+            onError={() => setImgFailed(true)}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          <span className="syne" style={{ fontSize: 13, fontWeight: 700, color: textColor, letterSpacing: '1px', textTransform: 'uppercase' }}>
+            {String(name || '').slice(0, 6)}
+          </span>
+        )}
       </div>
       <div style={{ fontSize: 12, fontWeight: 700, color: G.tx, letterSpacing: '.3px', textTransform: 'uppercase' }}>{name || '—'}</div>
       {code && <div className="num" style={{ fontSize: 11, color: G.accent, fontWeight: 600 }}>#{code}</div>}
@@ -414,12 +391,16 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
   const actualQty = Number(src.Acture_Total_Quantity || 0)
   const shipRate = planQty ? (actualQty / planQty) * 100 : 0
 
-  // Image URL helper
-  const imgUrl = (field, index = 0) => `/api/zoho-image?report=All_MO&recordId=${encodeURIComponent(id)}&field=${encodeURIComponent(field)}&index=${index}`
-
-  const styleImg = (Array.isArray(src.Style_Image) ? src.Style_Image.length : (src.Style_Image ? 1 : 0)) > 0 ? imgUrl('Style_Image', 0) : null
-  const topFlatImg = (Array.isArray(src.Top_Flat_Image) ? src.Top_Flat_Image.length : (src.Top_Flat_Image ? 1 : 0)) > 0 ? imgUrl('Top_Flat_Image', 0) : null
-  const bottomFlatImg = (Array.isArray(src.Bottom_Flat_Image) ? src.Bottom_Flat_Image.length : (src.Bottom_Flat_Image ? 1 : 0)) > 0 ? imgUrl('Bottom_Flat_Image', 0) : null
+  // Image field availability — used to enable the zoom cursor
+  const hasField = (f) => {
+    const v = src?.[f]
+    if (!v) return false
+    if (Array.isArray(v)) return v.length > 0
+    return true
+  }
+  const hasStyleImg = hasField('Style_Image')
+  const hasTopFlat = hasField('Top_Flat_Image')
+  const hasBottomFlat = hasField('Bottom_Flat_Image')
 
   // Plan/Actual lines
   const planLines = (fullRecord?.Plan_MO_Lines || []).filter(Boolean)
@@ -430,7 +411,20 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
     const map = new Map()
     planLines.forEach(l => {
       const name = safe(l.Plan_Color || l.Color || l.color)
-      if (!map.has(name)) map.set(name, { name, code: l.Plan_Color_Code || l.Color_Code || '', ptone: l.Pantone || l.PTone || '' })
+      if (!map.has(name)) {
+        // Try to extract a swatch URL from the subform row if Zoho returned one
+        const swatchUrl = l.Color_Image
+          ? (Array.isArray(l.Color_Image) && l.Color_Image.length
+              ? `/api/zoho-image?filepath=${encodeURIComponent(typeof l.Color_Image[0] === 'string' ? l.Color_Image[0] : (l.Color_Image[0]?.url || l.Color_Image[0]?.filepath || ''))}`
+              : (typeof l.Color_Image === 'string' ? `/api/zoho-image?filepath=${encodeURIComponent(l.Color_Image)}` : null))
+          : null
+        map.set(name, {
+          name,
+          code: l.Plan_Color_Code || l.Color_Code || '',
+          ptone: l.Pantone || l.PTone || '',
+          swatchUrl,
+        })
+      }
     })
     return Array.from(map.values()).filter(c => c.name && c.name !== '—')
   }, [planLines])
@@ -541,9 +535,9 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
                 B. Image grid (Style / Top / Bottom / QR)
             ────────────────────────────────────────────── */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 22 }}>
-              <ImageCell G={T} label="Style Image" sublabel="스타일 · 款式" src={styleImg} onZoom={setZoomSrc} />
-              <ImageCell G={T} label="Top Flat" sublabel="상의도안 · 上衣图" src={topFlatImg} onZoom={setZoomSrc} />
-              <ImageCell G={T} label="Bottom Flat" sublabel="하의도안 · 下装图" src={bottomFlatImg} onZoom={setZoomSrc} />
+              <ImageCell G={T} label="Style Image" sublabel="스타일 · 款式" record={src} field="Style_Image" report="All_MO" hasImage={hasStyleImg} onZoom={setZoomSrc} />
+              <ImageCell G={T} label="Top Flat" sublabel="상의도안 · 上衣图" record={src} field="Top_Flat_Image" report="All_MO" hasImage={hasTopFlat} onZoom={setZoomSrc} />
+              <ImageCell G={T} label="Bottom Flat" sublabel="하의도안 · 下装图" record={src} field="Bottom_Flat_Image" report="All_MO" hasImage={hasBottomFlat} onZoom={setZoomSrc} />
               <QRCell G={T} mo={moNumber} sku={sku} factory={factoryName} />
             </div>
 
@@ -555,7 +549,7 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
                 <SectionTitle G={T} icon={<Shirt size={14} style={{ color: T.accent }} />} label="Color Image · 색상 · 色卡" />
                 <div style={{ background: T.cardAlt, border: `1px solid ${T.border}`, borderRadius: 12, padding: 24, display: 'flex', gap: 28, flexWrap: 'wrap', justifyContent: 'flex-start' }}>
                   {colorEntries.map((c, i) => (
-                    <ColorDisc key={c.name + i} G={T} name={c.name} code={c.code} ptone={c.ptone} />
+                    <ColorDisc key={c.name + i} G={T} name={c.name} code={c.code} ptone={c.ptone} swatchUrl={c.swatchUrl} />
                   ))}
                 </div>
               </div>
