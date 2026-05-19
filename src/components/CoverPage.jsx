@@ -114,7 +114,7 @@ function LoginPopup({ onClose, onAuth }) {
         background:"#FFFFFF",borderRadius:12,padding:"48px 40px",width:360,
         textAlign:"center",boxShadow:"0 24px 64px rgba(0,0,0,0.15)",
       }}>
-        <p style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:700,color:"#1A1714",letterSpacing:"-.5px"}}>JERA PREMIUM</p>
+        <p style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:700,color:"#1A1714",letterSpacing:"-.5px"}}>IKU ERP</p>
         <p style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:12,color:"#9A9590",letterSpacing:"2px",marginTop:8,marginBottom:32}}>대시보드 접속</p>
 
         <label style={{display:"block",fontSize:9,color:"#9A9590",letterSpacing:"3px",textAlign:"left",marginBottom:6,fontWeight:500}}>PASSWORD</label>
@@ -157,6 +157,7 @@ export default function CoverPage({ onEnter }) {
 
   const handleAuth = () => {
     setAuthed(true)
+    try { sessionStorage.setItem("iku_auth", "1") } catch {}
     setTimeout(() => { onEnter() }, 1500)
   }
 
@@ -171,7 +172,7 @@ export default function CoverPage({ onEnter }) {
       `}</style>
 
       <div style={{position:"fixed",top:0,left:0,right:0,zIndex:30,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"20px 32px"}}>
-        <span style={{fontSize:10,fontWeight:400,color:"#9A9590",letterSpacing:"3px"}}>SYS.IO · JERA—OPS</span>
+        <span style={{fontSize:10,fontWeight:400,color:"#9A9590",letterSpacing:"3px"}}>SYS.IO · IKU—OPS</span>
         <span style={{fontSize:10,fontWeight:400,color:"#9A9590",letterSpacing:"3px"}}>01 HOME · 02 생산 · 03 판매 · 04 TERMINAL</span>
       </div>
 
@@ -190,8 +191,8 @@ export default function CoverPage({ onEnter }) {
           textShadow:"1px 1px 0px rgba(0,0,0,0.15), 2px 2px 4px rgba(0,0,0,0.08)",
           mixBlendMode:"overlay",userSelect:"none",
         }}>
-          <div>JERA</div>
-          <div>PREMIUM</div>
+          <div>IKU</div>
+          <div>ERP</div>
           <div>DASHBOARD</div>
         </div>
 
@@ -223,11 +224,11 @@ export default function CoverPage({ onEnter }) {
         <span style={{fontSize:8,color:"#9A9590",letterSpacing:"3px",fontWeight:500}}>OBJECTIVE</span>
         <span style={{fontSize:12,color:"#8A8278"}}>의류 생산·판매 통합 운영 플랫폼.</span>
         <span style={{fontSize:8,color:"#9A9590",letterSpacing:"3px",fontWeight:500,marginTop:8}}>PROTOCOL</span>
-        <span style={{fontSize:11,color:"#1A1714",fontWeight:500}}>JERA-OPS-2026</span>
+        <span style={{fontSize:11,color:"#1A1714",fontWeight:500}}>IKU-OPS-2026</span>
       </div>
 
       <div style={{position:"absolute",bottom:32,right:32,zIndex:20}}>
-        <span style={{fontSize:8,color:"#9A9590",letterSpacing:"3px"}}>© JERA PREMIUM 2026</span>
+        <span style={{fontSize:8,color:"#9A9590",letterSpacing:"3px"}}>© IKU ERP 2026</span>
       </div>
 
       {showLogin && <LoginPopup onClose={()=>setShowLogin(false)} onAuth={handleAuth}/>}

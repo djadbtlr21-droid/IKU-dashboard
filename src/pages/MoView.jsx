@@ -8,82 +8,86 @@ import { SkeletonCard, SkeletonTable } from '../components/SkeletonLoader'
 import {
   getMoNumber, getMoSku, getMoFactory, getMoStatus,
   getPlanQty, getActualQty, getEndDate, getProgress,
-  isDelayed, isOverdue, STATUS_COLORS, getMonthKey, getChartBucket,
+  isDelayed, isOverdue, getMonthKey, getChartBucket,
 } from '../utils/moHelpers'
 
 const PAGE_SIZE = 50
 
-function SortIcon({ dir }) {
-  if (!dir) return <span style={{ color: '#3A4268' }}>⇅</span>
-  return <span style={{ color: '#C9A86E' }}>{dir === 'asc' ? '↑' : '↓'}</span>
+const SOFT_PALETTE = ["#C4B5FD", "#FCA5A5", "#6EE7B7", "#93C5FD", "#FCD34D", "#F9A8D4", "#A5F3FC", "#D9F99D"]
+
+// Chart status → SOFT_PALETTE
+const STATUS_HUES = {
+  Completed: "#6EE7B7",
+  "In Progress": "#C4B5FD",
+  "Not Started": "#A5F3FC",
+  Overdue: "#FCA5A5",
 }
 
-function StatusBadge({ status }) {
-  const c = STATUS_COLORS(status)
+function Rail({ G }) { return G.dk ? <span className="rail" /> : null }
+
+function SortIcon({ G, dir }) {
+  if (!dir) return <span style={{ color: G.fa }}>⇅</span>
+  return <span style={{ color: G.primary }}>{dir === 'asc' ? '↑' : '↓'}</span>
+}
+
+function StatusBadge({ G, status }) {
+  const map = {
+    "Completed": G.ok, "완료": G.ok, "Shipped": G.ok,
+    "In Progress": G.cool, "진행중": G.cool,
+    "Not Started": G.mu, "미시작": G.mu, "미오더": G.mu,
+    "Overdue": G.bad, "지연": G.bad,
+  }
+  let c = G.mu
+  for (const [k, v] of Object.entries(map)) {
+    if (status && status.includes(k)) { c = v; break }
+  }
+  const bg = G.dk ? `${c}22` : `${c}1A`
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
-      style={{ background: c.bg, color: c.text }}>
-      <span className="w-1.5 h-1.5 rounded-full inline-block flex-shrink-0" style={{ background: c.dot }} />
-      <span className="truncate max-w-[120px]">{status || '—'}</span>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600, color: c, background: bg, letterSpacing: ".1px", whiteSpace: "nowrap" }}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: c }} />
+      <span style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}>{status || '—'}</span>
     </span>
   )
 }
 
-function SummaryCard({ number, label, icon, color = '#C9A86E', loading }) {
-  if (loading) return <SkeletonCard />
+function KPI({ G, label, value, sub, dot }) {
   return (
-    <div className="rounded-xl p-5 flex flex-col gap-2" style={{ background: '#252B3D' }}>
-      <div className="flex items-center justify-between">
-        <span style={{ color, fontSize: 28, fontWeight: 700, fontFamily: 'Inter' }}>
-          {number}
-        </span>
-        <span>{icon}</span>
+    <div className="card" style={{ padding: "20px 24px" }}>
+      <Rail G={G} />
+      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10 }}>
+        {dot && <span style={{ width: 7, height: 7, borderRadius: "50%", background: dot, boxShadow: G.dk ? "none" : `0 0 0 3px ${dot}22` }} />}
+        <p style={{ fontSize: 13, color: G.mu, letterSpacing: "1px", fontWeight: 500 }}>{label}</p>
       </div>
-      <p className="text-xs font-medium" style={{ color: '#8896B3' }}>{label}</p>
+      <p className="num" style={{ fontSize: 26, fontWeight: 700, color: G.tx, lineHeight: 1.2 }}>{value}</p>
+      {sub && <p className="num" style={{ fontSize: 11, color: G.mu, marginTop: 8 }}>{sub}</p>}
     </div>
   )
 }
 
-function MonthTabs({ months, selected, onChange }) {
+function MonthTabs({ G, months, selected, onChange }) {
+  const tabStyle = (active) => ({
+    padding: "7px 14px",
+    fontSize: 12,
+    borderRadius: 999,
+    fontWeight: 600,
+    cursor: "pointer",
+    border: `1px solid ${active ? G.primary : G.border}`,
+    background: active ? (G.dk ? "rgba(232,200,152,0.12)" : "rgba(201,168,110,0.12)") : "transparent",
+    color: active ? G.accent : G.mu,
+    transition: "all .15s",
+    letterSpacing: ".2px",
+  })
   return (
-    <div className="flex gap-2 flex-wrap">
-      <button
-        onClick={() => onChange(null)}
-        className="px-4 py-1.5 rounded-lg text-xs font-semibold transition-all"
-        style={{
-          background: selected === null ? 'rgba(201,168,110,0.15)' : 'transparent',
-          color: selected === null ? '#C9A86E' : '#8896B3',
-          border: selected === null ? '1px solid rgba(201,168,110,0.3)' : '1px solid transparent',
-        }}
-      >
-        전체 · 全部
-      </button>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <button onClick={() => onChange(null)} style={tabStyle(selected === null)}>전체 · 全部</button>
       {months.map((m) => (
-        <button
-          key={m}
-          onClick={() => onChange(m)}
-          className="px-4 py-1.5 rounded-lg text-xs font-semibold transition-all"
-          style={{
-            background: selected === m ? 'rgba(201,168,110,0.15)' : 'transparent',
-            color: selected === m ? '#C9A86E' : '#8896B3',
-            border: selected === m ? '1px solid rgba(201,168,110,0.3)' : '1px solid transparent',
-          }}
-        >
-          {m}
-        </button>
+        <button key={m} onClick={() => onChange(m)} style={tabStyle(selected === m)}>{m}</button>
       ))}
     </div>
   )
 }
 
-const CHART_COLORS = {
-  Completed: '#10B981',
-  'In Progress': '#C9A86E',
-  'Not Started': '#4B5563',
-  Overdue: '#EF4444',
-}
-
-export default function MoView() {
+export default function MoView({ G }) {
   const [moList, setMoList] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -99,9 +103,7 @@ export default function MoView() {
     setError(null)
     fetchMoList({ perPage: 200 })
       .then((data) => {
-        console.log('[MoView] raw response keys:', data ? Object.keys(data) : null)
         const rows = data?.data || data?.records || data?.result || []
-        console.log('[MoView] rows count:', rows.length)
         setMoList(rows)
       })
       .catch((err) => {
@@ -117,13 +119,11 @@ export default function MoView() {
     return () => window.removeEventListener('iku:refresh', loadData)
   }, [loadData])
 
-  // Months derived from Plan_Year + Plan_Month
   const months = useMemo(() => {
     const keys = [...new Set(moList.map(getMonthKey).filter(Boolean))].sort().reverse()
     return keys.slice(0, 6)
   }, [moList])
 
-  // Default to current month
   useEffect(() => {
     if (months.length && selectedMonth === null) {
       const now = new Date()
@@ -132,9 +132,8 @@ export default function MoView() {
       const cur = `${yy}.${mm}`
       setSelectedMonth(months.includes(cur) ? cur : months[0])
     }
-  }, [months])
+  }, [months, selectedMonth])
 
-  // Filtered list
   const filtered = useMemo(() => {
     return moList.filter((mo) => {
       if (selectedMonth && getMonthKey(mo) !== selectedMonth) return false
@@ -143,10 +142,8 @@ export default function MoView() {
     })
   }, [moList, selectedMonth, selectedFactory])
 
-  // Summary cards — computed from full list
   const stats = useMemo(() => {
     const total = moList.length
-    // In Progress: has Production_Status value and not delayed/completed
     const inProgress = moList.filter((m) => {
       const s = getMoStatus(m)
       return s && !/complet/i.test(s) && !isDelayed(m)
@@ -157,7 +154,6 @@ export default function MoView() {
     return { total, inProgress, completed, notStarted, delayed }
   }, [moList])
 
-  // Chart by factory
   const chartData = useMemo(() => {
     const factoryMap = {}
     filtered.forEach((mo) => {
@@ -197,26 +193,11 @@ export default function MoView() {
   const paged = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const CARDS = [
-    {
-      label: '총 MO · 总MO', number: stats.total, color: '#C9A86E',
-      icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#C9A86E"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>,
-    },
-    {
-      label: '진행중 · 进行中', number: stats.inProgress, color: '#C9A86E',
-      icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#C9A86E"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-    },
-    {
-      label: '완료 · 完成', number: stats.completed, color: '#10B981',
-      icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#10B981"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-    },
-    {
-      label: '미시작 · 未开始', number: stats.notStarted, color: '#94A3B8',
-      icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#94A3B8"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-    },
-    {
-      label: '지연 · 延误', number: stats.delayed, color: '#EF4444',
-      icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#EF4444"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>,
-    },
+    { label: '총 MO · 总MO',     value: stats.total.toLocaleString(),       dot: SOFT_PALETTE[0] },
+    { label: '진행중 · 进行中',   value: stats.inProgress.toLocaleString(),  dot: SOFT_PALETTE[3] },
+    { label: '완료 · 完成',       value: stats.completed.toLocaleString(),   dot: SOFT_PALETTE[2] },
+    { label: '미시작 · 未开始',   value: stats.notStarted.toLocaleString(),  dot: SOFT_PALETTE[6] },
+    { label: '지연 · 延误',       value: stats.delayed.toLocaleString(),     dot: SOFT_PALETTE[1] },
   ]
 
   const COL = [
@@ -232,31 +213,38 @@ export default function MoView() {
 
   return (
     <div style={{ animation: 'fadeIn 0.4s ease' }}>
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-        {CARDS.map((c) => (
-          <SummaryCard key={c.label} loading={loading} {...c} />
-        ))}
+      {/* Page header */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 className="syne" style={{ fontSize: 28, fontWeight: 700, color: G.tx, letterSpacing: "-.5px", marginBottom: 4 }}>
+          MO View
+        </h1>
+        <p style={{ fontSize: 12, color: G.mu, letterSpacing: ".5px" }}>생산진행 · 生产进度</p>
+      </div>
+
+      {/* Summary KPIs */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 24 }}>
+        {loading
+          ? [...Array(5)].map((_, i) => <SkeletonCard key={i} G={G} />)
+          : CARDS.map((c) => <KPI key={c.label} G={G} {...c} />)
+        }
       </div>
 
       {error && (
-        <div className="mb-4 p-4 rounded-xl text-sm text-red-400"
-          style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+        <div style={{ marginBottom: 16, padding: 14, borderRadius: 10, fontSize: 13, color: G.bad, background: `${G.bad}1A`, border: `1px solid ${G.bad}40` }}>
           <strong>오류 · 错误:</strong> {error}
         </div>
       )}
 
-      {/* Month tabs */}
       {!loading && months.length > 0 && (
-        <div className="mb-4">
-          <MonthTabs months={months} selected={selectedMonth} onChange={(m) => { setSelectedMonth(m); setPage(1) }} />
+        <div style={{ marginBottom: 16 }}>
+          <MonthTabs G={G} months={months} selected={selectedMonth} onChange={(m) => { setSelectedMonth(m); setPage(1) }} />
         </div>
       )}
 
-      {/* Chart */}
       {!loading && chartData.length > 0 && (
-        <div className="rounded-xl p-5 mb-6" style={{ background: '#252B3D' }}>
-          <h2 className="text-sm font-bold mb-4" style={{ color: '#C9A86E', fontFamily: 'Pretendard' }}>
+        <div className="card" style={{ padding: "20px 24px", marginBottom: 24 }}>
+          <Rail G={G} />
+          <h2 className="syne" style={{ fontSize: 14, fontWeight: 700, color: G.tx, marginBottom: 16, letterSpacing: "-.2px" }}>
             공장별 MO 현황 · 按工厂MO状态
           </h2>
           <ResponsiveContainer width="100%" height={Math.max(80, chartData.length * 52)}>
@@ -272,20 +260,14 @@ export default function MoView() {
                 }
               }}
             >
-              <XAxis type="number" stroke="#3A4268" tick={{ fill: '#8896B3', fontSize: 11 }} />
-              <YAxis
-                type="category"
-                dataKey="factory"
-                stroke="#3A4268"
-                tick={{ fill: '#8896B3', fontSize: 11 }}
-                width={86}
-              />
+              <XAxis type="number" stroke={G.border} tick={{ fill: G.mu, fontSize: 11 }} />
+              <YAxis type="category" dataKey="factory" stroke={G.border} tick={{ fill: G.mu, fontSize: 11 }} width={86} />
               <Tooltip
-                contentStyle={{ background: '#252B3D', border: '1px solid rgba(201,168,110,0.3)', borderRadius: 8, fontSize: 12 }}
-                labelStyle={{ color: '#C9A86E', fontWeight: 600 }}
-                itemStyle={{ color: '#F5F1E8' }}
+                contentStyle={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 8, fontSize: 12, color: G.tx, boxShadow: G.cardShadow }}
+                labelStyle={{ color: G.accent, fontWeight: 600 }}
+                itemStyle={{ color: G.tx }}
               />
-              {Object.entries(CHART_COLORS).map(([key, color]) => (
+              {Object.entries(STATUS_HUES).map(([key, color]) => (
                 <Bar key={key} dataKey={key} stackId="a" fill={color} radius={key === 'Overdue' ? [0, 4, 4, 0] : [0, 0, 0, 0]}>
                   {chartData.map((entry) => (
                     <Cell
@@ -299,10 +281,9 @@ export default function MoView() {
             </BarChart>
           </ResponsiveContainer>
           {selectedFactory && (
-            <div className="mt-3 flex items-center gap-2">
-              <span className="text-xs" style={{ color: '#8896B3' }}>필터: {selectedFactory}</span>
-              <button onClick={() => setSelectedFactory(null)} className="text-xs px-2 py-0.5 rounded-full"
-                style={{ background: 'rgba(239,68,68,0.1)', color: '#EF4444' }}>
+            <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 11, color: G.mu }}>필터: {selectedFactory}</span>
+              <button onClick={() => setSelectedFactory(null)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 999, background: `${G.bad}1A`, color: G.bad, border: "none", cursor: "pointer", fontWeight: 600 }}>
                 ✕ 해제
               </button>
             </div>
@@ -311,34 +292,35 @@ export default function MoView() {
       )}
 
       {/* Table */}
-      <div className="rounded-xl overflow-hidden" style={{ background: '#252B3D' }}>
-        <div className="px-5 py-3 flex items-center justify-between"
-          style={{ borderBottom: '1px solid rgba(201,168,110,0.1)' }}>
-          <h2 className="text-sm font-bold" style={{ color: '#C9A86E', fontFamily: 'Pretendard' }}>
+      <div className="card" style={{ overflow: "hidden" }}>
+        <Rail G={G} />
+        <div style={{ padding: "14px 24px", borderBottom: `1px solid ${G.hair}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h2 className="syne" style={{ fontSize: 14, fontWeight: 700, color: G.tx, letterSpacing: "-.2px" }}>
             MO 목록 · MO列表
-            {!loading && <span className="ml-2 text-xs font-normal" style={{ color: '#8896B3' }}>({sorted.length}건)</span>}
+            {!loading && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: G.mu }}>({sorted.length}건)</span>}
           </h2>
         </div>
 
         {loading ? (
-          <SkeletonTable rows={8} />
+          <div style={{ padding: "0 24px 24px" }}>
+            <SkeletonTable rows={8} G={G} />
+          </div>
         ) : sorted.length === 0 ? (
-          <div className="py-16 text-center" style={{ color: '#3A4268' }}>
-            <p className="text-sm">데이터가 없습니다 · 暂无数据</p>
+          <div style={{ padding: "64px 0", textAlign: "center", color: G.fa, fontSize: 13 }}>
+            데이터가 없습니다 · 暂无数据
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ background: '#1A1F2E', borderBottom: '1px solid rgba(201,168,110,0.1)' }}>
+                <tr style={{ background: G.cardAlt, borderBottom: `1px solid ${G.hair}` }}>
                   {COL.map((c) => (
                     <th
                       key={c.key}
                       onClick={() => handleSort(c.key)}
-                      className="px-4 py-3 text-left text-xs font-semibold cursor-pointer select-none whitespace-nowrap"
-                      style={{ color: sortKey === c.key ? '#C9A86E' : '#8896B3' }}
+                      style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", color: sortKey === c.key ? G.accent : G.mu, letterSpacing: ".3px" }}
                     >
-                      {c.label} <SortIcon dir={sortKey === c.key ? sortDir : null} />
+                      {c.label} <SortIcon G={G} dir={sortKey === c.key ? sortDir : null} />
                     </th>
                   ))}
                 </tr>
@@ -354,45 +336,43 @@ export default function MoView() {
                     <tr
                       key={moId || i}
                       onClick={() => setSelectedMo({ id: moId, row: mo })}
-                      className="cursor-pointer transition-colors"
                       style={{
-                        borderBottom: '1px solid rgba(201,168,110,0.06)',
-                        background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)',
+                        borderBottom: `1px solid ${G.hair}`,
+                        background: i % 2 === 0 ? "transparent" : G.rh,
+                        cursor: "pointer",
+                        transition: "background .15s",
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(201,168,110,0.06)' }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = G.nh }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = i % 2 === 0 ? "transparent" : G.rh }}
                     >
-                      <td className="px-4 py-3 font-semibold whitespace-nowrap" style={{ color: '#C9A86E' }}>
+                      <td className="num" style={{ padding: "12px 16px", fontWeight: 600, whiteSpace: "nowrap", color: G.accent }}>
                         {getMoNumber(mo)}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: '#F5F1E8' }}>
+                      <td style={{ padding: "12px 16px", whiteSpace: "nowrap", color: G.tx }}>
                         {getMoSku(mo)}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: '#F5F1E8' }}>
+                      <td style={{ padding: "12px 16px", whiteSpace: "nowrap", color: G.tx }}>
                         {getMoFactory(mo)}
                       </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap" style={{ color: '#8896B3' }}>
+                      <td className="num" style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap", color: G.mu }}>
                         {getPlanQty(mo).toLocaleString()}
                       </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap" style={{ color: '#F5F1E8' }}>
+                      <td className="num" style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap", color: G.tx, fontWeight: 600 }}>
                         {getActualQty(mo).toLocaleString()}
                       </td>
-                      <td className="px-4 py-3" style={{ minWidth: 120 }}>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: '#2F3650' }}>
-                            <div
-                              className="h-full rounded-full"
-                              style={{ width: `${progress}%`, background: 'linear-gradient(90deg, #C9A86E, #DFC08A)' }}
-                            />
+                      <td style={{ padding: "12px 16px", minWidth: 130 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ flex: 1, height: 5, borderRadius: 999, overflow: "hidden", background: G.hair }}>
+                            <div style={{ height: "100%", borderRadius: 999, width: `${progress}%`, background: `linear-gradient(90deg, ${G.primary}, ${G.primarySoft})`, transition: "width .3s" }} />
                           </div>
-                          <span className="text-xs w-8 text-right" style={{ color: '#C9A86E' }}>{progress}%</span>
+                          <span className="num" style={{ fontSize: 11, width: 32, textAlign: "right", color: G.accent, fontWeight: 600 }}>{progress}%</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: overdue ? '#EF4444' : '#8896B3' }}>
-                        {endDate || '—'}{overdue && <span className="ml-1">⚠</span>}
+                      <td className="num" style={{ padding: "12px 16px", whiteSpace: "nowrap", color: overdue ? G.bad : G.mu, fontWeight: overdue ? 600 : 400 }}>
+                        {endDate || '—'}{overdue && <span style={{ marginLeft: 4 }}>⚠</span>}
                       </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={status} />
+                      <td style={{ padding: "12px 16px" }}>
+                        <StatusBadge G={G} status={status} />
                       </td>
                     </tr>
                   )
@@ -402,28 +382,24 @@ export default function MoView() {
           </div>
         )}
 
-        {/* Pagination */}
         {!loading && totalPages > 1 && (
-          <div className="px-5 py-3 flex items-center justify-between"
-            style={{ borderTop: '1px solid rgba(201,168,110,0.1)' }}>
-            <span className="text-xs" style={{ color: '#8896B3' }}>
+          <div style={{ padding: "12px 24px", borderTop: `1px solid ${G.hair}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span className="num" style={{ fontSize: 11, color: G.mu }}>
               {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sorted.length)} / {sorted.length}
             </span>
-            <div className="flex gap-2">
+            <div style={{ display: "flex", gap: 8 }}>
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="px-3 py-1 rounded-lg text-xs"
-                style={{ background: 'rgba(201,168,110,0.1)', color: page === 1 ? '#3A4268' : '#C9A86E', cursor: page === 1 ? 'not-allowed' : 'pointer' }}
+                style={{ padding: "5px 12px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: `1px solid ${G.border}`, background: page === 1 ? "transparent" : G.cardAlt, color: page === 1 ? G.fa : G.tx, cursor: page === 1 ? "not-allowed" : "pointer" }}
               >
                 ← 이전
               </button>
-              <span className="px-3 py-1 text-xs" style={{ color: '#8896B3' }}>{page} / {totalPages}</span>
+              <span className="num" style={{ padding: "5px 12px", fontSize: 11, color: G.mu, display: "flex", alignItems: "center" }}>{page} / {totalPages}</span>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="px-3 py-1 rounded-lg text-xs"
-                style={{ background: 'rgba(201,168,110,0.1)', color: page === totalPages ? '#3A4268' : '#C9A86E', cursor: page === totalPages ? 'not-allowed' : 'pointer' }}
+                style={{ padding: "5px 12px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: `1px solid ${G.border}`, background: page === totalPages ? "transparent" : G.cardAlt, color: page === totalPages ? G.fa : G.tx, cursor: page === totalPages ? "not-allowed" : "pointer" }}
               >
                 다음 →
               </button>

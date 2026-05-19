@@ -1,28 +1,219 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './contexts/AuthContext'
-import ProtectedRoute from './contexts/ProtectedRoute'
-import Login from './pages/Login'
-import MoView from './pages/MoView'
-import Layout from './components/Layout'
-import ErrorBoundary from './components/ErrorBoundary'
+import { useState, createContext, useContext } from "react"
+import { Package, ClipboardList, Truck, Building, Sun, Moon, RefreshCw } from "lucide-react"
+import CoverPage from "./components/CoverPage"
+import MoView from "./pages/MoView"
+import ErrorBoundary from "./components/ErrorBoundary"
+
+// ── THEME (Golden Hour) ──
+const LT = {
+  dk: false,
+  bg: "#FAFAF7", surf: "#FFFFFF", card: "#FFFFFF", cardAlt: "#FBF9F4",
+  border: "#EDE8DE", hair: "#E4DED2",
+  primary: "#C9A86E", primarySoft: "#E8D5B0", accent: "#9A7228",
+  tx: "#1A1714", mu: "#7A7268", fa: "#C8C0B2",
+  ok: "#5E8C6E", bad: "#A14E3A", warn: "#B47A3F", cool: "#6B7F94",
+  nh: "rgba(26,23,20,0.035)", rh: "rgba(26,23,20,0.02)",
+  cardShadow: "0 2px 8px rgba(26,23,20,0.06), 0 1px 2px rgba(26,23,20,0.04)",
+  overlayBg: "rgba(26,23,20,0.45)",
+}
+const DK = {
+  dk: true,
+  bg: "#0F0E0C", surf: "#1A1916", card: "#221F1C", cardAlt: "#1A1916",
+  border: "#2E2B27", hair: "#3A3630",
+  primary: "#E8C898", primarySoft: "#C9A86E", accent: "#D4B080",
+  tx: "#F5F0E8", mu: "#8A8278", fa: "#4A453E",
+  ok: "#86B59A", bad: "#D28971", warn: "#D4A572", cool: "#9AAEC4",
+  nh: "rgba(245,240,232,0.04)", rh: "rgba(245,240,232,0.025)",
+  cardShadow: "0 1px 0 rgba(255,255,255,0.02) inset",
+  overlayBg: "rgba(0,0,0,0.6)",
+}
+
+const ThemeContext = createContext(null)
+export const useTheme = () => useContext(ThemeContext)
+
+const mkCSS = G => `
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body,#root{height:100%}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color:${G.tx};background:${G.bg};overscroll-behavior-y:none}
+button{font-family:inherit;touch-action:manipulation}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:${G.border};border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:${G.fa}}
+
+.nv{display:flex;align-items:center;gap:12px;padding:10px 22px;min-height:44px;font-size:13px;font-weight:500;color:${G.mu};cursor:pointer;transition:color .15s, background .15s;border-left:2px solid transparent;letter-spacing:-.05px}
+.nv:hover{color:${G.tx};background:${G.nh}}
+.nv.on{color:${G.accent};background:${G.dk ? "rgba(232,200,152,0.08)" : "rgba(201,168,110,0.08)"};border-left-color:${G.primary};font-weight:600}
+.nv.disabled{cursor:not-allowed;opacity:.45}
+.nv.disabled:hover{color:${G.mu};background:transparent}
+.nv-label{white-space:nowrap;overflow:hidden;flex:1}
+.nv-sub{font-size:10px;color:${G.fa};letterSpacing:".5px";margin-top:1px}
+
+.chip{padding:7px 14px;font-size:11px;border-radius:999px;cursor:pointer;transition:all .15s;font-weight:500;letter-spacing:.1px;line-height:1.5;min-height:32px}
+.chip:hover{border-color:${G.primary}}
+
+.syne{font-family:'Syne','Plus Jakarta Sans',sans-serif;letter-spacing:-.3px}
+.num{font-variant-numeric:tabular-nums;letter-spacing:-.2px}
+
+.rail{position:absolute;top:14px;left:14px;width:6px;height:6px;border-radius:50%;background:${G.primary};box-shadow:0 0 0 3px ${G.dk ? "rgba(232,200,152,0.15)" : "rgba(201,168,110,0.14)"}}
+.card{background:${G.card};border:1px solid ${G.border};border-radius:12px;box-shadow:${G.cardShadow};position:relative}
+.card-plain{background:${G.card};border:1px solid ${G.border};border-radius:12px}
+
+.btn-primary{background:${G.tx};color:${G.bg};border:1px solid ${G.tx};border-radius:8px;padding:12px 18px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .15s;letter-spacing:-.1px;min-height:44px}
+.btn-primary:hover{opacity:.85}
+.btn-ghost{background:transparent;color:${G.tx};border:1px solid ${G.border};border-radius:8px;padding:12px 18px;font-size:13px;font-weight:500;cursor:pointer;transition:background .15s;letter-spacing:-.1px;min-height:44px}
+.btn-ghost:hover{background:${G.nh}}
+
+.mobn{display:none;position:fixed;bottom:0;left:0;right:0;z-index:100;background:${G.surf};border-top:1px solid ${G.border};padding-bottom:env(safe-area-inset-bottom);min-height:64px}
+.mb{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 0 8px;font-size:10px;color:${G.mu};cursor:pointer;flex:1;gap:4px;transition:color .15s;font-weight:500;position:relative;min-height:64px}
+.mb.on{color:${G.accent}}
+.mb.on::before{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);width:24px;height:2px;background:${G.primary};border-radius:0 0 2px 2px}
+
+.page-wrap{padding:32px 48px 48px;width:100%}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+@media(max-width:860px){
+  aside,.sb,.sidebar{display:none!important;width:0!important}
+  main{width:100%!important;flex:1 1 100%!important;min-width:0!important}
+  .mobn{display:flex!important}
+  .page-wrap{padding:16px!important;padding-bottom:80px!important}
+}
+@media(max-width:480px){
+  body{font-size:14px}
+  .card{border-radius:10px}
+}
+`
+
+const TABS = [
+  { id: "mo", label: "MO View", sub: "생산진행 · 生产进度", icon: Package, active: true },
+  { id: "style", label: "Style View", sub: "스타일 · 款式", icon: ClipboardList, active: false },
+  { id: "shipment", label: "Shipment", sub: "선적 · 装箱出货", icon: Truck, active: false },
+  { id: "factory", label: "Factory", sub: "공장 · 工厂", icon: Building, active: false },
+]
+
+function Rail({ G }) { return G.dk ? <span className="rail" /> : null }
+
+function ComingSoon({ G, label }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400, gap: 14 }}>
+      <div className="card" style={{ padding: "32px 40px", textAlign: "center" }}>
+        <Rail G={G} />
+        <p className="syne" style={{ fontSize: 20, fontWeight: 700, color: G.tx, marginBottom: 6 }}>{label}</p>
+        <p style={{ fontSize: 12, color: G.mu, letterSpacing: "2px", textTransform: "uppercase" }}>Coming Soon</p>
+        <p style={{ fontSize: 11, color: G.fa, marginTop: 6 }}>준비 중 · 即将推出</p>
+      </div>
+    </div>
+  )
+}
 
 export default function App() {
+  const [showCover, setShowCover] = useState(() => {
+    try { return sessionStorage.getItem("iku_auth") !== "1" } catch { return true }
+  })
+  const [dark, setDark] = useState(false)
+  const [tab, setTab] = useState("mo")
+  const [refreshing, setRefreshing] = useState(false)
+  const G = dark ? DK : LT
+
+  if (showCover) {
+    return <CoverPage onEnter={() => setShowCover(false)} />
+  }
+
+  const activeTab = TABS.find(t => t.id === tab)
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    window.dispatchEvent(new Event("iku:refresh"))
+    await new Promise(r => setTimeout(r, 600))
+    setRefreshing(false)
+  }
+
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            <Route index element={<Navigate to="/mo" replace />} />
-            <Route path="mo" element={
-              <ErrorBoundary>
-                <MoView />
-              </ErrorBoundary>
-            } />
-          </Route>
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+    <ThemeContext.Provider value={{ G, dark, setDark }}>
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: G.bg, color: G.tx, overflow: "hidden" }}>
+        <style>{mkCSS(G)}</style>
+
+        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+          <aside className="sb" style={{ width: 224, minWidth: 224, background: G.surf, borderRight: `1px solid ${G.border}`, display: "flex", flexDirection: "column", padding: "28px 0", transition: "background .2s" }}>
+            <div style={{ padding: "0 24px 22px", borderBottom: `1px solid ${G.hair}`, marginBottom: 14 }}>
+              <div style={{ textAlign: "center" }}>
+                <div className="syne" style={{ fontSize: 34, fontWeight: 700, color: G.primary, lineHeight: .95, letterSpacing: "-.8px" }}>IKU</div>
+                <div className="syne" style={{ fontSize: 11, fontWeight: 400, color: G.accent, letterSpacing: "6px", marginTop: 6, textTransform: "uppercase" }}>ERP Dashboard</div>
+                <div style={{ height: 1, background: `linear-gradient(90deg, transparent 0%, ${G.primary} 30%, ${G.primary} 70%, transparent 100%)`, marginTop: 12, marginBottom: 10 }} />
+                <div style={{ fontSize: 9, color: G.mu, letterSpacing: "2.2px", textTransform: "uppercase", fontWeight: 600 }}>Operations · 2026</div>
+              </div>
+            </div>
+
+            <nav style={{ flex: 1 }}>
+              {TABS.map(t => (
+                <div
+                  key={t.id}
+                  className={`nv${tab === t.id ? " on" : ""}${!t.active ? " disabled" : ""}`}
+                  onClick={() => t.active && setTab(t.id)}
+                  title={!t.active ? "Coming soon · 即将推出" : ""}
+                >
+                  <t.icon size={15} strokeWidth={1.8} />
+                  <span className="nv-label">
+                    {t.label}
+                    {!t.active && <span style={{ marginLeft: 6, fontSize: 9, padding: "2px 6px", borderRadius: 999, background: G.dk ? "rgba(232,200,152,0.12)" : "rgba(201,168,110,0.12)", color: G.accent, letterSpacing: ".5px", fontWeight: 600 }}>SOON</span>}
+                  </span>
+                </div>
+              ))}
+            </nav>
+
+            <div style={{ padding: "16px 24px", borderTop: `1px solid ${G.hair}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span style={{ fontSize: 10, color: G.mu, fontWeight: 600, letterSpacing: "1.5px" }}>IKU × JERA</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  aria-label="refresh"
+                  title="새로고침 · 刷新"
+                  style={{ background: "transparent", border: `1px solid ${G.border}`, borderRadius: 8, cursor: refreshing ? "wait" : "pointer", padding: "8px 10px", color: G.mu, display: "flex", alignItems: "center", justifyContent: "center", minWidth: 36, minHeight: 36, transition: "border-color .15s, color .15s" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = G.primary; e.currentTarget.style.color = G.accent }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = G.border; e.currentTarget.style.color = G.mu }}
+                >
+                  <RefreshCw size={13} style={{ animation: refreshing ? "spin 1s linear infinite" : "none" }} />
+                </button>
+                <button
+                  onClick={() => setDark(!dark)}
+                  aria-label="toggle theme"
+                  style={{ background: "transparent", border: `1px solid ${G.border}`, borderRadius: 8, cursor: "pointer", padding: "8px 10px", color: G.mu, display: "flex", alignItems: "center", justifyContent: "center", minWidth: 36, minHeight: 36, transition: "border-color .15s, color .15s" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = G.primary; e.currentTarget.style.color = G.accent }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = G.border; e.currentTarget.style.color = G.mu }}
+                >
+                  {dark ? <Sun size={13} /> : <Moon size={13} />}
+                </button>
+              </div>
+            </div>
+          </aside>
+
+          <main style={{ flex: 1, overflow: "auto", background: G.bg, WebkitOverflowScrolling: "touch" }}>
+            <div className="page-wrap">
+              {tab === "mo" && (
+                <ErrorBoundary>
+                  <MoView G={G} />
+                </ErrorBoundary>
+              )}
+              {tab !== "mo" && activeTab && <ComingSoon G={G} label={activeTab.label} />}
+            </div>
+          </main>
+        </div>
+
+        <nav className="mobn" aria-label="mobile nav">
+          {TABS.map(t => (
+            <div
+              key={t.id}
+              className={`mb${tab === t.id ? " on" : ""}`}
+              onClick={() => t.active && setTab(t.id)}
+              style={{ opacity: t.active ? 1 : .4, cursor: t.active ? "pointer" : "not-allowed" }}
+            >
+              <t.icon size={18} strokeWidth={1.8} />
+              <span>{t.label.split(" ")[0]}</span>
+            </div>
+          ))}
+        </nav>
+      </div>
+    </ThemeContext.Provider>
   )
 }

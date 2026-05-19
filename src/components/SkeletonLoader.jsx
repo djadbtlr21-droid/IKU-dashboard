@@ -1,8 +1,10 @@
-export function SkeletonCard() {
+export function SkeletonCard({ G }) {
+  const bg = G?.dk ? "#221F1C" : "#FFFFFF"
+  const border = G?.border || "#EDE8DE"
   return (
-    <div className="rounded-xl p-5" style={{ background: '#252B3D' }}>
-      <div className="shimmer h-8 w-16 rounded-lg mb-3" />
-      <div className="shimmer h-4 w-24 rounded" />
+    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, padding: "20px 24px" }}>
+      <div className="shimmer" style={{ height: 28, width: 64, borderRadius: 6, marginBottom: 10 }} />
+      <div className="shimmer" style={{ height: 12, width: 96, borderRadius: 4 }} />
     </div>
   )
 }
@@ -12,19 +14,21 @@ export function SkeletonRow() {
     <tr>
       {[...Array(8)].map((_, i) => (
         <td key={i} className="px-4 py-3">
-          <div className="shimmer h-4 rounded" style={{ width: `${60 + Math.random() * 40}%` }} />
+          <div className="shimmer" style={{ height: 14, borderRadius: 4, width: `${60 + Math.random() * 40}%` }} />
         </td>
       ))}
     </tr>
   )
 }
 
-export function SkeletonTable({ rows = 8 }) {
+export function SkeletonTable({ rows = 8, G }) {
+  const bg = G?.dk ? "#221F1C" : "#FFFFFF"
+  const border = G?.border || "#EDE8DE"
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: '#252B3D' }}>
-      <div className="shimmer h-12 w-full mb-0.5" />
+    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, overflow: "hidden" }}>
+      <div className="shimmer" style={{ height: 48, width: "100%", marginBottom: 2 }} />
       {[...Array(rows)].map((_, i) => (
-        <div key={i} className="shimmer h-14 w-full mb-0.5" style={{ opacity: 1 - i * 0.07 }} />
+        <div key={i} className="shimmer" style={{ height: 56, width: "100%", marginBottom: 2, opacity: 1 - i * 0.07 }} />
       ))}
     </div>
   )
