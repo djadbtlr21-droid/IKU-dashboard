@@ -10,7 +10,7 @@ let lastMeta = null;
 // Useful when a refresh_token was just rotated and warm instances may
 // still be holding an access_token minted from the old refresh_token.
 // Flip back to `false` after one good production call.
-const DISABLE_TOKEN_CACHE = true;
+const DISABLE_TOKEN_CACHE = false;
 
 function trim(v) {
   return typeof v === 'string' ? v.trim().replace(/^["']|["']$/g, '') : v;
