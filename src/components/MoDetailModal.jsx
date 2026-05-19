@@ -1,150 +1,318 @@
-import { useState, useEffect, useCallback } from 'react'
-import { X, ChevronRight as ChevronRightIcon } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { X, Shirt, Package, Truck, Scissors, ChevronRight, ChevronDown, ZoomIn, FileText, CheckCircle2, Layers } from 'lucide-react'
+import QRCode from 'qrcode'
 import { fetchMoDetail } from '../api/client'
-import StyleImageCarousel from './StyleImageCarousel'
-import {
-  getMoNumber, getMoSku, getMoFactory, getMoStatus,
-  getPlanQty, getActualQty, getEndDate, isOverdue, isDelayed,
-  parseZohoDate, parseSpecJSON,
-} from '../utils/moHelpers'
+import { parseSpecJSON, parseZohoDate, isOverdue, isDelayed } from '../utils/moHelpers'
 
+// ──────────────────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────────────────
 function safe(val) {
-  if (val === null || val === undefined) return '—'
-  if (typeof val === 'object') return val.zc_display_value || val.display_value || JSON.stringify(val)
-  return String(val) || '—'
+  if (val === null || val === undefined || val === '') return '—'
+  if (typeof val === 'object') return val.zc_display_value || val.display_value || val.Style_SKU || val.Factory_Name_Chinese || JSON.stringify(val).slice(0, 60)
+  return String(val)
 }
 
-function Section({ G, title, children }) {
+function fmtNum(v) {
+  if (v === null || v === undefined || v === '') return '—'
+  const n = Number(v)
+  if (isNaN(n)) return String(v)
+  return n.toLocaleString()
+}
+
+function fmtMoney(v, prefix = '¥') {
+  if (v === null || v === undefined || v === '') return '—'
+  const n = Number(v)
+  if (isNaN(n)) return String(v)
+  return `${prefix}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+const COLOR_HEX = {
+  BLACK: '#1A1A1A', BLK: '#1A1A1A', "검정": '#1A1A1A', "黑": '#1A1A1A',
+  NAVY: '#1B2A4A', NVY: '#1B2A4A', "네이비": '#1B2A4A', "深蓝": '#1B2A4A',
+  WHITE: '#FAFAF7', WHT: '#FAFAF7', "흰색": '#FAFAF7', "白": '#FAFAF7',
+  'W/C': '#F5F5F0', WC: '#F5F5F0',
+  GRAY: '#8E8E93', GREY: '#8E8E93', "회색": '#8E8E93',
+  CREAM: '#F5E6C8', BEIGE: '#D4BFA0', IVORY: '#F0EAD6',
+  RED: '#D32F2F', BLUE: '#1976D2', GREEN: '#388E3C',
+  PINK: '#F48FB1', YELLOW: '#FBC02D', ORANGE: '#F57C00',
+  BROWN: '#795548', PURPLE: '#7B1FA2',
+}
+
+function colorHash(name) {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0
+  const r = (h & 0xFF), g = ((h >> 8) & 0xFF), b = ((h >> 16) & 0xFF)
+  return `rgb(${r},${g},${b})`
+}
+
+function colorFor(name) {
+  if (!name) return '#C8C0B2'
+  const upper = String(name).toUpperCase().replace(/\s/g, '')
+  return COLOR_HEX[upper] || colorHash(upper)
+}
+
+// White-or-black text on color disc
+function readableText(hex) {
+  if (!hex || !hex.startsWith('#')) return '#FFFFFF'
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return lum > 0.55 ? '#1A1714' : '#FFFFFF'
+}
+
+// ──────────────────────────────────────────────────────────
+// Sub-components
+// ──────────────────────────────────────────────────────────
+function SectionTitle({ G, icon, label }) {
   return (
-    <div style={{ marginBottom: 22 }}>
-      <h3 className="syne" style={{ fontSize: 11, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase", color: G.accent, marginBottom: 12 }}>
-        {title}
-      </h3>
-      {children}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, paddingBottom: 8, borderBottom: `1px solid ${G.hair}` }}>
+      {icon}
+      <h3 className="syne" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: G.accent }}>{label}</h3>
     </div>
   )
 }
 
-function InfoRow({ G, label, value, highlight }) {
+function Field({ G, label, value, badge, badgeColor }) {
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "7px 0", borderBottom: `1px solid ${G.hair}` }}>
-      <span style={{ fontSize: 11, width: 140, flexShrink: 0, marginTop: 1, color: G.mu, letterSpacing: ".2px" }}>{label}</span>
-      <span className="num" style={{ fontSize: 13, fontWeight: 500, flex: 1, wordBreak: "break-word", color: highlight ? G.bad : G.tx }}>
-        {value || '—'}
-      </span>
+    <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 8, padding: '10px 14px' }}>
+      <div style={{ fontSize: 10, color: G.mu, letterSpacing: '.5px', fontWeight: 600, marginBottom: 4, textTransform: 'uppercase' }}>{label}</div>
+      {badge ? (
+        <span style={{
+          display: 'inline-block', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+          background: `${badgeColor || G.primary}1A`, color: badgeColor || G.accent,
+        }}>
+          {value || '—'}
+        </span>
+      ) : (
+        <div style={{ fontSize: 13, color: G.tx, fontWeight: 500, wordBreak: 'break-word' }}>{value || '—'}</div>
+      )}
     </div>
   )
 }
 
-function CollapsibleSection({ G, title, defaultOpen = false, children }) {
+function ImageCell({ G, label, sublabel, src, onZoom }) {
+  const [err, setErr] = useState(false)
+  return (
+    <div style={{ background: G.cardAlt, border: `1px solid ${G.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '8px 12px', borderBottom: `1px solid ${G.hair}` }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', color: G.accent, textTransform: 'uppercase' }}>{label}</div>
+        {sublabel && <div style={{ fontSize: 10, color: G.mu, marginTop: 1 }}>{sublabel}</div>}
+      </div>
+      <div style={{ aspectRatio: '3/4', position: 'relative', cursor: src && !err ? 'zoom-in' : 'default' }}
+        onClick={() => src && !err && onZoom && onZoom(src)}>
+        {src && !err ? (
+          <>
+            <img src={src} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              onError={() => setErr(true)} />
+            <div style={{ position: 'absolute', top: 6, right: 6, padding: 4, borderRadius: 6, background: 'rgba(26,23,20,0.55)', color: '#FFF', display: 'flex' }}>
+              <ZoomIn size={11} />
+            </div>
+          </>
+        ) : (
+          <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: G.fa, fontSize: 10, gap: 6 }}>
+            <Package size={28} strokeWidth={1.4} />
+            <span>이미지 없음 · 无图片</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function QRCell({ G, mo, sku, factory }) {
+  const canvasRef = useRef(null)
+  const text = `MO:${mo}|SKU:${sku || ''}|FACTORY:${factory || ''}`
+  useEffect(() => {
+    if (!canvasRef.current) return
+    QRCode.toCanvas(canvasRef.current, text, {
+      width: 200, margin: 1,
+      color: { dark: '#1A1714', light: '#FFFFFF' },
+    }).catch(err => console.error('[QR]', err))
+  }, [text])
+  return (
+    <div style={{ background: G.cardAlt, border: `1px solid ${G.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '8px 12px', borderBottom: `1px solid ${G.hair}` }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', color: G.accent, textTransform: 'uppercase' }}>QR Code</div>
+        <div style={{ fontSize: 10, color: G.mu, marginTop: 1 }}>스캔 / 扫码</div>
+      </div>
+      <div style={{ flex: 1, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: G.surf, minHeight: 0 }}>
+        <canvas ref={canvasRef} style={{ width: '100%', maxWidth: 160, height: 'auto', borderRadius: 4 }} />
+        <div className="num" style={{ fontSize: 9, color: G.mu, textAlign: 'center', lineHeight: 1.5, wordBreak: 'break-all' }}>
+          {text}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ColorDisc({ G, name, code, ptone, size = 110 }) {
+  const hex = colorFor(name)
+  const textColor = readableText(hex)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 130 }}>
+      <div style={{
+        width: size, height: size, borderRadius: '50%',
+        background: hex, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: G.dk ? '0 4px 16px rgba(0,0,0,0.4)' : '0 4px 16px rgba(26,23,20,0.12)',
+        border: `2px solid ${G.dk ? G.hair : '#FFFFFF'}`,
+      }}>
+        <span className="syne" style={{ fontSize: 13, fontWeight: 700, color: textColor, letterSpacing: '1px', textTransform: 'uppercase' }}>
+          {String(name || '').slice(0, 6)}
+        </span>
+      </div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: G.tx, letterSpacing: '.3px', textTransform: 'uppercase' }}>{name || '—'}</div>
+      {code && <div className="num" style={{ fontSize: 11, color: G.accent, fontWeight: 600 }}>#{code}</div>}
+      {ptone && <div className="num" style={{ fontSize: 10, color: G.mu }}>{ptone}</div>}
+    </div>
+  )
+}
+
+function Collapsible({ G, title, icon, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ marginBottom: 18 }}>
       <button onClick={() => setOpen(o => !o)} style={{
-        display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
-        padding: "8px 0", borderBottom: `1px solid ${G.hair}`, color: G.accent,
-        background: "transparent", border: "none", cursor: "pointer", borderRadius: 0, borderBottomColor: G.hair, borderBottomWidth: 1, borderBottomStyle: "solid",
+        display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 0',
+        background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left',
+        borderBottom: `1px solid ${G.hair}`, color: G.accent,
       }}>
-        <ChevronRightIcon size={14} style={{ transition: "transform .15s", transform: open ? "rotate(90deg)" : "none" }} />
-        <span className="syne" style={{ fontSize: 11, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" }}>{title}</span>
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        {icon}
+        <span className="syne" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase' }}>{title}</span>
       </button>
       {open && <div style={{ marginTop: 12 }}>{children}</div>}
     </div>
   )
 }
 
-function SpecTable({ G, json }) {
-  if (!json) return <p style={{ fontSize: 11, color: G.mu }}>데이터 없음 · 无数据</p>
+function SpecTable({ G, json, title }) {
   const rows = parseSpecJSON(json)
-  if (!rows || !rows.length) return <p style={{ fontSize: 11, color: G.mu }}>데이터 없음 · 无数据</p>
+  if (!rows || !rows.length) return null
 
   const allKeys = Object.keys(rows[0] || {})
   const sizeKeys = allKeys.filter(k => k !== 'pom' && k !== 'notes' && k !== 'ID' && k !== 'zc_display_value')
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table className="num" style={{ fontSize: 11, width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th style={{ textAlign: "left", padding: "6px 8px", color: G.mu, background: G.cardAlt, fontWeight: 600 }}>POM</th>
-            {sizeKeys.map(s => (
-              <th key={s} style={{ padding: "6px 8px", textAlign: "center", textTransform: "uppercase", color: G.accent, background: G.cardAlt, fontWeight: 700 }}>{s}</th>
-            ))}
-            {allKeys.includes('notes') && (
-              <th style={{ padding: "6px 8px", textAlign: "left", color: G.mu, background: G.cardAlt, fontWeight: 600 }}>비고</th>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={i} style={{ borderBottom: `1px solid ${G.hair}` }}>
-              <td style={{ padding: "6px 8px", fontWeight: 600, color: G.tx }}>{safe(row.pom)}</td>
+    <div style={{ marginBottom: 14 }}>
+      {title && <p style={{ fontSize: 11, fontWeight: 600, color: G.mu, marginBottom: 6 }}>{title}</p>}
+      <div style={{ overflowX: 'auto', border: `1px solid ${G.hair}`, borderRadius: 8 }}>
+        <table className="num" style={{ fontSize: 11, width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: G.cardAlt }}>
+              <th style={{ textAlign: 'left', padding: '8px 12px', color: G.mu, fontWeight: 600, borderBottom: `1px solid ${G.hair}` }}>POM</th>
               {sizeKeys.map(s => (
-                <td key={s} style={{ padding: "6px 8px", textAlign: "center", color: G.mu }}>{row[s] ?? '—'}</td>
+                <th key={s} style={{ padding: '8px 12px', textAlign: 'center', textTransform: 'uppercase', color: G.accent, fontWeight: 700, borderBottom: `1px solid ${G.hair}` }}>{s}</th>
               ))}
-              {allKeys.includes('notes') && <td style={{ padding: "6px 8px", color: G.mu }}>{row.notes || ''}</td>}
+              {allKeys.includes('notes') && (
+                <th style={{ padding: '8px 12px', textAlign: 'left', color: G.mu, fontWeight: 600, borderBottom: `1px solid ${G.hair}` }}>비고 · 备注</th>
+              )}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} style={{ borderBottom: i < rows.length - 1 ? `1px solid ${G.hair}` : 'none', background: G.card }}>
+                <td style={{ padding: '8px 12px', fontWeight: 600, color: G.tx }}>{safe(row.pom)}</td>
+                {sizeKeys.map(s => (
+                  <td key={s} style={{ padding: '8px 12px', textAlign: 'center', color: G.tx }}>{row[s] ?? '—'}</td>
+                ))}
+                {allKeys.includes('notes') && <td style={{ padding: '8px 12px', color: G.mu }}>{row.notes || ''}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
 
-function MatrixTable({ G, lines = [] }) {
-  if (!lines.length) return <p style={{ fontSize: 11, color: G.mu }}>서브폼 데이터 없음 · 无子表单数据</p>
-
-  const colors = [...new Set(lines.map(l => safe(l.Plan_Color || l.Color || l.color)))]
-  const sizes = [...new Set(lines.map(l => safe(l.Plan_Sizes || l.Size || l.size)))]
-
-  function cell(color, size) {
-    const row = lines.find(l =>
-      safe(l.Plan_Color || l.Color || l.color) === color &&
-      safe(l.Plan_Sizes || l.Size || l.size) === size
+// ──────────────────────────────────────────────────────────
+// Plan/Actual matrix table
+// ──────────────────────────────────────────────────────────
+function MatrixTable({ G, lines, fields, currency = '¥' }) {
+  // fields: { color, size, qty, price }
+  const records = (lines || []).filter(Boolean)
+  if (!records.length) {
+    return (
+      <div style={{ padding: 28, textAlign: 'center', fontSize: 12, color: G.mu, background: G.cardAlt, borderRadius: 10, border: `1px dashed ${G.border}` }}>
+        데이터 없음 · 无数据
+      </div>
     )
-    if (!row) return null
-    return { plan: Number(row.Plan_Quantity || row.Plan_Qty || row.plan_qty || 0) }
   }
 
-  const colTotals = sizes.map(size =>
-    lines.filter(l => safe(l.Plan_Sizes || l.Size || l.size) === size)
-      .reduce((s, l) => s + Number(l.Plan_Quantity || 0), 0)
+  const colors = [...new Set(records.map(l => safe(l[fields.color])))]
+  const sizes = [...new Set(records.map(l => safe(l[fields.size])))]
+
+  const cellOf = (color, size) => {
+    const m = records.find(l => safe(l[fields.color]) === color && safe(l[fields.size]) === size)
+    if (!m) return null
+    return {
+      qty: Number(m[fields.qty] || 0),
+      price: Number(m[fields.price] || 0),
+    }
+  }
+
+  const colorRowTotals = colors.map(c =>
+    records.filter(l => safe(l[fields.color]) === c).reduce((s, l) => s + Number(l[fields.qty] || 0), 0)
   )
-  const grandTotal = colTotals.reduce((a, b) => a + b, 0)
+  const colorRowAmounts = colors.map(c =>
+    records.filter(l => safe(l[fields.color]) === c).reduce((s, l) => s + Number(l[fields.qty] || 0) * Number(l[fields.price] || 0), 0)
+  )
+  const colorUnitPrice = colors.map(c => {
+    const r = records.find(l => safe(l[fields.color]) === c)
+    return Number(r?.[fields.price] || 0)
+  })
+  const sizeColTotals = sizes.map(s =>
+    records.filter(l => safe(l[fields.size]) === s).reduce((sum, l) => sum + Number(l[fields.qty] || 0), 0)
+  )
+  const grandQty = colorRowTotals.reduce((a, b) => a + b, 0)
+  const grandAmt = colorRowAmounts.reduce((a, b) => a + b, 0)
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table className="num" style={{ fontSize: 11, width: "100%", borderCollapse: "collapse" }}>
+    <div style={{ overflowX: 'auto', border: `1px solid ${G.hair}`, borderRadius: 8 }}>
+      <table className="num" style={{ fontSize: 12, width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
         <thead>
-          <tr>
-            <th style={{ padding: "6px 8px", textAlign: "left", color: G.mu, background: G.cardAlt, fontWeight: 600 }}>컬러 · 颜色</th>
-            {sizes.map(s => <th key={s} style={{ padding: "6px 8px", textAlign: "center", color: G.accent, background: G.cardAlt, fontWeight: 700 }}>{s}</th>)}
-            <th style={{ padding: "6px 8px", textAlign: "center", color: G.mu, background: G.cardAlt, fontWeight: 600 }}>합계</th>
+          <tr style={{ background: G.cardAlt }}>
+            <th style={{ padding: '10px 12px', textAlign: 'left', color: G.mu, fontWeight: 600, letterSpacing: '.3px', borderBottom: `1px solid ${G.hair}` }}>Color · 색상</th>
+            {sizes.map(s => (
+              <th key={s} style={{ padding: '10px 12px', textAlign: 'center', color: G.accent, fontWeight: 700, borderBottom: `1px solid ${G.hair}` }}>{s}</th>
+            ))}
+            <th style={{ padding: '10px 12px', textAlign: 'right', color: G.mu, fontWeight: 600, borderBottom: `1px solid ${G.hair}` }}>Qty · 수량</th>
+            <th style={{ padding: '10px 12px', textAlign: 'right', color: G.mu, fontWeight: 600, borderBottom: `1px solid ${G.hair}` }}>Unit</th>
+            <th style={{ padding: '10px 12px', textAlign: 'right', color: G.mu, fontWeight: 600, borderBottom: `1px solid ${G.hair}` }}>Amount · 金额</th>
           </tr>
         </thead>
         <tbody>
-          {colors.map(color => {
-            let rowTotal = 0
-            return (
-              <tr key={color} style={{ borderBottom: `1px solid ${G.hair}` }}>
-                <td style={{ padding: "6px 8px", fontWeight: 600, color: G.tx }}>{color}</td>
-                {sizes.map(size => {
-                  const data = cell(color, size)
-                  if (data) rowTotal += data.plan
-                  return (
-                    <td key={size} style={{ padding: "6px 8px", textAlign: "center", background: data?.plan ? `${G.primary}1A` : "transparent" }}>
-                      {data?.plan > 0 ? <span style={{ color: G.accent, fontWeight: 600 }}>{data.plan}</span> : '—'}
-                    </td>
-                  )
-                })}
-                <td style={{ padding: "6px 8px", textAlign: "center", fontWeight: 700, color: G.accent }}>{rowTotal || '—'}</td>
-              </tr>
-            )
-          })}
-          <tr style={{ background: `${G.primary}0D`, borderTop: `2px solid ${G.primary}33` }}>
-            <td style={{ padding: "6px 8px", fontWeight: 700, color: G.mu }}>합계 · 合计</td>
-            {colTotals.map((t, i) => <td key={i} style={{ padding: "6px 8px", textAlign: "center", fontWeight: 700, color: G.tx }}>{t || '—'}</td>)}
-            <td style={{ padding: "6px 8px", textAlign: "center", fontWeight: 700, color: G.accent }}>{grandTotal}</td>
+          {colors.map((color, ci) => (
+            <tr key={color} style={{ background: G.card, borderBottom: ci < colors.length - 1 ? `1px solid ${G.hair}` : 'none' }}>
+              <td style={{ padding: '8px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 12, height: 12, borderRadius: '50%', background: colorFor(color), border: `1px solid ${G.hair}` }} />
+                  <span style={{ fontWeight: 600, color: G.tx, textTransform: 'uppercase' }}>{color}</span>
+                </div>
+              </td>
+              {sizes.map(s => {
+                const c = cellOf(color, s)
+                return (
+                  <td key={s} style={{ padding: '8px 12px', textAlign: 'center', background: c?.qty ? `${G.primary}0F` : 'transparent', color: c?.qty ? G.accent : G.fa, fontWeight: c?.qty ? 600 : 400 }}>
+                    {c?.qty ? fmtNum(c.qty) : '—'}
+                  </td>
+                )
+              })}
+              <td style={{ padding: '8px 12px', textAlign: 'right', color: G.tx, fontWeight: 700 }}>{fmtNum(colorRowTotals[ci])}</td>
+              <td style={{ padding: '8px 12px', textAlign: 'right', color: G.mu }}>{colorUnitPrice[ci] ? fmtMoney(colorUnitPrice[ci], currency) : '—'}</td>
+              <td style={{ padding: '8px 12px', textAlign: 'right', color: G.tx, fontWeight: 600 }}>{colorRowAmounts[ci] ? fmtMoney(colorRowAmounts[ci], currency) : '—'}</td>
+            </tr>
+          ))}
+          <tr style={{ background: G.cardAlt, borderTop: `2px solid ${G.primary}33` }}>
+            <td style={{ padding: '10px 12px', color: G.mu, fontWeight: 700, letterSpacing: '.5px' }}>TOTAL · 합계</td>
+            {sizeColTotals.map((t, i) => (
+              <td key={i} style={{ padding: '10px 12px', textAlign: 'center', color: G.tx, fontWeight: 700 }}>{fmtNum(t)}</td>
+            ))}
+            <td style={{ padding: '10px 12px', textAlign: 'right', color: G.accent, fontWeight: 700 }}>{fmtNum(grandQty)}</td>
+            <td style={{ padding: '10px 12px' }} />
+            <td style={{ padding: '10px 12px', textAlign: 'right', color: G.accent, fontWeight: 700 }}>{grandAmt ? fmtMoney(grandAmt, currency) : '—'}</td>
           </tr>
         </tbody>
       </table>
@@ -152,216 +320,485 @@ function MatrixTable({ G, lines = [] }) {
   )
 }
 
-export default function MoDetailModal({ G, moId, moRow, onClose }) {
+// ──────────────────────────────────────────────────────────
+// Lightbox
+// ──────────────────────────────────────────────────────────
+function Lightbox({ src, onClose }) {
+  useEffect(() => {
+    const h = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onClose])
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(0,0,0,0.92)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+    }}>
+      <button onClick={onClose} aria-label="close"
+        style={{ position: 'absolute', top: 16, right: 16, padding: 10, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', color: '#FFF', border: 'none', cursor: 'pointer', display: 'flex' }}>
+        <X size={18} />
+      </button>
+      <img src={src} alt="" onClick={e => e.stopPropagation()}
+        style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }} />
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────────────────
+// Main modal
+// ──────────────────────────────────────────────────────────
+export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [tab, setTab] = useState('plan')
+  const [zoomSrc, setZoomSrc] = useState(null)
+
+  // Resolve seed record from props
+  const seed = mo || moRow || {}
+  const id = moId || seed.ID || seed.id
 
   useEffect(() => {
-    if (!moId) { setLoading(false); return }
+    if (!id) { setLoading(false); return }
     setLoading(true)
     setError(null)
-    fetchMoDetail(moId)
+    fetchMoDetail(id)
       .then(setDetail)
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
-  }, [moId])
+  }, [id])
 
-  const handleKeyDown = useCallback((e) => { if (e.key === 'Escape') onClose() }, [onClose])
+  const handleKeyDown = useCallback(e => { if (e.key === 'Escape') onClose() }, [onClose])
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = prev
+    }
   }, [handleKeyDown])
 
-  const record = (() => {
+  // Merge detail over seed
+  const fullRecord = useMemo(() => {
     if (!detail) return null
     if (Array.isArray(detail.data)) return detail.data[0] || null
     if (detail.data && typeof detail.data === 'object') return detail.data
     return detail
-  })()
+  }, [detail])
 
-  const src = record || moRow || {}
-  const moNumber = getMoNumber(src)
-  const sku = getMoSku(src)
-  const factory = getMoFactory(src)
-  const status = getMoStatus(src)
-  const planQty = getPlanQty(src)
-  const actualQty = getActualQty(src)
-  const progress = planQty ? Math.min(100, Math.round((actualQty / planQty) * 100)) : 0
-  const endDate = getEndDate(src)
+  const src = fullRecord || seed || {}
+
+  // Fallback G — never let dark hardcoding leak
+  const T = G || {
+    bg: '#FAFAF7', surf: '#FFFFFF', card: '#FFFFFF', cardAlt: '#FBF9F4',
+    border: '#EDE8DE', hair: '#E4DED2',
+    primary: '#C9A86E', primarySoft: '#E8D5B0', accent: '#9A7228',
+    tx: '#1A1714', mu: '#7A7268', fa: '#C8C0B2',
+    ok: '#5E8C6E', bad: '#A14E3A', warn: '#B47A3F', cool: '#6B7F94',
+    overlayBg: 'rgba(26,23,20,0.45)',
+    cardShadow: '0 2px 8px rgba(26,23,20,0.06)',
+    dk: false,
+  }
+
+  const moNumber = safe(src.MO_Number || src.ID)
+  const sku = src.Style_SKU?.Style_SKU || (typeof src.Style_SKU === 'string' ? src.Style_SKU : '—')
+  const factoryName = src.Factory?.Factory_Name_Chinese || (typeof src.Factory === 'string' ? src.Factory : safe(src.Factory))
+  const modifiedTime = src.Modified_Time || src.Modified_Date || ''
+  const orderStatus = src.Order_Status
+  const deliveryStatus = src.Delivery_Status
+  const productionStatus = src.Production_Status
   const overdue = isOverdue(src)
   const delayed = isDelayed(src)
-  const styleRecordId = record?.Style_SKU?.ID || null
-  const planLines = (record?.Plan_MO_Lines || []).filter(Boolean)
-  const topSpec = record?.Top_Spec_JSON || null
-  const bottomSpec = record?.Bottom_Spec_JSON || null
-  const daysRemaining = endDate
-    ? Math.ceil((new Date() - (parseZohoDate(endDate) || new Date())) / 86400000) * -1
-    : null
+  const planQty = Number(src.Plan_Total_Quantity || 0)
+  const actualQty = Number(src.Acture_Total_Quantity || 0)
+  const shipRate = planQty ? (actualQty / planQty) * 100 : 0
 
-  // Fallback G if not provided
-  const T = G || { bg: "#FAFAF7", surf: "#FFFFFF", card: "#FFFFFF", cardAlt: "#FBF9F4",
-    border: "#EDE8DE", hair: "#E4DED2", primary: "#C9A86E", accent: "#9A7228",
-    tx: "#1A1714", mu: "#7A7268", fa: "#C8C0B2", ok: "#5E8C6E", bad: "#A14E3A",
-    overlayBg: "rgba(26,23,20,0.45)", cardShadow: "0 2px 8px rgba(26,23,20,0.06)", dk: false }
+  // Image URL helper
+  const imgUrl = (field, index = 0) => `/api/zoho-image?report=All_MO&recordId=${encodeURIComponent(id)}&field=${encodeURIComponent(field)}&index=${index}`
+
+  const styleImg = (Array.isArray(src.Style_Image) ? src.Style_Image.length : (src.Style_Image ? 1 : 0)) > 0 ? imgUrl('Style_Image', 0) : null
+  const topFlatImg = (Array.isArray(src.Top_Flat_Image) ? src.Top_Flat_Image.length : (src.Top_Flat_Image ? 1 : 0)) > 0 ? imgUrl('Top_Flat_Image', 0) : null
+  const bottomFlatImg = (Array.isArray(src.Bottom_Flat_Image) ? src.Bottom_Flat_Image.length : (src.Bottom_Flat_Image ? 1 : 0)) > 0 ? imgUrl('Bottom_Flat_Image', 0) : null
+
+  // Plan/Actual lines
+  const planLines = (fullRecord?.Plan_MO_Lines || []).filter(Boolean)
+  const actualLines = (fullRecord?.Acture_Order_Lines || []).filter(Boolean)
+
+  // Colors for COLOR IMAGE section
+  const colorEntries = useMemo(() => {
+    const map = new Map()
+    planLines.forEach(l => {
+      const name = safe(l.Plan_Color || l.Color || l.color)
+      if (!map.has(name)) map.set(name, { name, code: l.Plan_Color_Code || l.Color_Code || '', ptone: l.Pantone || l.PTone || '' })
+    })
+    return Array.from(map.values()).filter(c => c.name && c.name !== '—')
+  }, [planLines])
+
+  // Inner Pack & Bulto
+  const INNER_PACK_PCS = 12
+  const MASTER_BAG_PCS = 120
+  const expPackCount = INNER_PACK_PCS ? Math.ceil(planQty / INNER_PACK_PCS) : 0
+  const expBultoCount = MASTER_BAG_PCS ? Math.ceil(planQty / MASTER_BAG_PCS) : 0
+
+  const innerPackDetails = useMemo(() => {
+    const arr = []
+    planLines.forEach(l => {
+      arr.push({
+        color: safe(l.Plan_Color || l.Color),
+        size: safe(l.Plan_Sizes || l.Size),
+        qty: 1,
+      })
+    })
+    return arr
+  }, [planLines])
+
+  // Production tracking steps
+  const trackSteps = [
+    { key: 'Order_Date', label: '주문 · 订单', icon: FileText },
+    { key: 'Cutting_Start_Date', label: '재단 시작 · 裁剪开始', icon: Scissors },
+    { key: 'Cutting_End_Date', label: '재단 완료 · 裁剪完成', icon: Scissors },
+    { key: 'Sewing_Start_Date', label: '재봉 시작 · 缝制开始', icon: Layers },
+    { key: 'Sewing_End_Date', label: '재봉 완료 · 缝制完成', icon: Layers },
+    { key: 'Packing_Start_Date', label: '포장 · 包装', icon: Package },
+    { key: 'Expected_Delivery', label: '예상 납기 · 预计交货', icon: Truck },
+    { key: 'Ship_Date', label: '출하 · 出货', icon: CheckCircle2 },
+  ]
+
+  const today = new Date()
 
   return (
-    <div
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      style={{
-        position: "fixed", inset: 0, zIndex: 1000,
-        display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
-        background: T.overlayBg, backdropFilter: "blur(4px)", animation: "fadeIn 0.2s ease",
-      }}
-    >
-      <div style={{
-        width: "100%", maxWidth: 1100, maxHeight: "95vh", display: "flex", flexDirection: "column",
-        background: T.surf, borderRadius: 16, border: `1px solid ${T.border}`,
-        boxShadow: T.dk ? "0 32px 64px rgba(0,0,0,0.6)" : "0 24px 60px rgba(26,23,20,0.15)",
-        overflow: "hidden", animation: "slideUp 0.3s ease-out",
-      }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: `1px solid ${T.hair}`, background: T.cardAlt, flexShrink: 0, gap: 12, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <h2 className="syne num" style={{ fontSize: 20, fontWeight: 700, color: T.accent, letterSpacing: "-.3px" }}>{moNumber}</h2>
-            {sku && sku !== '—' && <span style={{ fontSize: 13, color: T.mu }}>{sku}</span>}
-            {status && (
-              <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 999, fontWeight: 600, background: `${T.primary}1A`, color: T.accent }}>
-                <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", marginRight: 6, background: T.primary }} />
-                {status}
-              </span>
-            )}
-            {delayed && (
-              <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, fontWeight: 700, background: `${T.bad}1A`, color: T.bad }}>⚠ 지연</span>
-            )}
-          </div>
-          <button onClick={onClose} style={{ padding: 8, borderRadius: 10, color: T.mu, background: "transparent", border: "none", cursor: "pointer", display: "flex" }}
-            onMouseEnter={e => { e.currentTarget.style.background = `${T.bad}1A`; e.currentTarget.style.color = T.bad }}
-            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.mu }}>
-            <X size={18} />
-          </button>
-        </div>
+    <>
+      <div
+        onClick={e => { if (e.target === e.currentTarget) onClose() }}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 1000, padding: 16,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: T.overlayBg, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+          animation: 'fadeIn 0.2s ease',
+        }}
+      >
+        <div style={{
+          width: 'min(1200px, 95vw)', maxHeight: '90vh',
+          background: T.surf, color: T.tx,
+          borderRadius: 16, border: `1px solid ${T.border}`,
+          boxShadow: T.dk ? '0 32px 64px rgba(0,0,0,0.6)' : '0 24px 64px rgba(26,23,20,0.18)',
+          overflow: 'hidden', display: 'flex', flexDirection: 'column',
+          animation: 'slideUp 0.3s ease-out',
+        }}>
 
-        {/* Body */}
-        <div style={{ display: "flex", flex: 1, overflow: "hidden" }} className="modal-body">
-          {/* Image */}
-          <div style={{ width: "40%", padding: 20, flexShrink: 0, overflowY: "auto", borderRight: `1px solid ${T.hair}`, background: T.cardAlt }}>
-            <StyleImageCarousel styleSku={sku !== '—' ? sku : null} recordId={styleRecordId} />
-            {sku && sku !== '—' && (
-              <div style={{ marginTop: 14, textAlign: "center" }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: T.accent }}>{sku}</p>
-                {src.Chi_Style_Name && <p style={{ fontSize: 11, marginTop: 4, color: T.mu }}>{src.Chi_Style_Name}</p>}
+          {/* ──────────────────────────────────────────────
+              A. Header (sticky)
+          ────────────────────────────────────────────── */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '18px 24px', borderBottom: `1px solid ${T.hair}`,
+            background: T.cardAlt, gap: 16, flexShrink: 0, flexWrap: 'wrap',
+          }}>
+            <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <h2 className="syne num" style={{ fontSize: 26, fontWeight: 700, color: T.primary, letterSpacing: '-.4px', lineHeight: 1 }}>{moNumber}</h2>
+                {delayed && <span style={{ fontSize: 10, padding: '3px 9px', borderRadius: 999, fontWeight: 700, background: `${T.bad}1A`, color: T.bad }}>⚠ 지연</span>}
               </div>
-            )}
+              <div style={{ fontSize: 12, color: T.mu, marginTop: 4, fontWeight: 500 }}>— {sku}</div>
+              {modifiedTime && (
+                <div className="num" style={{ fontSize: 11, color: T.mu, marginTop: 2 }}>
+                  최종수정일 · 最后修改日: <span style={{ color: T.tx, fontWeight: 500 }}>{modifiedTime}</span>
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+              <button style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+                background: T.primarySoft, color: T.dk ? T.tx : '#1A1714', border: 'none',
+                borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                letterSpacing: '.3px', fontFamily: 'inherit',
+              }}>
+                <Shirt size={13} /> Style Info / 스타일
+              </button>
+              <button onClick={onClose} aria-label="close" style={{
+                width: 36, height: 36, borderRadius: '50%', background: 'transparent',
+                border: `1px solid ${T.border}`, color: T.mu, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all .15s',
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = `${T.bad}1A`; e.currentTarget.style.color = T.bad; e.currentTarget.style.borderColor = T.bad }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = T.mu; e.currentTarget.style.borderColor = T.border }}>
+                <X size={16} />
+              </button>
+            </div>
           </div>
 
-          {/* Info */}
-          <div style={{ flex: 1, overflowY: "auto", padding: 22 }}>
+          {/* Body scroll */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
             {error && (
-              <div style={{ padding: 12, borderRadius: 10, fontSize: 12, color: T.bad, background: `${T.bad}1A`, border: `1px solid ${T.bad}40`, marginBottom: 14 }}>
+              <div style={{ padding: 12, borderRadius: 8, fontSize: 12, color: T.bad, background: `${T.bad}1A`, border: `1px solid ${T.bad}40`, marginBottom: 16 }}>
                 오류 · 错误: {error}
               </div>
             )}
 
-            <Section G={T} title="기본 정보 · 基本信息">
-              <InfoRow G={T} label="MO 번호 · MO号" value={moNumber} />
-              <InfoRow G={T} label="스타일 SKU · 款号" value={sku} />
-              <InfoRow G={T} label="스타일명 (중문)" value={safe(src.Chi_Style_Name)} />
-              <InfoRow G={T} label="스타일명 (영문)" value={safe(src.Eng_Style_Name)} />
-              <InfoRow G={T} label="공장 · 工厂" value={factory} />
-              <InfoRow G={T} label="시즌 · 季节" value={safe(src.Season)} />
-              <InfoRow G={T} label="계획 연월 · 计划年月" value={src.Plan_Year && src.Plan_Month ? `${src.Plan_Year}-${String(src.Plan_Month).padStart(2, '0')}` : '—'} />
-              <InfoRow G={T} label="주문확인일 · 订单日期" value={safe(src.Order_Date)} />
-              <InfoRow G={T} label="오더 상태 · 订单状态" value={safe(src.Order_Status)} />
-              <InfoRow G={T} label="생산 상태 · 生产状态" value={safe(src.Production_Status)} />
-              <InfoRow G={T} label="납기 상태 · 交货状态" value={safe(src.Delivery_Status)} />
-              <InfoRow G={T} label="소재 · 面料" value={safe(src.Material_Type)} />
-            </Section>
+            {/* ──────────────────────────────────────────────
+                B. Image grid (Style / Top / Bottom / QR)
+            ────────────────────────────────────────────── */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 22 }}>
+              <ImageCell G={T} label="Style Image" sublabel="스타일 · 款式" src={styleImg} onZoom={setZoomSrc} />
+              <ImageCell G={T} label="Top Flat" sublabel="상의도안 · 上衣图" src={topFlatImg} onZoom={setZoomSrc} />
+              <ImageCell G={T} label="Bottom Flat" sublabel="하의도안 · 下装图" src={bottomFlatImg} onZoom={setZoomSrc} />
+              <QRCell G={T} mo={moNumber} sku={sku} factory={factoryName} />
+            </div>
 
-            <Section G={T} title="수량 정보 · 数量信息">
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-                <div style={{ padding: "14px 16px", borderRadius: 10, background: T.cardAlt, border: `1px solid ${T.hair}`, textAlign: "center" }}>
-                  <p style={{ fontSize: 11, color: T.mu, marginBottom: 4 }}>계획 · 计划</p>
-                  <p className="num syne" style={{ fontSize: 22, fontWeight: 700, color: T.accent }}>{planQty.toLocaleString()}</p>
-                </div>
-                <div style={{ padding: "14px 16px", borderRadius: 10, background: T.cardAlt, border: `1px solid ${T.hair}`, textAlign: "center" }}>
-                  <p style={{ fontSize: 11, color: T.mu, marginBottom: 4 }}>실적 · 实际</p>
-                  <p className="num syne" style={{ fontSize: 22, fontWeight: 700, color: T.ok }}>{actualQty.toLocaleString()}</p>
-                </div>
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.mu, marginBottom: 6 }}>
-                  <span>진행률 · 进度</span>
-                  <span className="num" style={{ color: T.accent, fontWeight: 600 }}>{progress}%</span>
-                </div>
-                <div style={{ height: 7, borderRadius: 999, overflow: "hidden", background: T.hair }}>
-                  <div style={{ height: "100%", borderRadius: 999, width: `${progress}%`, background: `linear-gradient(90deg, ${T.primary}, ${T.primary}AA)`, transition: "width .6s" }} />
+            {/* ──────────────────────────────────────────────
+                C. Color Image (color discs)
+            ────────────────────────────────────────────── */}
+            {colorEntries.length > 0 && (
+              <div style={{ marginBottom: 22 }}>
+                <SectionTitle G={T} icon={<Shirt size={14} style={{ color: T.accent }} />} label="Color Image · 색상 · 色卡" />
+                <div style={{ background: T.cardAlt, border: `1px solid ${T.border}`, borderRadius: 12, padding: 24, display: 'flex', gap: 28, flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+                  {colorEntries.map((c, i) => (
+                    <ColorDisc key={c.name + i} G={T} name={c.name} code={c.code} ptone={c.ptone} />
+                  ))}
                 </div>
               </div>
-              <InfoRow G={T} label="예정 출하일 · 预计出货日" value={safe(src.Expected_Delivery)} />
-              <InfoRow G={T} label="출하일 · 出货日" value={safe(src.Ship_Date)} highlight={overdue} />
-              {daysRemaining !== null && (
-                <InfoRow G={T} label="D-Day"
-                  value={daysRemaining < 0
-                    ? `${Math.abs(daysRemaining)}일 초과 · 已超期${Math.abs(daysRemaining)}天`
-                    : daysRemaining === 0 ? 'D-Day!' : `D-${daysRemaining}`}
-                  highlight={daysRemaining <= 0} />
+            )}
+
+            {/* ──────────────────────────────────────────────
+                D. Basic Info (3-col grid)
+            ────────────────────────────────────────────── */}
+            <div style={{ marginBottom: 22 }}>
+              <SectionTitle G={T} icon={<FileText size={14} style={{ color: T.accent }} />} label="기본 정보 · 订单信息 · Basic Info" />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+                <Field G={T} label="MO 번호 / 订单号" value={moNumber} />
+                <Field G={T} label="스타일 SKU / 款号" value={sku} />
+                <Field G={T} label="영문 스타일명 / Eng Name" value={safe(src.Eng_Style_Name)} />
+                <Field G={T} label="중문 스타일명 / 中文款名" value={safe(src.Chi_Style_Name)} />
+                <Field G={T} label="시즌 / 季节" value={safe(src.Season)} />
+                <Field G={T} label="카테고리 / 大类" value={safe(src.Category)} />
+                <Field G={T} label="공장 / 工厂" value={factoryName} />
+                <Field G={T} label="주문일 / 订单日" value={safe(src.Order_Date)} />
+                <Field G={T} label="주문 상태 / 订单状态" value={orderStatus} badge badgeColor={T.ok} />
+                <Field G={T} label="예상 납기 / 预计交货" value={safe(src.Expected_Delivery)} />
+                <Field G={T} label="납기 상태 / 交期状态" value={deliveryStatus} badge badgeColor={overdue ? T.bad : T.cool} />
+                <Field G={T} label="성별 / 性别" value={safe(src.Gender)} />
+              </div>
+            </div>
+
+            {/* ──────────────────────────────────────────────
+                E. Product Definition
+            ────────────────────────────────────────────── */}
+            <div style={{ marginBottom: 22 }}>
+              <SectionTitle G={T} icon={<Shirt size={14} style={{ color: T.accent }} />} label="제품 정의 · 产品定义 · Product Definition" />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+                <Field G={T} label="상의 유형 / 上衣类型" value={safe(src.Top_Type)} />
+                <Field G={T} label="소매 유형 / 衣袖类型" value={safe(src.Sleeve)} />
+                <Field G={T} label="핏 / 版型" value={safe(src.Fit)} />
+                <Field G={T} label="디테일 / 类型详情" value={safe(src.Details)} />
+                <Field G={T} label="하의 유형 / 下装类型" value={safe(src.Bottom_Type)} />
+                <Field G={T} label="하의 기장 / 下装长短" value={safe(src.Bottom_Length)} />
+              </div>
+            </div>
+
+            {/* ──────────────────────────────────────────────
+                F. Material Info
+            ────────────────────────────────────────────── */}
+            <div style={{ marginBottom: 22 }}>
+              <SectionTitle G={T} icon={<Layers size={14} style={{ color: T.accent }} />} label="원단 정보 · 面料信息 · Material" />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+                <Field G={T} label="원단 종류 / 面料种类" value={safe(src.Material_Type)} />
+                <Field G={T} label="혼방% / 混纺%" value={safe(src.blended)} />
+                <Field G={T} label="안감 / 里料类型" value={safe(src.Lining_Type)} />
+                <Field G={T} label="원단 중량 / 面料克重" value={safe(src.Fabric_Weight)} />
+                <Field G={T} label="안감 중량 / 里料克重" value={safe(src.Lining_Weight)} />
+                <Field G={T} label="안감 비고 / 里料备注" value={safe(src.Lining_Notes)} />
+              </div>
+            </div>
+
+            {/* ──────────────────────────────────────────────
+                G. Size Spec (collapsible)
+            ────────────────────────────────────────────── */}
+            <Collapsible G={T} title="사이즈 스펙 · 尺寸规格 · Size Specs" icon={<Scissors size={14} />}>
+              {!src.Top_Spec_JSON && !src.Bottom_Spec_JSON ? (
+                <div style={{ padding: 16, fontSize: 12, color: T.mu, textAlign: 'center', background: T.cardAlt, borderRadius: 8 }}>
+                  스펙 데이터 없음 · 无规格数据
+                </div>
+              ) : (
+                <>
+                  <SpecTable G={T} json={src.Top_Spec_JSON} title="Top Spec · 상의 스펙" />
+                  <SpecTable G={T} json={src.Bottom_Spec_JSON} title="Bottom Spec · 하의 스펙" />
+                </>
               )}
-              <InfoRow G={T} label="포장 합계 · 包装合计" value={safe(src.Inner_Pack_Total_Qty)} />
-              <InfoRow G={T} label="Plan Grand Total" value={src.Plan_Grand_Total ? `$${Number(src.Plan_Grand_Total).toLocaleString()}` : '—'} />
-              <InfoRow G={T} label="Actual Grand Total" value={src.Acture_Grand_Total ? `$${Number(src.Acture_Grand_Total).toLocaleString()}` : '—'} />
-            </Section>
+            </Collapsible>
 
-            <Section G={T} title="계획 매트릭스 · 计划矩阵">
-              <MatrixTable G={T} lines={planLines} />
-            </Section>
-
-            <CollapsibleSection G={T} title="사이즈 스펙 · 尺寸规格">
-              <div style={{ marginBottom: 16 }}>
-                <p style={{ fontSize: 11, fontWeight: 600, color: T.mu, marginBottom: 6 }}>Top Spec</p>
-                <SpecTable G={T} json={topSpec} />
+            {/* ──────────────────────────────────────────────
+                H. Plan / Actual Matrix (tabs)
+            ────────────────────────────────────────────── */}
+            <div style={{ marginBottom: 22 }}>
+              <SectionTitle G={T} icon={<FileText size={14} style={{ color: T.accent }} />} label="수량 매트릭스 · 数量矩阵 · Plan/Actual" />
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                {[
+                  { id: 'plan', label: '📋 PLAN · 주문 · 订单' },
+                  { id: 'actual', label: '✅ ACTUAL · 실출고 · 实际出货' },
+                ].map(t => (
+                  <button key={t.id} onClick={() => setTab(t.id)} className="chip" style={{
+                    border: `1px solid ${tab === t.id ? T.primary : T.border}`,
+                    background: tab === t.id ? (T.dk ? 'rgba(232,200,152,0.14)' : 'rgba(201,168,110,0.14)') : 'transparent',
+                    color: tab === t.id ? T.accent : T.mu,
+                    fontWeight: 600, fontSize: 11, padding: '7px 14px',
+                  }}>
+                    {t.label}
+                  </button>
+                ))}
               </div>
-              <div>
-                <p style={{ fontSize: 11, fontWeight: 600, color: T.mu, marginBottom: 6 }}>Bottom Spec</p>
-                <SpecTable G={T} json={bottomSpec} />
+
+              {tab === 'plan' ? (
+                <MatrixTable G={T} lines={planLines} fields={{ color: 'Plan_Color', size: 'Plan_Sizes', qty: 'Plan_Quantity', price: 'Plan_Unit_Price' }} />
+              ) : (
+                <MatrixTable G={T} lines={actualLines} fields={{ color: 'Acture_Color', size: 'Acture_Sizes', qty: 'Acture_Quantity', price: 'Acture_Unit_Price' }} />
+              )}
+
+              {/* Summary cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginTop: 14 }}>
+                <div style={{ background: T.dk ? 'rgba(147,197,253,0.12)' : '#EEF2FF', borderRadius: 10, padding: '14px 18px', border: `1px solid ${T.dk ? 'rgba(147,197,253,0.25)' : '#C7D2FE'}` }}>
+                  <div style={{ fontSize: 10, color: T.dk ? '#93C5FD' : '#4338CA', fontWeight: 700, letterSpacing: '.5px', marginBottom: 4 }}>📋 PLAN 오더 수량</div>
+                  <div className="num syne" style={{ fontSize: 24, fontWeight: 700, color: T.tx, lineHeight: 1 }}>{fmtNum(planQty)} <span style={{ fontSize: 12, color: T.mu, fontWeight: 500 }}>pcs</span></div>
+                  <div style={{ fontSize: 10, color: T.mu, marginTop: 3 }}>Plan_Total_Quantity</div>
+                </div>
+                <div style={{ background: T.dk ? 'rgba(110,231,183,0.12)' : '#F0FDF4', borderRadius: 10, padding: '14px 18px', border: `1px solid ${T.dk ? 'rgba(110,231,183,0.25)' : '#BBF7D0'}` }}>
+                  <div style={{ fontSize: 10, color: T.dk ? '#6EE7B7' : '#16A34A', fontWeight: 700, letterSpacing: '.5px', marginBottom: 4 }}>✅ ACTUAL 실출고</div>
+                  <div className="num syne" style={{ fontSize: 24, fontWeight: 700, color: T.tx, lineHeight: 1 }}>{fmtNum(actualQty)} <span style={{ fontSize: 12, color: T.mu, fontWeight: 500 }}>pcs</span></div>
+                  <div style={{ fontSize: 10, color: T.mu, marginTop: 3 }}>{actualLines.length ? `${actualLines.length} 라인` : '데이터 없음 · 无数据'}</div>
+                </div>
+                <div style={{ background: T.dk ? 'rgba(252,211,77,0.12)' : '#FEFCE8', borderRadius: 10, padding: '14px 18px', border: `1px solid ${T.dk ? 'rgba(252,211,77,0.25)' : '#FDE68A'}` }}>
+                  <div style={{ fontSize: 10, color: T.dk ? '#FCD34D' : '#A16207', fontWeight: 700, letterSpacing: '.5px', marginBottom: 4 }}>📊 출고율 · 出货率</div>
+                  <div className="num syne" style={{ fontSize: 24, fontWeight: 700, color: T.tx, lineHeight: 1 }}>{shipRate.toFixed(1)}<span style={{ fontSize: 14 }}>%</span></div>
+                  <div className="num" style={{ fontSize: 10, color: T.mu, marginTop: 3 }}>{fmtNum(actualQty - planQty)} pcs</div>
+                </div>
               </div>
-            </CollapsibleSection>
+            </div>
 
-            <CollapsibleSection G={T} title="소재 정보 · 面料信息">
-              <InfoRow G={T} label="소재 · 面料" value={safe(src.Material_Type)} />
-              <InfoRow G={T} label="Lining" value={safe(src.Lining_Type)} />
-              <InfoRow G={T} label="Blended" value={safe(src.blended)} />
-              <InfoRow G={T} label="Business Entity" value={safe(src.Business_Entity)} />
-            </CollapsibleSection>
+            {/* ──────────────────────────────────────────────
+                I. Inner Pack & Bulto
+            ────────────────────────────────────────────── */}
+            <div style={{ marginBottom: 22 }}>
+              <SectionTitle G={T} icon={<Package size={14} style={{ color: T.accent }} />} label="중간 포장 & Bulto · 中间包装 & 麻袋 · Inner Pack & Master Bag" />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
+                {/* Inner Pack card */}
+                <div style={{ background: T.dk ? '#2A1F3A' : '#F5F3FF', borderRadius: 12, padding: 20, border: `1px solid ${T.dk ? '#3F2F55' : '#DDD6FE'}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <span style={{ fontSize: 16 }}>🟪</span>
+                    <span className="syne" style={{ fontSize: 13, fontWeight: 700, color: T.dk ? '#C4B5FD' : '#5B21B6', letterSpacing: '.3px' }}>중간 포장 · Inner Pack</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: T.mu, marginBottom: 14 }}>1 포장 = {INNER_PACK_PCS}장 (각 조합 1장씩)</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div className="num syne" style={{ fontSize: 30, fontWeight: 700, color: T.dk ? '#C4B5FD' : '#5B21B6', lineHeight: 1 }}>{INNER_PACK_PCS}</div>
+                      <div style={{ fontSize: 10, color: T.mu, marginTop: 4, lineHeight: 1.4 }}>1포장 구성<br />组合数</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div className="num syne" style={{ fontSize: 30, fontWeight: 700, color: T.dk ? '#C4B5FD' : '#5B21B6', lineHeight: 1 }}>{fmtNum(expPackCount)}</div>
+                      <div style={{ fontSize: 10, color: T.mu, marginTop: 4, lineHeight: 1.4 }}>예상 포장수<br />预计包装数</div>
+                    </div>
+                  </div>
+                  {colorEntries.length && (
+                    <div style={{ background: T.dk ? 'rgba(252,211,77,0.08)' : '#FEFCE8', borderRadius: 8, padding: '8px 12px', fontSize: 11, color: T.dk ? '#FCD34D' : '#854D0E', marginBottom: 12 }}>
+                      ✅ 표준 구성({colorEntries.length}색×{INNER_PACK_PCS / Math.max(colorEntries.length, 1) || '?'}사이즈={INNER_PACK_PCS}장)
+                    </div>
+                  )}
+                  <div style={{ fontSize: 10, color: T.mu, fontWeight: 600, marginBottom: 6, letterSpacing: '.3px' }}>구성 상세 · 组合明细</div>
+                  <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {innerPackDetails.slice(0, 24).map((d, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', borderRadius: 4, background: T.dk ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.6)', fontSize: 11 }}>
+                        <span style={{ width: 9, height: 9, borderRadius: '50%', background: colorFor(d.color) }} />
+                        <span style={{ flex: 1, color: T.tx, textTransform: 'uppercase', fontWeight: 500 }}>{d.color}</span>
+                        <span className="num" style={{ width: 32, textAlign: 'center', color: T.tx }}>{d.size}</span>
+                        <span className="num" style={{ color: T.mu, fontWeight: 600 }}>×{d.qty}</span>
+                      </div>
+                    ))}
+                    {!innerPackDetails.length && (
+                      <div style={{ padding: 12, fontSize: 11, color: T.mu, textAlign: 'center' }}>구성 데이터 없음</div>
+                    )}
+                  </div>
+                </div>
 
-            <CollapsibleSection G={T} title="포장/출하 · 包装出货">
-              <InfoRow G={T} label="Inner Pack 수 · 内包数" value={safe(src.Inner_Pack_Count)} />
-              <InfoRow G={T} label="Master Bag 수 · 主袋数" value={safe(src.Master_Bag_Count)} />
-              <InfoRow G={T} label="Inner Pack 총 수량" value={safe(src.Inner_Pack_Total_Qty)} />
-              <InfoRow G={T} label="출하일 · 出货日期" value={safe(src.Ship_Date)} />
-              <InfoRow G={T} label="수정일 · 修改时间" value={safe(src.Modified_Time)} />
-            </CollapsibleSection>
+                {/* Master Bag card */}
+                <div style={{ background: T.dk ? '#3A1F22' : '#FFF1F2', borderRadius: 12, padding: 20, border: `1px solid ${T.dk ? '#552F33' : '#FECDD3'}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <span style={{ fontSize: 16 }}>🔴</span>
+                    <span className="syne" style={{ fontSize: 13, fontWeight: 700, color: T.dk ? '#FCA5A5' : '#9F1239', letterSpacing: '.3px' }}>Bulto · 麻袋 · Master Bag</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: T.mu, marginBottom: 14 }}>1 Bulto = 10 포장 = {MASTER_BAG_PCS}장</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div className="num syne" style={{ fontSize: 30, fontWeight: 700, color: T.dk ? '#FCA5A5' : '#9F1239', lineHeight: 1 }}>{fmtNum(expBultoCount)}</div>
+                      <div style={{ fontSize: 10, color: T.mu, marginTop: 4, lineHeight: 1.4 }}>예상 Bulto<br />预计麻袋</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div className="num syne" style={{ fontSize: 30, fontWeight: 700, color: T.dk ? '#FCA5A5' : '#9F1239', lineHeight: 1 }}>{fmtNum(planQty)}</div>
+                      <div style={{ fontSize: 10, color: T.mu, marginTop: 4, lineHeight: 1.4 }}>Plan 총수량<br />计划总数</div>
+                    </div>
+                  </div>
+                  <div style={{ background: T.dk ? 'rgba(196,181,253,0.12)' : '#F5F3FF', borderRadius: 8, padding: '8px 12px', fontSize: 11, color: T.dk ? '#C4B5FD' : '#5B21B6', marginBottom: 12 }}>
+                    📦 {expBultoCount} Bulto × {MASTER_BAG_PCS}장 = {fmtNum(expBultoCount * MASTER_BAG_PCS)}장
+                  </div>
+                  <div style={{ fontSize: 10, color: T.mu, fontWeight: 600, marginBottom: 6, letterSpacing: '.3px' }}>계산 내역 · 计算明细</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 4, background: T.dk ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.6)' }}>
+                      <span style={{ color: T.mu }}>Plan 총수량</span>
+                      <span className="num" style={{ color: T.tx, fontWeight: 600 }}>{fmtNum(planQty)} 장</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 4, background: T.dk ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.6)' }}>
+                      <span style={{ color: T.mu }}>÷ 1 포장 ({INNER_PACK_PCS}장)</span>
+                      <span className="num" style={{ color: T.tx, fontWeight: 600 }}>{fmtNum(expPackCount)} 포장</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 4, background: T.dk ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.6)' }}>
+                      <span style={{ color: T.mu }}>÷ 1 Bulto (10포장)</span>
+                      <span className="num" style={{ color: T.tx, fontWeight: 600 }}>{fmtNum(expBultoCount)} Bulto</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-            <CollapsibleSection G={T} title="일정 · 日程">
-              <InfoRow G={T} label="Order Date" value={safe(src.Order_Date)} />
-              <InfoRow G={T} label="Cutting Start" value={safe(src.Cutting_Start_Date)} />
-              <InfoRow G={T} label="Cutting End" value={safe(src.Cutting_End_Date)} />
-              <InfoRow G={T} label="Sewing Start" value={safe(src.Sewing_Start_Date)} />
-              <InfoRow G={T} label="Sewing End" value={safe(src.Sewing_End_Date)} />
-              <InfoRow G={T} label="Packing Start" value={safe(src.Packing_Start_Date)} />
-              <InfoRow G={T} label="Expected Delivery" value={safe(src.Expected_Delivery)} />
-              <InfoRow G={T} label="Ship Date" value={safe(src.Ship_Date)} />
-            </CollapsibleSection>
+            {/* ──────────────────────────────────────────────
+                J. Production Tracking
+            ────────────────────────────────────────────── */}
+            <div style={{ marginBottom: 22 }}>
+              <SectionTitle G={T} icon={<Truck size={14} style={{ color: T.accent }} />} label="생산 추적 · 生产跟踪 · Production Tracking" />
+              <div style={{ background: T.cardAlt, border: `1px solid ${T.border}`, borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {trackSteps.map((step, i) => {
+                  const v = src[step.key]
+                  const date = v ? parseZohoDate(v) : null
+                  const past = date && date < today
+                  const isToday = date && date.toDateString() === today.toDateString()
+                  const stateColor = past ? T.ok : (isToday ? T.warn : T.mu)
+                  const stateLabel = past ? '완료 · 完成' : (isToday ? 'D-Day' : (v ? '예정 · 预计' : '미정 · 未定'))
+                  return (
+                    <div key={step.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: T.surf, borderRadius: 8, border: `1px solid ${T.hair}` }}>
+                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: `${stateColor}1A`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: stateColor, flexShrink: 0 }}>
+                        <step.icon size={13} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, color: T.tx, fontWeight: 600 }}>{step.label}</div>
+                        <div className="num" style={{ fontSize: 11, color: T.mu, marginTop: 1 }}>{safe(v)}</div>
+                      </div>
+                      <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 999, background: `${stateColor}1A`, color: stateColor, fontWeight: 600, letterSpacing: '.3px', flexShrink: 0 }}>
+                        {stateLabel}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {loading && (
+              <div style={{ padding: 12, fontSize: 11, color: T.mu, textAlign: 'center' }}>
+                상세 데이터 로딩 중… · 加载详细数据中…
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      <style>{`
-        @media (max-width: 768px) {
-          .modal-body { flex-direction: column !important; }
-          .modal-body > div:first-child { width: 100% !important; border-right: none !important; border-bottom: 1px solid ${T.hair} !important; }
-        }
-      `}</style>
-    </div>
+      {zoomSrc && <Lightbox src={zoomSrc} onClose={() => setZoomSrc(null)} />}
+    </>
   )
 }

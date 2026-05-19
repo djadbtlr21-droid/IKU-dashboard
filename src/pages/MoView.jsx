@@ -783,8 +783,8 @@ export default function MoView({ G }) {
       {selectedMo && (
         <MoDetailModal
           G={G}
+          mo={selectedMo.row}
           moId={selectedMo.id}
-          moRow={selectedMo.row}
           onClose={() => setSelectedMo(null)}
         />
       )}
