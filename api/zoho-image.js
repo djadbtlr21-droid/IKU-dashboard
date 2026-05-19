@@ -47,23 +47,26 @@ export default async function handler(req, res) {
     const app = process.env.ZOHO_APP || 'eom';
 
     // ── Path 1: direct filepath passthrough (preferred — client extracts from field value) ──
+    // NOTE: Zoho file downloads live on creator.zoho.com, NOT www.zohoapis.com.
+    // Hitting www.zohoapis.com with a /api/v2.1/.../download path returns 400.
+    const creatorHost = (process.env.ZOHO_CREATOR_DOMAIN || 'https://creator.zoho.com').replace(/\/+$/, '');
     if (filepath) {
       let url;
       if (/^https?:\/\//i.test(filepath)) {
         // Already an absolute URL
         url = filepath;
       } else if (filepath.startsWith('/api/') || filepath.startsWith('/creator/')) {
-        // Zoho relative path — prepend the API domain as-is
-        url = `${domain}${filepath}`;
+        // Zoho relative file-download path — use creator.zoho.com
+        url = `${creatorHost}${filepath}`;
       } else if (filepath.startsWith('/')) {
-        // Generic absolute path
-        url = `${domain}${filepath}`;
+        // Generic absolute path — assume creator host
+        url = `${creatorHost}${filepath}`;
       } else {
-        // Bare filename — assume canonical download endpoint
+        // Bare filename — assume canonical download endpoint on creator host
         if (report && recordId && field) {
-          url = `${domain}/creator/v2.1/data/${account}/${app}/report/${encodeURIComponent(report)}/${encodeURIComponent(recordId)}/${encodeURIComponent(field)}/download?filepath=${encodeURIComponent(filepath)}`;
+          url = `${creatorHost}/api/v2.1/${account}/${app}/report/${encodeURIComponent(report)}/${encodeURIComponent(recordId)}/${encodeURIComponent(field)}/download?filepath=${encodeURIComponent(filepath)}`;
         } else {
-          url = `${domain}/${filepath}`;
+          url = `${creatorHost}/${filepath}`;
         }
       }
 
