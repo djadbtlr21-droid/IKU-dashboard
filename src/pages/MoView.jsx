@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { fetchMoList } from '../api/client'
 import MoDetailModal from '../components/MoDetailModal'
+import PipelineStageModal from '../components/PipelineStageModal'
 import ZohoImage from '../components/ZohoImage'
 import { SkeletonCard } from '../components/SkeletonLoader'
 import { useStyleData } from '../hooks/useStyleData'
@@ -248,47 +249,54 @@ function MOCard({ G, mo, onClick }) {
         </div>
       </div>
 
-      {/* Body */}
-      <div style={{ padding: "10px 12px", fontSize: 11, flex: 1 }}>
+      {/* Body — every row is single-line + ellipsis. title attr exposes full text on hover. */}
+      <div style={{ padding: "10px 12px", fontSize: 11, flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 8, color: G.mu, letterSpacing: ".5px", fontWeight: 600 }}>MO#</div>
-        <div className="num" style={{ fontSize: 14, fontWeight: 700, color: G.accent, marginBottom: 6, letterSpacing: "-.2px" }}>
+        <div className="num" title={getMoNumber(mo)} style={{ fontSize: 14, fontWeight: 700, color: G.accent, marginBottom: 6, letterSpacing: "-.2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {getMoNumber(mo)}
         </div>
 
         <div style={{ fontSize: 8, color: G.mu, letterSpacing: ".5px" }}>SKU</div>
-        <div style={{ fontSize: 10, color: G.tx, marginBottom: 4, lineHeight: 1.3, fontWeight: 500 }}>{getMoSku(mo)}</div>
+        <div title={getMoSku(mo)} style={{ fontSize: 10, color: G.tx, marginBottom: 4, lineHeight: 1.3, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{getMoSku(mo)}</div>
 
         {engName && (
           <>
             <div style={{ fontSize: 8, color: G.mu, letterSpacing: ".5px" }}>EN</div>
-            <div style={{ fontSize: 10, color: G.tx, marginBottom: 4, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{engName}</div>
+            <div title={engName} style={{ fontSize: 10, color: G.tx, marginBottom: 4, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{engName}</div>
           </>
         )}
         {chiName && (
           <>
             <div style={{ fontSize: 8, color: G.mu, letterSpacing: ".5px" }}>CN</div>
-            <div style={{ fontSize: 10, color: G.tx, marginBottom: 6, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{chiName}</div>
+            <div title={chiName} style={{ fontSize: 10, color: G.tx, marginBottom: 6, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{chiName}</div>
           </>
         )}
 
         <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px", fontSize: 9, color: G.mu, marginTop: 6 }}>
-          {category && <><span>분류</span><span style={{ color: G.tx, textAlign: "right" }}>{category}</span></>}
-          <span>공장</span><span style={{ color: G.tx, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{getMoFactory(mo)}</span>
-          {material && <><span>원단</span><span style={{ color: G.tx, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{material}</span></>}
+          {category && <>
+            <span style={{ whiteSpace: "nowrap" }}>분류</span>
+            <span title={category} style={{ color: G.tx, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{category}</span>
+          </>}
+          <span style={{ whiteSpace: "nowrap" }}>공장</span>
+          <span title={getMoFactory(mo)} style={{ color: G.tx, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{getMoFactory(mo)}</span>
+          {material && <>
+            <span style={{ whiteSpace: "nowrap" }}>원단</span>
+            <span title={material} style={{ color: G.tx, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{material}</span>
+          </>}
         </div>
 
         {/* PLAN/ACT */}
-        <div style={{ marginTop: 8, padding: "5px 8px", background: G.dk ? "rgba(147,197,253,0.12)" : "#EEF2FF", borderRadius: 4, display: "flex", justifyContent: "space-between" }}>
+        <div style={{ marginTop: 8, padding: "5px 8px", background: G.dk ? "rgba(147,197,253,0.12)" : "#EEF2FF", borderRadius: 4, display: "flex", justifyContent: "space-between", whiteSpace: "nowrap", overflow: "hidden" }}>
           <span style={{ fontSize: 9, fontWeight: 700, color: G.dk ? "#93C5FD" : "#4338CA", letterSpacing: ".5px" }}>PLAN</span>
           <span className="num" style={{ fontSize: 11, fontWeight: 700, color: G.tx }}>{planQ.toLocaleString()} pcs</span>
         </div>
-        <div style={{ marginTop: 3, padding: "5px 8px", background: G.dk ? "rgba(110,231,183,0.12)" : "#F0FDF4", borderRadius: 4, display: "flex", justifyContent: "space-between" }}>
+        <div style={{ marginTop: 3, padding: "5px 8px", background: G.dk ? "rgba(110,231,183,0.12)" : "#F0FDF4", borderRadius: 4, display: "flex", justifyContent: "space-between", whiteSpace: "nowrap", overflow: "hidden" }}>
           <span style={{ fontSize: 9, fontWeight: 700, color: G.dk ? "#6EE7B7" : "#16A34A", letterSpacing: ".5px" }}>ACT</span>
           <span className="num" style={{ fontSize: 11, fontWeight: 700, color: G.tx }}>{actQ.toLocaleString()} pcs</span>
         </div>
 
         {mo.Order_Status && (
-          <div style={{ marginTop: 6, padding: "3px 8px", background: G.dk ? "rgba(134,239,172,0.15)" : "#D1FAE5", borderRadius: 4, fontSize: 10, textAlign: "center", color: G.dk ? "#86EFAC" : "#065F46", fontWeight: 600 }}>
+          <div title={mo.Order_Status} style={{ marginTop: 6, padding: "3px 8px", background: G.dk ? "rgba(134,239,172,0.15)" : "#D1FAE5", borderRadius: 4, fontSize: 10, textAlign: "center", color: G.dk ? "#86EFAC" : "#065F46", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {mo.Order_Status}
           </div>
         )}
@@ -296,12 +304,14 @@ function MOCard({ G, mo, onClick }) {
         <div style={{ marginTop: 8, fontSize: 9, color: G.mu, lineHeight: 1.5 }}>
           {mo.Expected_Delivery && (
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>예상</span><span className="num" style={{ color: G.tx }}>{mo.Expected_Delivery}</span>
+              <span style={{ whiteSpace: "nowrap" }}>예상</span>
+              <span className="num" style={{ color: G.tx, whiteSpace: "nowrap" }}>{mo.Expected_Delivery}</span>
             </div>
           )}
           {mo.Ship_Date && (
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>출하</span><span className="num" style={{ color: G.tx }}>{mo.Ship_Date}</span>
+              <span style={{ whiteSpace: "nowrap" }}>출하</span>
+              <span className="num" style={{ color: G.tx, whiteSpace: "nowrap" }}>{mo.Ship_Date}</span>
             </div>
           )}
         </div>
@@ -359,7 +369,7 @@ export default function MoView({ G }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedMo, setSelectedMo] = useState(null)
-  const [stageFilter, setStageFilter] = useState(null)
+  const [selectedStage, setSelectedStage] = useState(null)
   const [factoryView, setFactoryView] = useState(false)
 
   // shared filters across timeline + grid
@@ -433,10 +443,9 @@ export default function MoView({ G }) {
       if (filtFactory && getMoFactory(m) !== filtFactory) return false
       if (filtProd && m.Production_Status !== filtProd) return false
       if (filtOrder && m.Order_Status !== filtOrder) return false
-      if (stageFilter && moStage(m) !== stageFilter) return false
       return true
     })
-  }, [monthMOs, search, filtCategory, filtFactory, filtProd, filtOrder, stageFilter])
+  }, [monthMOs, search, filtCategory, filtFactory, filtProd, filtOrder])
 
   // KPIs from monthMOs (or whole list when month not selected)
   const stats = useMemo(() => {
@@ -644,24 +653,14 @@ export default function MoView({ G }) {
           </span>
         </div>
 
-        {stageFilter && (
-          <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 11, color: G.mu }}>단계 필터:</span>
-            <span className="chip" style={{ background: `${STAGES.find(s => s.kr === stageFilter)?.hue}33`, color: G.tx, border: `1px solid ${STAGES.find(s => s.kr === stageFilter)?.hue}`, fontWeight: 600 }}>
-              {stageFilter}
-            </span>
-            <button onClick={() => setStageFilter(null)} style={{ fontSize: 11, color: G.bad, background: "transparent", border: "none", cursor: "pointer", fontWeight: 600 }}>✕ 해제</button>
-          </div>
-        )}
-
         {loading ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
             {[...Array(8)].map((_, i) => <SkeletonCard key={i} G={G} />)}
           </div>
         ) : filteredMOs.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: G.fa, fontSize: 12 }}>일치하는 MO 없음 · 无匹配MO</div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
             {filteredMOs.map(mo => (
               <MOCard key={mo.ID} G={G} mo={mo} onClick={() => setSelectedMo({ id: mo.ID, row: mo })} />
             ))}
@@ -698,30 +697,33 @@ export default function MoView({ G }) {
           <div className="pl-row" style={{ display: "flex", alignItems: "stretch", gap: 0, overflowX: "auto", padding: "4px 0" }}>
             {STAGES.map((stage, i) => {
               const count = stageCounts[stage.kr] || 0
-              const active = stageFilter === stage.kr
               return (
                 <Fragment key={stage.kr}>
                   <div
                     className="pl-stg"
-                    onClick={() => setStageFilter(active ? null : stage.kr)}
-                    style={{
-                      minWidth: 116, flex: 1, padding: "14px 16px",
-                      display: "flex", flexDirection: "column", justifyContent: "space-between",
-                      borderRadius: 10, cursor: "pointer",
-                      background: active ? `${stage.hue}1A` : (G.dk ? "rgba(245,240,232,0.025)" : "rgba(201,168,110,0.04)"),
-                      transition: "background .15s",
-                      border: active ? `1px solid ${stage.hue}` : "1px solid transparent",
+                    onClick={() => {
+                      const stageMos = monthMOs.filter(m => moStage(m) === stage.kr)
+                      setSelectedStage({ stage, mos: stageMos })
                     }}
+                    style={{
+                      minWidth: 130, flex: 1, padding: "20px 12px",
+                      minHeight: 180,
+                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12,
+                      borderRadius: 12, cursor: "pointer",
+                      background: G.dk ? "rgba(245,240,232,0.025)" : "rgba(201,168,110,0.04)",
+                      transition: "background .15s, transform .15s",
+                      border: "1px solid transparent",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = `${stage.hue}1A`; e.currentTarget.style.borderColor = stage.hue; e.currentTarget.style.transform = "translateY(-2px)" }}
+                    onMouseLeave={e => { e.currentTarget.style.background = G.dk ? "rgba(245,240,232,0.025)" : "rgba(201,168,110,0.04)"; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.transform = "" }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <stage.Icon size={14} style={{ color: stage.hue }} />
-                      <span className="num syne" style={{ fontSize: 24, fontWeight: 700, color: stage.hue, lineHeight: 1 }}>{count}</span>
+                    <stage.Icon size={36} strokeWidth={1.5} style={{ color: stage.hue }} />
+                    <span className="num syne" style={{ fontSize: 56, fontWeight: 800, color: stage.hue, lineHeight: 1, letterSpacing: "-2px" }}>{count}</span>
+                    <div style={{ textAlign: "center", lineHeight: 1.3 }}>
+                      <div style={{ fontSize: 15, color: G.tx, fontWeight: 600, letterSpacing: ".3px" }}>{stage.kr}</div>
+                      <div style={{ fontSize: 13, color: G.mu, marginTop: 3 }}>{stage.cn}</div>
                     </div>
-                    <div style={{ marginTop: 10 }}>
-                      <div style={{ fontSize: 11, color: G.tx, fontWeight: 600, letterSpacing: ".2px" }}>{stage.kr}</div>
-                      <div style={{ fontSize: 9, color: G.mu, marginTop: 1 }}>{stage.cn}</div>
-                      <div style={{ marginTop: 6, width: 28, height: 3, background: stage.hue, borderRadius: 2 }} />
-                    </div>
+                    <div style={{ width: 48, height: 4, background: stage.hue, borderRadius: 2, marginTop: 2 }} />
                   </div>
                   {i < STAGES.length - 1 && (
                     <div className="pl-arr" style={{ display: "flex", alignItems: "center", padding: "0 4px", color: G.fa, flexShrink: 0 }}>
@@ -764,6 +766,19 @@ export default function MoView({ G }) {
           </div>
         )}
       </div>
+
+      {selectedStage && (
+        <PipelineStageModal
+          G={G}
+          stage={selectedStage.stage}
+          mos={selectedStage.mos}
+          onClose={() => setSelectedStage(null)}
+          onMoClick={(mo) => {
+            setSelectedStage(null)
+            setSelectedMo({ id: mo.ID, row: mo })
+          }}
+        />
+      )}
 
       {selectedMo && (
         <MoDetailModal
