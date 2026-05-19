@@ -186,14 +186,16 @@ export default function CoverPage({ onEnter }) {
       <div style={{position:"absolute",inset:0,zIndex:10,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
         <div style={{
           fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,
-          fontSize:"6vw",
-          lineHeight:1.0,textAlign:"center",
+          fontSize:"7.5vw",
+          lineHeight:0.95,
+          textAlign:"center",
           color:"#FFFFFF",letterSpacing:"-0.01em",
           textShadow:"1px 1px 0px rgba(0,0,0,0.15), 2px 2px 4px rgba(0,0,0,0.08)",
-          mixBlendMode:"overlay",userSelect:"none",
-          whiteSpace:"nowrap",
+          mixBlendMode:"overlay",
+          userSelect:"none",
         }}>
-          IKU ERP DASHBOARD
+          <div>IKU ERP</div>
+          <div>DASHBOARD</div>
         </div>
 
         <div style={{marginTop:32,pointerEvents:"auto"}}>

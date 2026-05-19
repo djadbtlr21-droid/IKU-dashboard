@@ -10,8 +10,8 @@ const LT = {
   bg: "#FAFAF7", surf: "#FFFFFF", card: "#FFFFFF", cardAlt: "#FBF9F4",
   border: "#EDE8DE", hair: "#E4DED2",
   primary: "#C9A86E", primarySoft: "#E8D5B0", accent: "#9A7228",
-  tx: "#1A1714", mu: "#7A7268", fa: "#C8C0B2",
-  ok: "#5E8C6E", bad: "#A14E3A", warn: "#B47A3F", cool: "#6B7F94",
+  tx: "#1A1714", mu: "#5A5248", fa: "#9A9080",
+  ok: "#4A7058", bad: "#8A3E2E", warn: "#8A5A2E", cool: "#4E627A",
   nh: "rgba(26,23,20,0.035)", rh: "rgba(26,23,20,0.02)",
   cardShadow: "0 2px 8px rgba(26,23,20,0.06), 0 1px 2px rgba(26,23,20,0.04)",
   overlayBg: "rgba(26,23,20,0.45)",
@@ -34,7 +34,7 @@ export const useTheme = () => useContext(ThemeContext)
 const mkCSS = G => `
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body,#root{height:100%}
-body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color:${G.tx};background:${G.bg};overscroll-behavior-y:none}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14.3px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color:${G.tx};background:${G.bg};overscroll-behavior-y:none}
 button{font-family:inherit;touch-action:manipulation}
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -79,7 +79,7 @@ button{font-family:inherit;touch-action:manipulation}
   .page-wrap{padding:16px!important;padding-bottom:80px!important}
 }
 @media(max-width:480px){
-  body{font-size:14px}
+  body{font-size:15.4px}
   .card{border-radius:10px}
 }
 `
