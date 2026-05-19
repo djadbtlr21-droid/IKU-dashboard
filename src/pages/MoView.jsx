@@ -36,19 +36,32 @@ const STAGES = [
 
 function Rail({ G }) { return G.dk ? <span className="rail" /> : null }
 
-// Map a MO record to a pipeline stage key (kr label)
+// Map a MO record to a pipeline stage key (kr label).
+// Priority: explicit late-stage signals first, then earlier stages, then explicit
+// "not started" markers, finally fall back to 미시작 (NOT 재봉) so unknown
+// statuses don't get misclassified as mid-flight.
 function moStage(mo) {
-  const ps = String(mo.Production_Status || '').toLowerCase()
+  const raw = String(mo.Production_Status || '').trim()
+  const ps = raw.toLowerCase()
   const os = String(mo.Order_Status || '').toLowerCase()
   const ds = String(mo.Delivery_Status || '').toLowerCase()
-  if (/ship|出货|出货完|delivered/.test(ds) || /ship|出货|出货完|delivered/.test(ps)) return "출고"
-  if (/complet|완료|done|finish|finished/.test(ps) || /complet|完成/.test(os)) return "완료"
-  if (/pack|包装|packing/.test(ps)) return "포장"
-  if (/sew|缝|봉제|stitch|sewing/.test(ps)) return "재봉"
-  if (/cut|裁|재단/.test(ps)) return "재단"
-  if (/fab|면료|원단|fabric/.test(ps)) return "원단"
-  if (!ps) return "미시작"
-  return "재봉" // default mid-flight
+
+  // Explicit empty / not-started — match before partial-keyword regex so e.g.
+  // "Not Started" doesn't accidentally hit the 'sew' / 'pack' / etc. branches.
+  if (!raw) return "미시작"
+  if (/not\s*start|미시작|未开始|未开|not started/i.test(raw)) return "미시작"
+
+  if (/ship|出货|出货完|delivered|出库/.test(ds) || /ship|出货|出货完|delivered|出库/.test(ps)) return "출고"
+  if (/complet|완료|done|finish|finished|完成/.test(ps) || /complet|完成/.test(os)) return "완료"
+  if (/pack|包装|packing|포장/.test(ps)) return "포장"
+  if (/sew|缝|봉제|stitch|sewing|재봉/.test(ps)) return "재봉"
+  if (/cut|裁|재단|cutting/.test(ps)) return "재단"
+  if (/fab|면료|원단|fabric|trim|面料/.test(ps)) return "원단"
+
+  // Unknown / unmapped status — treat as not yet started rather than
+  // assuming mid-flight (was previously returning 재봉, which mis-labeled
+  // any MO with a status string we hadn't seen before).
+  return "미시작"
 }
 
 function statusOverlayColor(mo, G) {
