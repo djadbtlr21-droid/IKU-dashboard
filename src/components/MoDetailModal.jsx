@@ -325,6 +325,263 @@ function Lightbox({ src, onClose }) {
 }
 
 // ──────────────────────────────────────────────────────────
+// Production Log + Packaging helpers (Sections K + L)
+// ──────────────────────────────────────────────────────────
+
+// Field-name probe: try a list of candidate keys, return first non-empty value
+function pick(obj, candidates) {
+  if (!obj) return undefined
+  for (const k of candidates) {
+    const v = obj[k]
+    if (v !== null && v !== undefined && v !== '') return v
+  }
+  return undefined
+}
+
+function pickArray(obj, candidates) {
+  if (!obj) return []
+  for (const k of candidates) {
+    const v = obj[k]
+    if (Array.isArray(v) && v.length) return v
+  }
+  return []
+}
+
+function ProgressBar({ G, label, current, total, color }) {
+  const pct = total > 0 ? Math.min((current / total) * 100, 100) : 0
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: G.mu, marginBottom: 6 }}>
+        <span style={{ fontWeight: 500 }}>{label}</span>
+        <span className="num" style={{ color: G.tx, fontWeight: 600 }}>{current} / {total}</span>
+      </div>
+      <div style={{ height: 8, background: G.cardAlt, borderRadius: 4, overflow: 'hidden', border: `1px solid ${G.hair}` }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color || G.primary, transition: 'width .4s ease' }} />
+      </div>
+      <div className="num" style={{ fontSize: 10, color: G.mu, marginTop: 3, textAlign: 'right' }}>{pct.toFixed(0)}%</div>
+    </div>
+  )
+}
+
+const PACK_STATUS_DEFS = [
+  { key: 'Created', emoji: '✅', kr: '생성됨', cn: '已创建' },
+  { key: 'Bagged', emoji: '📦', kr: '마대 포장', cn: '已装袋' },
+  { key: 'Shipped', emoji: '📦', kr: '출고됨', cn: '已发货' },
+  { key: 'Received', emoji: '📥', kr: '입고됨', cn: '已入仓' },
+  { key: 'Out For Delivery', emoji: '🚚', kr: '배송 중', cn: '配送中' },
+  { key: 'Delivered', emoji: '✓', kr: '도착 완료', cn: '已交付' },
+]
+
+function StatusList({ G, statuses, packs }) {
+  const getStatus = p => pick(p, ['Status', 'State', 'Pack_Status']) || 'Unknown'
+  const counts = packs.reduce((m, p) => { const k = getStatus(p); m[k] = (m[k] || 0) + 1; return m }, {})
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      {statuses.map(s => {
+        const count = counts[s.key] || 0
+        const sample = packs.find(p => getStatus(p) === s.key)
+        const date = sample && pick(sample, ['Created_Time', 'Added_Time', 'Modified_Time', 'Date'])
+        const worker = sample && pick(sample, ['Worker', 'Operator', 'Added_User'])
+        const has = count > 0
+        return (
+          <div key={s.key} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '7px 12px', borderRadius: 6,
+            background: has ? G.cardAlt : 'transparent',
+            border: `1px solid ${has ? G.hair : 'transparent'}`,
+            fontSize: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 14 }}>{s.emoji}</span>
+              <span style={{ color: G.tx, fontWeight: 500 }}>{s.key}</span>
+              <span style={{ color: G.mu, fontSize: 11 }}>/ {s.kr} / {s.cn}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+              <span className="num" style={{ fontWeight: 700, color: has ? G.primary : G.fa, minWidth: 30, textAlign: 'right' }}>{count}</span>
+              {date && <span className="num" style={{ color: G.mu, fontSize: 10, minWidth: 80 }}>{String(date).split(' ')[0]}</span>}
+              {worker && <span style={{ color: G.mu, fontSize: 10 }}>{worker}</span>}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function PackTable({ G, packs }) {
+  if (!packs.length) {
+    return <div style={{ textAlign: 'center', padding: 20, color: G.mu, fontSize: 12 }}>데이터 없음 · 无数据</div>
+  }
+  const th = { padding: '8px 10px', textAlign: 'left', fontSize: 10, fontWeight: 600, color: G.mu, borderBottom: `1px solid ${G.border}`, letterSpacing: '.3px', textTransform: 'uppercase' }
+  const td = { padding: '7px 10px', color: G.tx, fontSize: 11 }
+  return (
+    <div style={{ maxHeight: 360, overflow: 'auto', border: `1px solid ${G.hair}`, borderRadius: 8 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead style={{ position: 'sticky', top: 0, background: G.cardAlt, zIndex: 1 }}>
+          <tr>
+            <th style={th}>Pack# · 编号</th>
+            <th style={th}>Status · 状态</th>
+            <th style={{ ...th, textAlign: 'right' }}>Qty · 数量</th>
+            <th style={th}>Worker · 担当</th>
+            <th style={th}>Created · 创建</th>
+          </tr>
+        </thead>
+        <tbody>
+          {packs.map((p, i) => {
+            const num = pick(p, ['Pack_Number', 'Bag_Number', 'Sequence', 'Pack_Sequence', 'ID']) || (i + 1)
+            const status = pick(p, ['Status', 'State']) || '—'
+            const qty = pick(p, ['Quantity', 'Qty', 'Pack_Quantity']) || ''
+            const worker = pick(p, ['Worker', 'Operator', 'Added_User']) || '—'
+            const created = pick(p, ['Created_Time', 'Added_Time', 'Modified_Time']) || '—'
+            return (
+              <tr key={p.ID || i} style={{ borderBottom: `1px solid ${G.hair}`, background: i % 2 === 0 ? 'transparent' : G.rh }}>
+                <td className="num" style={{ ...td, fontWeight: 600, color: G.accent }}>#{String(num).slice(-6)}</td>
+                <td style={td}>{status}</td>
+                <td className="num" style={{ ...td, textAlign: 'right', fontWeight: 600 }}>{qty}</td>
+                <td style={td}>{worker}</td>
+                <td className="num" style={td}>{created}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function ProductionLogTable({ G, logs }) {
+  if (!logs?.length) return null
+  const th = { padding: '8px 10px', textAlign: 'left', fontSize: 10, fontWeight: 600, color: G.mu, borderBottom: `1px solid ${G.border}`, letterSpacing: '.3px', textTransform: 'uppercase', background: G.cardAlt }
+  const td = { padding: '8px 10px', color: G.tx, fontSize: 12 }
+  return (
+    <div style={{ overflowX: 'auto', border: `1px solid ${G.hair}`, borderRadius: 8 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={th}>공정 · 工序</th>
+            <th style={{ ...th, textAlign: 'right' }}>완성 · 完成</th>
+            <th style={{ ...th, textAlign: 'right' }}>미완성 · 未完成</th>
+            <th style={th}>담당 · 负责人</th>
+            <th style={th}>기록 · 记录时间</th>
+            <th style={th}>비고 · 备注</th>
+          </tr>
+        </thead>
+        <tbody>
+          {logs.map((log, i) => {
+            const process = pick(log, ['Process', 'Stage', 'Operation', 'Type', 'Step']) || '—'
+            const done = pick(log, ['Completed_Qty', 'Done_Qty', 'Quantity_Done', 'Qty_Completed', 'Quantity'])
+            const pending = pick(log, ['Pending_Qty', 'Remaining_Qty', 'Qty_Pending'])
+            const worker = pick(log, ['Worker', 'Operator', 'Recorder', 'Added_User']) || '—'
+            const time = pick(log, ['Recorded_Time', 'Log_Date', 'Added_Time', 'Modified_Time']) || '—'
+            const notes = pick(log, ['Notes', 'Remark', 'Comments', 'Note']) || '—'
+            return (
+              <tr key={log.ID || i} style={{ borderBottom: `1px solid ${G.hair}`, background: i % 2 === 0 ? 'transparent' : G.rh }}>
+                <td style={{ ...td, fontWeight: 600 }}>{process}</td>
+                <td className="num" style={{ ...td, textAlign: 'right', color: G.primary, fontWeight: 700 }}>{done != null ? Number(done).toLocaleString() : '—'}</td>
+                <td className="num" style={{ ...td, textAlign: 'right', color: G.mu }}>{pending != null ? Number(pending).toLocaleString() : '—'}</td>
+                <td style={td}>{worker}</td>
+                <td className="num" style={td}>{time}</td>
+                <td style={{ ...td, color: G.mu }}>{notes}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// PackagingSection — fetches Inner_Packs and Master_Bags either from
+// subform on the MO record or from /api/packs-list.
+function PackagingSection({ G, src }) {
+  const moNumber = src?.MO_Number
+  const planQty = Number(src?.Plan_Total_Quantity || 0)
+
+  const subformInner = pickArray(src, ['Inner_Packs', 'Inner_Pack_List', 'InnerPacks'])
+  const subformMaster = pickArray(src, ['Master_Bags', 'MasterBags', 'Bulto_List'])
+
+  const [innerPacks, setInnerPacks] = useState(subformInner)
+  const [masterBags, setMasterBags] = useState(subformMaster)
+  const [loading, setLoading] = useState(false)
+  const [showInnerList, setShowInnerList] = useState(false)
+  const [showMasterList, setShowMasterList] = useState(false)
+
+  useEffect(() => {
+    if (!moNumber) return
+    // If subforms already populated, skip the fetch.
+    if (subformInner.length || subformMaster.length) {
+      setInnerPacks(subformInner)
+      setMasterBags(subformMaster)
+      return
+    }
+    setLoading(true)
+    Promise.all([
+      fetch(`/api/packs-list?mo=${encodeURIComponent(moNumber)}&type=inner`).then(r => r.json()).catch(() => ({ data: [] })),
+      fetch(`/api/packs-list?mo=${encodeURIComponent(moNumber)}&type=master`).then(r => r.json()).catch(() => ({ data: [] })),
+    ]).then(([inner, master]) => {
+      setInnerPacks(inner?.data || [])
+      setMasterBags(master?.data || [])
+    }).finally(() => setLoading(false))
+  }, [moNumber, subformInner.length, subformMaster.length])
+
+  const innerTotal = planQty ? Math.ceil(planQty / 12) : 0
+  const masterTotal = planQty ? Math.ceil(planQty / 120) : 0
+  const innerCreated = innerPacks.length
+  const masterCreated = masterBags.length
+
+  return (
+    <div style={{ background: G.cardAlt, border: `1px solid ${G.border}`, borderRadius: 12, padding: 16 }}>
+      <ProgressBar G={G} label="Inner Pack 진행률 · 中间包装进度" current={innerCreated} total={innerTotal} color={G.primary} />
+      <ProgressBar G={G} label="Master Bag 진행률 · 麻袋进度" current={masterCreated} total={masterTotal} color={G.primary} />
+
+      <div style={{ marginTop: 18 }}>
+        <div className="syne" style={{ fontSize: 11, fontWeight: 700, color: G.mu, letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 8 }}>
+          Inner Pack 상태별 · 包状态分布
+        </div>
+        <StatusList G={G} statuses={PACK_STATUS_DEFS} packs={innerPacks} />
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <div className="syne" style={{ fontSize: 11, fontWeight: 700, color: G.mu, letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 8 }}>
+          Master Bag 상태별 · 麻袋状态分布
+        </div>
+        <StatusList G={G} statuses={PACK_STATUS_DEFS.filter(s => s.key !== 'Bagged')} packs={masterBags} />
+      </div>
+
+      <div style={{ marginTop: 18, borderTop: `1px solid ${G.hair}`, paddingTop: 12 }}>
+        <button onClick={() => setShowInnerList(v => !v)} style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'transparent', border: 'none', color: G.tx, cursor: 'pointer',
+          padding: '6px 0', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+        }}>
+          <span>개별 Inner Pack 리스트 · 中间包装明细 ({innerCreated})</span>
+          <span style={{ color: G.mu, fontSize: 11 }}>{showInnerList ? '▲' : '▼'}</span>
+        </button>
+        {showInnerList && <div style={{ marginTop: 8 }}><PackTable G={G} packs={innerPacks} /></div>}
+      </div>
+
+      <div style={{ marginTop: 8, borderTop: `1px solid ${G.hair}`, paddingTop: 12 }}>
+        <button onClick={() => setShowMasterList(v => !v)} style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'transparent', border: 'none', color: G.tx, cursor: 'pointer',
+          padding: '6px 0', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+        }}>
+          <span>개별 Master Bag 리스트 · 麻袋明细 ({masterCreated})</span>
+          <span style={{ color: G.mu, fontSize: 11 }}>{showMasterList ? '▲' : '▼'}</span>
+        </button>
+        {showMasterList && <div style={{ marginTop: 8 }}><PackTable G={G} packs={masterBags} /></div>}
+      </div>
+
+      {loading && (
+        <div style={{ marginTop: 12, fontSize: 11, color: G.mu, textAlign: 'center' }}>
+          포장 데이터 로딩 중… · 加载包装数据中…
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────────────────
 // Main modal
 // ──────────────────────────────────────────────────────────
 export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
@@ -343,7 +600,22 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
     setLoading(true)
     setError(null)
     fetchMoDetail(id)
-      .then(setDetail)
+      .then(data => {
+        setDetail(data)
+        // Field-discovery diagnostic — surfaces subform names + first-row keys
+        try {
+          const rec = Array.isArray(data?.data) ? data.data[0] : (data?.data || data)
+          if (rec && typeof rec === 'object') {
+            const arrays = Object.entries(rec).filter(([, v]) => Array.isArray(v))
+            console.log('[MO_DETAIL] All keys:', Object.keys(rec))
+            console.log('[MO_DETAIL] Array fields (subforms):')
+            arrays.forEach(([k, v]) => {
+              const firstKeys = v[0] && typeof v[0] === 'object' ? Object.keys(v[0]) : '(primitives)'
+              console.log(`  ${k}: length=${v.length}, sample keys:`, firstKeys)
+            })
+          }
+        } catch (e) { /* ignore */ }
+      })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [id])
@@ -790,6 +1062,28 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
                   )
                 })}
               </div>
+            </div>
+
+            {/* ──────────────────────────────────────────────
+                K. Production Log (생산 로그)
+            ────────────────────────────────────────────── */}
+            {(() => {
+              const productionLogs = pickArray(src, ['Production_Logs', 'Process_Logs', 'Operations', 'Logs', 'Cutting_Logs', 'Fabric_Logs', 'Production_Records'])
+              if (!productionLogs.length) return null
+              return (
+                <div style={{ marginBottom: 22 }}>
+                  <SectionTitle G={T} icon={<FileText size={14} style={{ color: T.accent }} />} label="생산 로그 · 生产记录 · Production Log" />
+                  <ProductionLogTable G={T} logs={productionLogs} />
+                </div>
+              )
+            })()}
+
+            {/* ──────────────────────────────────────────────
+                L. Packaging Status (포장 현황)
+            ────────────────────────────────────────────── */}
+            <div style={{ marginBottom: 22 }}>
+              <SectionTitle G={T} icon={<Package size={14} style={{ color: T.accent }} />} label="포장 현황 · 包装现况 · Packaging Status" />
+              <PackagingSection G={T} src={src} />
             </div>
 
             {loading && (
