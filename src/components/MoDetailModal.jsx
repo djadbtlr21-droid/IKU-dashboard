@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
+import { X, ChevronRight as ChevronRightIcon } from 'lucide-react'
 import { fetchMoDetail } from '../api/client'
 import StyleImageCarousel from './StyleImageCarousel'
 import {
   getMoNumber, getMoSku, getMoFactory, getMoStatus,
   getPlanQty, getActualQty, getEndDate, isOverdue, isDelayed,
-  STATUS_COLORS, parseZohoDate, parseSpecJSON,
+  parseZohoDate, parseSpecJSON,
 } from '../utils/moHelpers'
 
 function safe(val) {
@@ -13,10 +14,10 @@ function safe(val) {
   return String(val) || '—'
 }
 
-function Section({ title, children }) {
+function Section({ G, title, children }) {
   return (
-    <div className="mb-6">
-      <h3 className="text-xs font-bold tracking-widest uppercase mb-3" style={{ color: '#C9A86E' }}>
+    <div style={{ marginBottom: 22 }}>
+      <h3 className="syne" style={{ fontSize: 11, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase", color: G.accent, marginBottom: 12 }}>
         {title}
       </h3>
       {children}
@@ -24,75 +25,64 @@ function Section({ title, children }) {
   )
 }
 
-function InfoRow({ label, value, highlight }) {
+function InfoRow({ G, label, value, highlight }) {
   return (
-    <div className="flex items-start gap-3 py-2" style={{ borderBottom: '1px solid rgba(201,168,110,0.08)' }}>
-      <span className="text-xs w-36 flex-shrink-0 mt-0.5" style={{ color: '#8896B3' }}>{label}</span>
-      <span className={`text-sm font-medium flex-1 break-words ${highlight ? 'text-red-400' : ''}`}
-        style={highlight ? {} : { color: '#F5F1E8' }}>
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "7px 0", borderBottom: `1px solid ${G.hair}` }}>
+      <span style={{ fontSize: 11, width: 140, flexShrink: 0, marginTop: 1, color: G.mu, letterSpacing: ".2px" }}>{label}</span>
+      <span className="num" style={{ fontSize: 13, fontWeight: 500, flex: 1, wordBreak: "break-word", color: highlight ? G.bad : G.tx }}>
         {value || '—'}
       </span>
     </div>
   )
 }
 
-function CollapsibleSection({ title, defaultOpen = false, children }) {
+function CollapsibleSection({ G, title, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="mb-4">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 w-full text-left py-2"
-        style={{ borderBottom: '1px solid rgba(201,168,110,0.1)', color: '#C9A86E' }}
-      >
-        <svg className={`w-4 h-4 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
-        <span className="text-xs font-bold tracking-widest uppercase">{title}</span>
+    <div style={{ marginBottom: 16 }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
+        padding: "8px 0", borderBottom: `1px solid ${G.hair}`, color: G.accent,
+        background: "transparent", border: "none", cursor: "pointer", borderRadius: 0, borderBottomColor: G.hair, borderBottomWidth: 1, borderBottomStyle: "solid",
+      }}>
+        <ChevronRightIcon size={14} style={{ transition: "transform .15s", transform: open ? "rotate(90deg)" : "none" }} />
+        <span className="syne" style={{ fontSize: 11, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" }}>{title}</span>
       </button>
-      {open && <div className="mt-3">{children}</div>}
+      {open && <div style={{ marginTop: 12 }}>{children}</div>}
     </div>
   )
 }
 
-// Renders Top_Spec_JSON / Bottom_Spec_JSON
-// Format: array of {pom, s, m, l, xl, notes} after parsing
-function SpecTable({ json }) {
-  if (!json) return <p className="text-xs" style={{ color: '#8896B3' }}>데이터 없음 · 无数据</p>
-
+function SpecTable({ G, json }) {
+  if (!json) return <p style={{ fontSize: 11, color: G.mu }}>데이터 없음 · 无数据</p>
   const rows = parseSpecJSON(json)
-  if (!rows || !rows.length) return <p className="text-xs" style={{ color: '#8896B3' }}>데이터 없음 · 无数据</p>
+  if (!rows || !rows.length) return <p style={{ fontSize: 11, color: G.mu }}>데이터 없음 · 无数据</p>
 
-  // Collect size columns (everything except pom and notes)
   const allKeys = Object.keys(rows[0] || {})
-  const sizeKeys = allKeys.filter((k) => k !== 'pom' && k !== 'notes' && k !== 'ID' && k !== 'zc_display_value')
+  const sizeKeys = allKeys.filter(k => k !== 'pom' && k !== 'notes' && k !== 'ID' && k !== 'zc_display_value')
 
   return (
-    <div className="overflow-x-auto">
-      <table className="text-xs w-full" style={{ borderCollapse: 'collapse' }}>
+    <div style={{ overflowX: "auto" }}>
+      <table className="num" style={{ fontSize: 11, width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th className="text-left py-1.5 px-2" style={{ color: '#8896B3', background: '#1A1F2E' }}>POM</th>
-            {sizeKeys.map((s) => (
-              <th key={s} className="py-1.5 px-2 text-center uppercase" style={{ color: '#C9A86E', background: '#1A1F2E' }}>{s}</th>
+            <th style={{ textAlign: "left", padding: "6px 8px", color: G.mu, background: G.cardAlt, fontWeight: 600 }}>POM</th>
+            {sizeKeys.map(s => (
+              <th key={s} style={{ padding: "6px 8px", textAlign: "center", textTransform: "uppercase", color: G.accent, background: G.cardAlt, fontWeight: 700 }}>{s}</th>
             ))}
             {allKeys.includes('notes') && (
-              <th className="py-1.5 px-2 text-left" style={{ color: '#8896B3', background: '#1A1F2E' }}>비고</th>
+              <th style={{ padding: "6px 8px", textAlign: "left", color: G.mu, background: G.cardAlt, fontWeight: 600 }}>비고</th>
             )}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => (
-            <tr key={i} style={{ borderBottom: '1px solid rgba(201,168,110,0.06)' }}>
-              <td className="py-1.5 px-2 font-medium" style={{ color: '#F5F1E8' }}>{safe(row.pom)}</td>
-              {sizeKeys.map((s) => (
-                <td key={s} className="py-1.5 px-2 text-center" style={{ color: '#94A3B8' }}>
-                  {row[s] ?? '—'}
-                </td>
+            <tr key={i} style={{ borderBottom: `1px solid ${G.hair}` }}>
+              <td style={{ padding: "6px 8px", fontWeight: 600, color: G.tx }}>{safe(row.pom)}</td>
+              {sizeKeys.map(s => (
+                <td key={s} style={{ padding: "6px 8px", textAlign: "center", color: G.mu }}>{row[s] ?? '—'}</td>
               ))}
-              {allKeys.includes('notes') && (
-                <td className="py-1.5 px-2" style={{ color: '#8896B3' }}>{row.notes || ''}</td>
-              )}
+              {allKeys.includes('notes') && <td style={{ padding: "6px 8px", color: G.mu }}>{row.notes || ''}</td>}
             </tr>
           ))}
         </tbody>
@@ -101,81 +91,60 @@ function SpecTable({ json }) {
   )
 }
 
-// Plan_MO_Lines: [{Plan_Color, Plan_Sizes, Plan_Quantity, ...}]
-// Each line = one color × size combination
-function MatrixTable({ lines = [] }) {
-  if (!lines.length) {
-    return <p className="text-xs" style={{ color: '#8896B3' }}>서브폼 데이터 없음 · 无子表单数据</p>
-  }
+function MatrixTable({ G, lines = [] }) {
+  if (!lines.length) return <p style={{ fontSize: 11, color: G.mu }}>서브폼 데이터 없음 · 无子表单数据</p>
 
-  const colors = [...new Set(lines.map((l) => safe(l.Plan_Color || l.Color || l.color)))]
-  const sizes = [...new Set(lines.map((l) => safe(l.Plan_Sizes || l.Size || l.size)))]
+  const colors = [...new Set(lines.map(l => safe(l.Plan_Color || l.Color || l.color)))]
+  const sizes = [...new Set(lines.map(l => safe(l.Plan_Sizes || l.Size || l.size)))]
 
   function cell(color, size) {
-    const row = lines.find((l) =>
+    const row = lines.find(l =>
       safe(l.Plan_Color || l.Color || l.color) === color &&
       safe(l.Plan_Sizes || l.Size || l.size) === size
     )
     if (!row) return null
-    return {
-      plan: Number(row.Plan_Quantity || row.Plan_Qty || row.plan_qty || 0),
-      price: row.Plan_Unit_Price || null,
-    }
+    return { plan: Number(row.Plan_Quantity || row.Plan_Qty || row.plan_qty || 0) }
   }
 
-  function cellBg(plan) {
-    if (!plan) return 'transparent'
-    return 'rgba(201,168,110,0.08)'
-  }
-
-  const colTotals = sizes.map((size) =>
-    lines.filter((l) => safe(l.Plan_Sizes || l.Size || l.size) === size)
-      .reduce((sum, l) => sum + Number(l.Plan_Quantity || 0), 0)
+  const colTotals = sizes.map(size =>
+    lines.filter(l => safe(l.Plan_Sizes || l.Size || l.size) === size)
+      .reduce((s, l) => s + Number(l.Plan_Quantity || 0), 0)
   )
   const grandTotal = colTotals.reduce((a, b) => a + b, 0)
 
   return (
-    <div className="overflow-x-auto">
-      <table className="text-xs w-full" style={{ borderCollapse: 'collapse' }}>
+    <div style={{ overflowX: "auto" }}>
+      <table className="num" style={{ fontSize: 11, width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th className="py-1.5 px-2 text-left" style={{ color: '#8896B3', background: '#1A1F2E' }}>컬러 · 颜色</th>
-            {sizes.map((s) => (
-              <th key={s} className="py-1.5 px-2 text-center" style={{ color: '#C9A86E', background: '#1A1F2E' }}>{s}</th>
-            ))}
-            <th className="py-1.5 px-2 text-center" style={{ color: '#8896B3', background: '#1A1F2E' }}>합계</th>
+            <th style={{ padding: "6px 8px", textAlign: "left", color: G.mu, background: G.cardAlt, fontWeight: 600 }}>컬러 · 颜色</th>
+            {sizes.map(s => <th key={s} style={{ padding: "6px 8px", textAlign: "center", color: G.accent, background: G.cardAlt, fontWeight: 700 }}>{s}</th>)}
+            <th style={{ padding: "6px 8px", textAlign: "center", color: G.mu, background: G.cardAlt, fontWeight: 600 }}>합계</th>
           </tr>
         </thead>
         <tbody>
-          {colors.map((color) => {
+          {colors.map(color => {
             let rowTotal = 0
             return (
-              <tr key={color} style={{ borderBottom: '1px solid rgba(201,168,110,0.06)' }}>
-                <td className="py-1.5 px-2 font-medium" style={{ color: '#F5F1E8' }}>{color}</td>
-                {sizes.map((size) => {
+              <tr key={color} style={{ borderBottom: `1px solid ${G.hair}` }}>
+                <td style={{ padding: "6px 8px", fontWeight: 600, color: G.tx }}>{color}</td>
+                {sizes.map(size => {
                   const data = cell(color, size)
                   if (data) rowTotal += data.plan
                   return (
-                    <td key={size} className="py-1.5 px-2 text-center" style={{ background: cellBg(data?.plan) }}>
-                      {data?.plan > 0 ? (
-                        <span style={{ color: '#C9A86E', fontWeight: 600 }}>{data.plan}</span>
-                      ) : '—'}
+                    <td key={size} style={{ padding: "6px 8px", textAlign: "center", background: data?.plan ? `${G.primary}1A` : "transparent" }}>
+                      {data?.plan > 0 ? <span style={{ color: G.accent, fontWeight: 600 }}>{data.plan}</span> : '—'}
                     </td>
                   )
                 })}
-                <td className="py-1.5 px-2 text-center font-bold" style={{ color: '#C9A86E' }}>
-                  {rowTotal || '—'}
-                </td>
+                <td style={{ padding: "6px 8px", textAlign: "center", fontWeight: 700, color: G.accent }}>{rowTotal || '—'}</td>
               </tr>
             )
           })}
-          {/* Total row */}
-          <tr style={{ background: 'rgba(201,168,110,0.05)', borderTop: '2px solid rgba(201,168,110,0.2)' }}>
-            <td className="py-1.5 px-2 font-bold text-xs" style={{ color: '#8896B3' }}>합계 · 合计</td>
-            {colTotals.map((t, i) => (
-              <td key={i} className="py-1.5 px-2 text-center font-bold" style={{ color: '#F5F1E8' }}>{t || '—'}</td>
-            ))}
-            <td className="py-1.5 px-2 text-center font-bold" style={{ color: '#C9A86E' }}>{grandTotal}</td>
+          <tr style={{ background: `${G.primary}0D`, borderTop: `2px solid ${G.primary}33` }}>
+            <td style={{ padding: "6px 8px", fontWeight: 700, color: G.mu }}>합계 · 合计</td>
+            {colTotals.map((t, i) => <td key={i} style={{ padding: "6px 8px", textAlign: "center", fontWeight: 700, color: G.tx }}>{t || '—'}</td>)}
+            <td style={{ padding: "6px 8px", textAlign: "center", fontWeight: 700, color: G.accent }}>{grandTotal}</td>
           </tr>
         </tbody>
       </table>
@@ -183,7 +152,7 @@ function MatrixTable({ lines = [] }) {
   )
 }
 
-export default function MoDetailModal({ moId, moRow, onClose }) {
+export default function MoDetailModal({ G, moId, moRow, onClose }) {
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -193,27 +162,17 @@ export default function MoDetailModal({ moId, moRow, onClose }) {
     setLoading(true)
     setError(null)
     fetchMoDetail(moId)
-      .then((data) => {
-        console.log('[MoDetailModal] response:', JSON.stringify(data).slice(0, 2000))
-        setDetail(data)
-      })
-      .catch((err) => {
-        console.error('[MoDetailModal] error:', err)
-        setError(err.message)
-      })
+      .then(setDetail)
+      .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [moId])
 
-  const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') onClose()
-  }, [onClose])
-
+  const handleKeyDown = useCallback((e) => { if (e.key === 'Escape') onClose() }, [onClose])
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
 
-  // Record resolution: mo-detail returns {data:[...]} same as list
   const record = (() => {
     if (!detail) return null
     if (Array.isArray(detail.data)) return detail.data[0] || null
@@ -221,9 +180,7 @@ export default function MoDetailModal({ moId, moRow, onClose }) {
     return detail
   })()
 
-  // Use moRow for instant display while loading
   const src = record || moRow || {}
-
   const moNumber = getMoNumber(src)
   const sku = getMoSku(src)
   const factory = getMoFactory(src)
@@ -234,195 +191,177 @@ export default function MoDetailModal({ moId, moRow, onClose }) {
   const endDate = getEndDate(src)
   const overdue = isOverdue(src)
   const delayed = isDelayed(src)
-  const statusColors = STATUS_COLORS(status)
-
-  // Style_SKU is an object: {ID, Style_SKU, zc_display_value}
   const styleRecordId = record?.Style_SKU?.ID || null
-
   const planLines = (record?.Plan_MO_Lines || []).filter(Boolean)
   const topSpec = record?.Top_Spec_JSON || null
   const bottomSpec = record?.Bottom_Spec_JSON || null
-
   const daysRemaining = endDate
     ? Math.ceil((new Date() - (parseZohoDate(endDate) || new Date())) / 86400000) * -1
     : null
 
+  // Fallback G if not provided
+  const T = G || { bg: "#FAFAF7", surf: "#FFFFFF", card: "#FFFFFF", cardAlt: "#FBF9F4",
+    border: "#EDE8DE", hair: "#E4DED2", primary: "#C9A86E", accent: "#9A7228",
+    tx: "#1A1714", mu: "#7A7268", fa: "#C8C0B2", ok: "#5E8C6E", bad: "#A14E3A",
+    overlayBg: "rgba(26,23,20,0.45)", cardShadow: "0 2px 8px rgba(26,23,20,0.06)", dk: false }
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
-      style={{ background: 'rgba(0,0,0,0.75)', animation: 'fadeIn 0.2s ease' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+        background: T.overlayBg, backdropFilter: "blur(4px)", animation: "fadeIn 0.2s ease",
+      }}
     >
-      <div
-        className="w-full rounded-2xl flex flex-col overflow-hidden"
-        style={{
-          maxWidth: 1100,
-          maxHeight: '95vh',
-          background: '#1A1F2E',
-          border: '1px solid rgba(201,168,110,0.2)',
-          boxShadow: '0 32px 64px rgba(0,0,0,0.6)',
-          animation: 'slideUp 0.3s ease-out',
-        }}
-      >
+      <div style={{
+        width: "100%", maxWidth: 1100, maxHeight: "95vh", display: "flex", flexDirection: "column",
+        background: T.surf, borderRadius: 16, border: `1px solid ${T.border}`,
+        boxShadow: T.dk ? "0 32px 64px rgba(0,0,0,0.6)" : "0 24px 60px rgba(26,23,20,0.15)",
+        overflow: "hidden", animation: "slideUp 0.3s ease-out",
+      }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 flex-shrink-0"
-          style={{ borderBottom: '1px solid rgba(201,168,110,0.15)', background: '#252B3D' }}>
-          <div className="flex items-center gap-3 flex-wrap">
-            <h2 className="text-lg font-bold" style={{ color: '#C9A86E', fontFamily: 'Pretendard, sans-serif' }}>
-              {moNumber}
-            </h2>
-            {sku && sku !== '—' && (
-              <span className="text-sm" style={{ color: '#8896B3' }}>{sku}</span>
-            )}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: `1px solid ${T.hair}`, background: T.cardAlt, flexShrink: 0, gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <h2 className="syne num" style={{ fontSize: 20, fontWeight: 700, color: T.accent, letterSpacing: "-.3px" }}>{moNumber}</h2>
+            {sku && sku !== '—' && <span style={{ fontSize: 13, color: T.mu }}>{sku}</span>}
             {status && (
-              <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
-                style={{ background: statusColors.bg, color: statusColors.text }}>
-                <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 flex-shrink-0" style={{ background: statusColors.dot }} />
+              <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 999, fontWeight: 600, background: `${T.primary}1A`, color: T.accent }}>
+                <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", marginRight: 6, background: T.primary }} />
                 {status}
               </span>
             )}
             {delayed && (
-              <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                style={{ background: 'rgba(239,68,68,0.15)', color: '#EF4444' }}>
-                ⚠ 지연
-              </span>
+              <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, fontWeight: 700, background: `${T.bad}1A`, color: T.bad }}>⚠ 지연</span>
             )}
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl transition-colors flex-shrink-0"
-            style={{ color: '#8896B3' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}>
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+          <button onClick={onClose} style={{ padding: 8, borderRadius: 10, color: T.mu, background: "transparent", border: "none", cursor: "pointer", display: "flex" }}
+            onMouseEnter={e => { e.currentTarget.style.background = `${T.bad}1A`; e.currentTarget.style.color = T.bad }}
+            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.mu }}>
+            <X size={18} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-          {/* LEFT: Image panel */}
-          <div className="lg:w-2/5 p-5 flex-shrink-0 overflow-y-auto scrollbar-thin"
-            style={{ borderRight: '1px solid rgba(201,168,110,0.1)' }}>
+        <div style={{ display: "flex", flex: 1, overflow: "hidden" }} className="modal-body">
+          {/* Image */}
+          <div style={{ width: "40%", padding: 20, flexShrink: 0, overflowY: "auto", borderRight: `1px solid ${T.hair}`, background: T.cardAlt }}>
             <StyleImageCarousel styleSku={sku !== '—' ? sku : null} recordId={styleRecordId} />
             {sku && sku !== '—' && (
-              <div className="mt-4 text-center">
-                <p className="text-sm font-semibold" style={{ color: '#C9A86E' }}>{sku}</p>
-                {src.Chi_Style_Name && (
-                  <p className="text-xs mt-1" style={{ color: '#8896B3' }}>{src.Chi_Style_Name}</p>
-                )}
+              <div style={{ marginTop: 14, textAlign: "center" }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: T.accent }}>{sku}</p>
+                {src.Chi_Style_Name && <p style={{ fontSize: 11, marginTop: 4, color: T.mu }}>{src.Chi_Style_Name}</p>}
               </div>
             )}
           </div>
 
-          {/* RIGHT: Info panel */}
-          <div className="flex-1 overflow-y-auto scrollbar-thin p-5 lg:p-6">
-            {loading && !record && (
-              <div className="space-y-3">
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="shimmer h-10 rounded-xl" />
-                ))}
-              </div>
-            )}
+          {/* Info */}
+          <div style={{ flex: 1, overflowY: "auto", padding: 22 }}>
             {error && (
-              <div className="p-4 rounded-xl text-sm text-red-400 mb-4"
-                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <div style={{ padding: 12, borderRadius: 10, fontSize: 12, color: T.bad, background: `${T.bad}1A`, border: `1px solid ${T.bad}40`, marginBottom: 14 }}>
                 오류 · 错误: {error}
               </div>
             )}
 
-            {/* Always render info from moRow/record */}
-            <>
-              {/* Section A: 기본정보 */}
-              <Section title="기본 정보 · 基本信息">
-                <InfoRow label="MO 번호 · MO号" value={moNumber} />
-                <InfoRow label="스타일 SKU · 款号" value={sku} />
-                <InfoRow label="스타일명 (중문)" value={safe(src.Chi_Style_Name)} />
-                <InfoRow label="스타일명 (영문)" value={safe(src.Eng_Style_Name)} />
-                <InfoRow label="공장 · 工厂" value={factory} />
-                <InfoRow label="시즌 · 季节" value={safe(src.Season)} />
-                <InfoRow label="계획 연월 · 计划年月" value={src.Plan_Year && src.Plan_Month ? `${src.Plan_Year}-${String(src.Plan_Month).padStart(2, '0')}` : '—'} />
-                <InfoRow label="주문확인일 · 订单日期" value={safe(src.Order_Date)} />
-                <InfoRow label="오더 상태 · 订单状态" value={safe(src.Order_Status)} />
-                <InfoRow label="납기 상태 · 交货状态" value={safe(src.Delivery_Status)} />
-                <InfoRow label="소재 · 面料" value={safe(src.Material_Type)} />
-              </Section>
+            <Section G={T} title="기본 정보 · 基本信息">
+              <InfoRow G={T} label="MO 번호 · MO号" value={moNumber} />
+              <InfoRow G={T} label="스타일 SKU · 款号" value={sku} />
+              <InfoRow G={T} label="스타일명 (중문)" value={safe(src.Chi_Style_Name)} />
+              <InfoRow G={T} label="스타일명 (영문)" value={safe(src.Eng_Style_Name)} />
+              <InfoRow G={T} label="공장 · 工厂" value={factory} />
+              <InfoRow G={T} label="시즌 · 季节" value={safe(src.Season)} />
+              <InfoRow G={T} label="계획 연월 · 计划年月" value={src.Plan_Year && src.Plan_Month ? `${src.Plan_Year}-${String(src.Plan_Month).padStart(2, '0')}` : '—'} />
+              <InfoRow G={T} label="주문확인일 · 订单日期" value={safe(src.Order_Date)} />
+              <InfoRow G={T} label="오더 상태 · 订单状态" value={safe(src.Order_Status)} />
+              <InfoRow G={T} label="생산 상태 · 生产状态" value={safe(src.Production_Status)} />
+              <InfoRow G={T} label="납기 상태 · 交货状态" value={safe(src.Delivery_Status)} />
+              <InfoRow G={T} label="소재 · 面料" value={safe(src.Material_Type)} />
+            </Section>
 
-              {/* Section B: 수량정보 */}
-              <Section title="수량 정보 · 数量信息">
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="rounded-xl p-4 text-center" style={{ background: '#252B3D' }}>
-                    <p className="text-xs mb-1" style={{ color: '#8896B3' }}>계획 · 计划</p>
-                    <p className="text-2xl font-bold" style={{ color: '#C9A86E' }}>{planQty.toLocaleString()}</p>
-                  </div>
-                  <div className="rounded-xl p-4 text-center" style={{ background: '#252B3D' }}>
-                    <p className="text-xs mb-1" style={{ color: '#8896B3' }}>실적 · 实际</p>
-                    <p className="text-2xl font-bold" style={{ color: '#10B981' }}>{actualQty.toLocaleString()}</p>
-                  </div>
+            <Section G={T} title="수량 정보 · 数量信息">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+                <div style={{ padding: "14px 16px", borderRadius: 10, background: T.cardAlt, border: `1px solid ${T.hair}`, textAlign: "center" }}>
+                  <p style={{ fontSize: 11, color: T.mu, marginBottom: 4 }}>계획 · 计划</p>
+                  <p className="num syne" style={{ fontSize: 22, fontWeight: 700, color: T.accent }}>{planQty.toLocaleString()}</p>
                 </div>
-                <div className="mb-3">
-                  <div className="flex justify-between text-xs mb-1.5" style={{ color: '#8896B3' }}>
-                    <span>진행률 · 进度</span>
-                    <span style={{ color: '#C9A86E' }}>{progress}%</span>
-                  </div>
-                  <div className="h-2.5 rounded-full overflow-hidden" style={{ background: '#2F3650' }}>
-                    <div
-                      className="h-full rounded-full transition-all duration-700"
-                      style={{ width: `${progress}%`, background: 'linear-gradient(90deg, #C9A86E, #DFC08A)' }}
-                    />
-                  </div>
+                <div style={{ padding: "14px 16px", borderRadius: 10, background: T.cardAlt, border: `1px solid ${T.hair}`, textAlign: "center" }}>
+                  <p style={{ fontSize: 11, color: T.mu, marginBottom: 4 }}>실적 · 实际</p>
+                  <p className="num syne" style={{ fontSize: 22, fontWeight: 700, color: T.ok }}>{actualQty.toLocaleString()}</p>
                 </div>
-                <InfoRow label="예정 출하일 · 预计出货日" value={safe(src.Expected_Delivery)} />
-                <InfoRow label="출하일 · 出货日" value={safe(src.Ship_Date)} highlight={overdue} />
-                {daysRemaining !== null && (
-                  <InfoRow
-                    label="D-Day"
-                    value={daysRemaining < 0
-                      ? `${Math.abs(daysRemaining)}일 초과 · 已超期${Math.abs(daysRemaining)}天`
-                      : daysRemaining === 0 ? 'D-Day!' : `D-${daysRemaining}`}
-                    highlight={daysRemaining <= 0}
-                  />
-                )}
-                <InfoRow label="포장 수량 합계 · 包装合计" value={safe(src.Inner_Pack_Total_Qty)} />
-              </Section>
-
-              {/* Section C: Plan Matrix */}
-              <Section title="계획 매트릭스 · 计划矩阵">
-                <MatrixTable lines={planLines} />
-                {planLines.length === 0 && loading && (
-                  <div className="shimmer h-20 rounded-lg" />
-                )}
-              </Section>
-
-              {/* Section D: Size Spec — collapsible */}
-              <CollapsibleSection title="사이즈 스펙 · 尺寸规格">
-                <div className="mb-5">
-                  <p className="text-xs font-semibold mb-2" style={{ color: '#8896B3' }}>Top Spec</p>
-                  <SpecTable json={topSpec} />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.mu, marginBottom: 6 }}>
+                  <span>진행률 · 进度</span>
+                  <span className="num" style={{ color: T.accent, fontWeight: 600 }}>{progress}%</span>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold mb-2" style={{ color: '#8896B3' }}>Bottom Spec</p>
-                  <SpecTable json={bottomSpec} />
+                <div style={{ height: 7, borderRadius: 999, overflow: "hidden", background: T.hair }}>
+                  <div style={{ height: "100%", borderRadius: 999, width: `${progress}%`, background: `linear-gradient(90deg, ${T.primary}, ${T.primary}AA)`, transition: "width .6s" }} />
                 </div>
-              </CollapsibleSection>
+              </div>
+              <InfoRow G={T} label="예정 출하일 · 预计出货日" value={safe(src.Expected_Delivery)} />
+              <InfoRow G={T} label="출하일 · 出货日" value={safe(src.Ship_Date)} highlight={overdue} />
+              {daysRemaining !== null && (
+                <InfoRow G={T} label="D-Day"
+                  value={daysRemaining < 0
+                    ? `${Math.abs(daysRemaining)}일 초과 · 已超期${Math.abs(daysRemaining)}天`
+                    : daysRemaining === 0 ? 'D-Day!' : `D-${daysRemaining}`}
+                  highlight={daysRemaining <= 0} />
+              )}
+              <InfoRow G={T} label="포장 합계 · 包装合计" value={safe(src.Inner_Pack_Total_Qty)} />
+              <InfoRow G={T} label="Plan Grand Total" value={src.Plan_Grand_Total ? `$${Number(src.Plan_Grand_Total).toLocaleString()}` : '—'} />
+              <InfoRow G={T} label="Actual Grand Total" value={src.Acture_Grand_Total ? `$${Number(src.Acture_Grand_Total).toLocaleString()}` : '—'} />
+            </Section>
 
-              {/* Section E: Material */}
-              <CollapsibleSection title="소재 정보 · 面料信息">
-                <InfoRow label="소재 · 面料" value={safe(src.Material_Type)} />
-                <InfoRow label="Business Entity" value={safe(src.Business_Entity)} />
-              </CollapsibleSection>
+            <Section G={T} title="계획 매트릭스 · 计划矩阵">
+              <MatrixTable G={T} lines={planLines} />
+            </Section>
 
-              {/* Section F: Packing / Shipment */}
-              <CollapsibleSection title="포장/출하 · 包装出货">
-                <InfoRow label="Inner Pack 수 · 内包数" value={safe(src.Inner_Pack_Count)} />
-                <InfoRow label="Master Bag 수 · 主袋数" value={safe(src.Master_Bag_Count)} />
-                <InfoRow label="Inner Pack 총 수량" value={safe(src.Inner_Pack_Total_Qty)} />
-                <InfoRow label="출하일 · 出货日期" value={safe(src.Ship_Date)} />
-                <InfoRow label="수정일 · 修改时间" value={safe(src.Modified_Time)} />
-              </CollapsibleSection>
-            </>
+            <CollapsibleSection G={T} title="사이즈 스펙 · 尺寸规格">
+              <div style={{ marginBottom: 16 }}>
+                <p style={{ fontSize: 11, fontWeight: 600, color: T.mu, marginBottom: 6 }}>Top Spec</p>
+                <SpecTable G={T} json={topSpec} />
+              </div>
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 600, color: T.mu, marginBottom: 6 }}>Bottom Spec</p>
+                <SpecTable G={T} json={bottomSpec} />
+              </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection G={T} title="소재 정보 · 面料信息">
+              <InfoRow G={T} label="소재 · 面料" value={safe(src.Material_Type)} />
+              <InfoRow G={T} label="Lining" value={safe(src.Lining_Type)} />
+              <InfoRow G={T} label="Blended" value={safe(src.blended)} />
+              <InfoRow G={T} label="Business Entity" value={safe(src.Business_Entity)} />
+            </CollapsibleSection>
+
+            <CollapsibleSection G={T} title="포장/출하 · 包装出货">
+              <InfoRow G={T} label="Inner Pack 수 · 内包数" value={safe(src.Inner_Pack_Count)} />
+              <InfoRow G={T} label="Master Bag 수 · 主袋数" value={safe(src.Master_Bag_Count)} />
+              <InfoRow G={T} label="Inner Pack 총 수량" value={safe(src.Inner_Pack_Total_Qty)} />
+              <InfoRow G={T} label="출하일 · 出货日期" value={safe(src.Ship_Date)} />
+              <InfoRow G={T} label="수정일 · 修改时间" value={safe(src.Modified_Time)} />
+            </CollapsibleSection>
+
+            <CollapsibleSection G={T} title="일정 · 日程">
+              <InfoRow G={T} label="Order Date" value={safe(src.Order_Date)} />
+              <InfoRow G={T} label="Cutting Start" value={safe(src.Cutting_Start_Date)} />
+              <InfoRow G={T} label="Cutting End" value={safe(src.Cutting_End_Date)} />
+              <InfoRow G={T} label="Sewing Start" value={safe(src.Sewing_Start_Date)} />
+              <InfoRow G={T} label="Sewing End" value={safe(src.Sewing_End_Date)} />
+              <InfoRow G={T} label="Packing Start" value={safe(src.Packing_Start_Date)} />
+              <InfoRow G={T} label="Expected Delivery" value={safe(src.Expected_Delivery)} />
+              <InfoRow G={T} label="Ship Date" value={safe(src.Ship_Date)} />
+            </CollapsibleSection>
           </div>
         </div>
       </div>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .modal-body { flex-direction: column !important; }
+          .modal-body > div:first-child { width: 100% !important; border-right: none !important; border-bottom: 1px solid ${T.hair} !important; }
+        }
+      `}</style>
     </div>
   )
 }
