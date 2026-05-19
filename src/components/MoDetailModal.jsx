@@ -64,19 +64,22 @@ function Field({ G, label, value, badge, badgeColor }) {
 }
 
 function StyleImageCell({ G, mo, onZoom, hasImage }) {
+  // Build the same proxy URL the inner <img> renders, so the lightbox shows the real image
+  const v = mo?.Style_Image
+  const first = Array.isArray(v) ? v[0] : v
+  const path = typeof first === 'string' ? first : (first?.url || first?.filepath || first?.path || '')
+  const lightboxUrl = path ? `/api/zoho-image?filepath=${encodeURIComponent(path)}` : null
+
   return (
     <div style={{ background: G.cardAlt, border: `1px solid ${G.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '10px 14px', borderBottom: `1px solid ${G.hair}` }}>
         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', color: G.accent, textTransform: 'uppercase' }}>Style Image</div>
         <div style={{ fontSize: 10, color: G.mu, marginTop: 1 }}>스타일 · 款式</div>
       </div>
-      <div style={{ aspectRatio: '3/4', position: 'relative', cursor: hasImage ? 'zoom-in' : 'default' }}
-        onClick={() => {
-          if (!hasImage || !onZoom) return
-          const url = `/api/zoho-image?report=All_MO&recordId=${encodeURIComponent(mo?.ID || '')}&field=Style_Image&index=0`
-          onZoom(url)
-        }}>
-        <ZohoImage mo={mo} field="Style_Image" report="All_MO" G={G} alt="Style" iconSize={36} />
+      <div style={{ height: 420, position: 'relative', overflow: 'hidden', cursor: hasImage ? 'zoom-in' : 'default' }}
+        onClick={() => { if (hasImage && onZoom && lightboxUrl) onZoom(lightboxUrl) }}>
+        <ZohoImage mo={mo} field="Style_Image" G={G} alt="Style" iconSize={48}
+          style={{ objectFit: 'contain', objectPosition: 'center' }} />
         {hasImage && (
           <div style={{ position: 'absolute', top: 8, right: 8, padding: 5, borderRadius: 6, background: 'rgba(26,23,20,0.55)', color: '#FFF', display: 'flex' }}>
             <ZoomIn size={12} />
@@ -98,9 +101,9 @@ function QRCell({ G, mo, sku, factory, qrSku }) {
         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', color: G?.accent, textTransform: 'uppercase' }}>QR Code</div>
         <div style={{ fontSize: 10, color: G?.mu, marginTop: 1 }}>스캔 · 扫码</div>
       </div>
-      <div style={{ aspectRatio: '3/4', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 16, background: G?.surf }}>
+      <div style={{ height: 420, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 18, background: G?.surf }}>
         <div style={{ padding: 8, background: bg, borderRadius: 6, border: `1px solid ${G?.hair}` }}>
-          <QRCodeCanvas value={text} size={140} level="M" fgColor={fg} bgColor={bg} />
+          <QRCodeCanvas value={text} size={200} level="M" fgColor={fg} bgColor={bg} />
         </div>
         <div className="num" style={{ fontSize: 9, color: G?.mu, textAlign: 'center', lineHeight: 1.5, wordBreak: 'break-all', maxWidth: 200 }}>
           {text}

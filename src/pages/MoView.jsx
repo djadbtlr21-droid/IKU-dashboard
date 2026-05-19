@@ -237,9 +237,9 @@ function MOCard({ G, mo, onClick }) {
       onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = G.cardShadow; e.currentTarget.style.borderColor = G.primary }}
       onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; e.currentTarget.style.borderColor = G.border }}
     >
-      {/* Image */}
-      <div style={{ aspectRatio: "3/4", background: G.cardAlt, position: "relative" }}>
-        <ZohoImage mo={mo} field="Style_Image" report="All_MO" G={G} alt={getMoNumber(mo)} iconSize={28} />
+      {/* Image — fixed height, top-anchored crop so model face/torso stays visible */}
+      <div style={{ height: 240, background: G.cardAlt, position: "relative", overflow: "hidden" }}>
+        <ZohoImage mo={mo} field="Style_Image" G={G} alt={getMoNumber(mo)} iconSize={28} />
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "5px 10px", background: overlay.bg, color: overlay.color, fontSize: 11, textAlign: "center", fontWeight: 600, letterSpacing: ".3px" }}>
           {overlay.stage}
         </div>

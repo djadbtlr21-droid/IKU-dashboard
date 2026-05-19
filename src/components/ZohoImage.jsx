@@ -61,7 +61,8 @@ export function ZohoImage({
   alt = '',
   placeholderText,
   iconSize = 36,
-  // legacy props (silently ignored): report, index, style, record, customCandidates, imgStyle
+  style: extraStyle,
+  // legacy props (silently ignored): report, index, record, customCandidates, imgStyle
 }) {
   const [hasError, setHasError] = useState(false)
   const url = buildZohoImageUrl(mo, field)
@@ -74,7 +75,14 @@ export function ZohoImage({
     <img
       src={url}
       alt={alt || field}
-      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        objectPosition: 'top center',
+        display: 'block',
+        ...extraStyle,
+      }}
       onError={() => setHasError(true)}
     />
   )
