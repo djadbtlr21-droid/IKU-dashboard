@@ -46,6 +46,10 @@ export default async function handler(req, res) {
     const account = process.env.ZOHO_ACCOUNT || 'jeramoda';
     const app = process.env.ZOHO_APP || 'eom';
 
+    console.log('[ZOHO_IMAGE_REQUEST]', {
+      report, recordId, field, index, filepath: filepath ? '(set)' : '(none)',
+    });
+
     // ── Path 1: direct filepath passthrough (preferred when client has Zoho's raw URL) ──
     if (filepath) {
       let url;
@@ -58,6 +62,12 @@ export default async function handler(req, res) {
       }
       console.log('[zoho-image] filepath →', url);
       const zres = await fetch(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+      console.log('[ZOHO_IMAGE_RESPONSE]', {
+        path: 'filepath',
+        status: zres.status,
+        contentType: zres.headers.get('content-type'),
+        contentLength: zres.headers.get('content-length'),
+      });
       if (!zres.ok) {
         console.error('[zoho-image] filepath upstream', zres.status, url);
         return placeholder(res, 'No Image');
@@ -82,6 +92,13 @@ export default async function handler(req, res) {
     console.log('[zoho-image] fetching →', imageUrl);
 
     const zres = await fetch(imageUrl, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+    console.log('[ZOHO_IMAGE_RESPONSE]', {
+      path: 'report',
+      constructedUrl: imageUrl,
+      status: zres.status,
+      contentType: zres.headers.get('content-type'),
+      contentLength: zres.headers.get('content-length'),
+    });
 
     if (zres.ok) return streamUpstream(zres, res);
 

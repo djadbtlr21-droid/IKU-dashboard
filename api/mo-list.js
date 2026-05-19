@@ -25,6 +25,20 @@ export default async function handler(req, res) {
     if (body?.data?.length) {
       console.log('[mo-list] first record keys:', Object.keys(body.data[0]));
       console.log('[mo-list] first record:', JSON.stringify(body.data[0]).slice(0, 800));
+
+      // STYLE_IMAGE diagnostic — confirms whether Zoho actually returns
+      // the field on the All_MO report and in what shape
+      const sample = body.data[0];
+      console.log('[STYLE_IMAGE_DEBUG]', JSON.stringify({
+        ID: sample.ID,
+        MO_Number: sample.MO_Number,
+        Style_Image: sample.Style_Image,
+        Style_Image_type: typeof sample.Style_Image,
+        Style_Image_isArray: Array.isArray(sample.Style_Image),
+        Style_Image_length: Array.isArray(sample.Style_Image)
+          ? sample.Style_Image.length
+          : (sample.Style_Image ? 'non-array' : 'empty'),
+      }, null, 2));
     }
 
     if (!zres.ok) {
