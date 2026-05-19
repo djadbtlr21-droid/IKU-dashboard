@@ -5,6 +5,7 @@ import { fetchMoDetail } from '../api/client'
 import { parseSpecJSON, parseZohoDate, isOverdue, isDelayed } from '../utils/moHelpers'
 import { getColorHex, getTextColorOnBg } from '../utils/colorMap'
 import { getImageUrl, getMoImageCandidates } from '../utils/imageUrl'
+import { useStyleData } from '../hooks/useStyleData'
 import ZohoImage from './ZohoImage'
 
 // ──────────────────────────────────────────────────────────
@@ -64,7 +65,7 @@ function Field({ G, label, value, badge, badgeColor }) {
   )
 }
 
-function ImageCell({ G, label, sublabel, record, field, report = 'All_MO', onZoom, hasImage }) {
+function ImageCell({ G, label, sublabel, mo, style, field, onZoom, hasImage }) {
   return (
     <div style={{ background: G.cardAlt, border: `1px solid ${G.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '8px 12px', borderBottom: `1px solid ${G.hair}` }}>
@@ -74,10 +75,12 @@ function ImageCell({ G, label, sublabel, record, field, report = 'All_MO', onZoo
       <div style={{ aspectRatio: '3/4', position: 'relative', cursor: hasImage ? 'zoom-in' : 'default' }}
         onClick={() => {
           if (!hasImage || !onZoom) return
-          const url = getImageUrl(record, field, report, 0)
-          if (url) onZoom(url)
+          // Try MO record first, then Style record
+          const moUrl = mo ? getImageUrl(mo, field, 'All_MO', 0) : null
+          const styleUrl = style ? getImageUrl(style, field, 'All_Styles', 0) : null
+          onZoom(moUrl || styleUrl)
         }}>
-        <ZohoImage record={record} field={field} report={report} G={G} alt={label} iconSize={28} />
+        <ZohoImage mo={mo} style={style} field={field} G={G} alt={label} iconSize={28} />
         {hasImage && (
           <div style={{ position: 'absolute', top: 6, right: 6, padding: 4, borderRadius: 6, background: 'rgba(26,23,20,0.55)', color: '#FFF', display: 'flex' }}>
             <ZoomIn size={11} />
@@ -88,9 +91,9 @@ function ImageCell({ G, label, sublabel, record, field, report = 'All_MO', onZoo
   )
 }
 
-function QRCell({ G, mo, sku, factory }) {
+function QRCell({ G, mo, sku, factory, qrSku }) {
   const canvasRef = useRef(null)
-  const text = `MO:${mo}|SKU:${sku || ''}|FACTORY:${factory || ''}`
+  const text = qrSku || `MO:${mo}|SKU:${sku || ''}|FACTORY:${factory || ''}`
   useEffect(() => {
     if (!canvasRef.current) return
     QRCode.toCanvas(canvasRef.current, text, {
@@ -366,6 +369,9 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
 
   const src = fullRecord || seed || {}
 
+  // Fetch linked Style record for image fallback
+  const { style: styleRecord } = useStyleData(src)
+
   // Fallback G — never let dark hardcoding leak
   const T = G || {
     bg: '#FAFAF7', surf: '#FFFFFF', card: '#FFFFFF', cardAlt: '#FBF9F4',
@@ -391,12 +397,15 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
   const actualQty = Number(src.Acture_Total_Quantity || 0)
   const shipRate = planQty ? (actualQty / planQty) * 100 : 0
 
-  // Image field availability — used to enable the zoom cursor
+  // Image field availability — checks MO record AND Style record
   const hasField = (f) => {
-    const v = src?.[f]
-    if (!v) return false
-    if (Array.isArray(v)) return v.length > 0
-    return true
+    const check = (r) => {
+      const v = r?.[f]
+      if (!v) return false
+      if (Array.isArray(v)) return v.length > 0
+      return true
+    }
+    return check(src) || check(styleRecord)
   }
   const hasStyleImg = hasField('Style_Image')
   const hasTopFlat = hasField('Top_Flat_Image')
@@ -535,10 +544,10 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
                 B. Image grid (Style / Top / Bottom / QR)
             ────────────────────────────────────────────── */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 22 }}>
-              <ImageCell G={T} label="Style Image" sublabel="스타일 · 款式" record={src} field="Style_Image" report="All_MO" hasImage={hasStyleImg} onZoom={setZoomSrc} />
-              <ImageCell G={T} label="Top Flat" sublabel="상의도안 · 上衣图" record={src} field="Top_Flat_Image" report="All_MO" hasImage={hasTopFlat} onZoom={setZoomSrc} />
-              <ImageCell G={T} label="Bottom Flat" sublabel="하의도안 · 下装图" record={src} field="Bottom_Flat_Image" report="All_MO" hasImage={hasBottomFlat} onZoom={setZoomSrc} />
-              <QRCell G={T} mo={moNumber} sku={sku} factory={factoryName} />
+              <ImageCell G={T} label="Style Image" sublabel="스타일 · 款式" mo={src} style={styleRecord} field="Style_Image" hasImage={hasStyleImg} onZoom={setZoomSrc} />
+              <ImageCell G={T} label="Top Flat" sublabel="상의도안 · 上衣图" mo={src} style={styleRecord} field="Top_Flat_Image" hasImage={hasTopFlat} onZoom={setZoomSrc} />
+              <ImageCell G={T} label="Bottom Flat" sublabel="하의도안 · 下装图" mo={src} style={styleRecord} field="Bottom_Flat_Image" hasImage={hasBottomFlat} onZoom={setZoomSrc} />
+              <QRCell G={T} mo={moNumber} sku={sku} factory={factoryName} qrSku={src?.QR_SKU} />
             </div>
 
             {/* ──────────────────────────────────────────────

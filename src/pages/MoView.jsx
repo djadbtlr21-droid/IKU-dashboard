@@ -7,6 +7,7 @@ import { fetchMoList } from '../api/client'
 import MoDetailModal from '../components/MoDetailModal'
 import ZohoImage from '../components/ZohoImage'
 import { SkeletonCard } from '../components/SkeletonLoader'
+import { useStyleData } from '../hooks/useStyleData'
 import {
   getMoNumber, getMoSku, getMoFactory,
   getPlanQty, getActualQty, getEndDate, getProgress,
@@ -110,17 +111,8 @@ function LegendDot({ color, label }) {
 // ──────────────────────────────────────────────────────────
 // Timeline gantt row
 // ──────────────────────────────────────────────────────────
-function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
-  const totalDays = Math.ceil((monthEnd - monthStart) / 86400000)
-  const today = new Date()
-  const todayPct = Math.max(0, Math.min(1, (today - monthStart) / (monthEnd - monthStart)))
-
-  // Month label markers (every 7 days)
-  const ticks = []
-  for (let d = 0; d <= totalDays; d += 7) {
-    const dt = new Date(monthStart.getTime() + d * 86400000)
-    ticks.push({ pct: d / totalDays, label: `${dt.getMonth() + 1}/${dt.getDate()}` })
-  }
+function TimelineRow({ G, mo, monthStart, monthEnd, todayPct, onClickMo }) {
+  const { style: styleRecord } = useStyleData(mo)
 
   const barFor = (start, end) => {
     if (!start || !end) return null
@@ -130,86 +122,92 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
     return { left: `${s * 100}%`, width: `${(e - s) * 100}%` }
   }
 
+  const orderD = parseZohoDate(mo.Order_Date)
+  const cutS = parseZohoDate(mo.Cutting_Start_Date) || orderD
+  const cutE = parseZohoDate(mo.Cutting_End_Date) || cutS
+  const sewS = parseZohoDate(mo.Sewing_Start_Date) || cutE
+  const sewE = parseZohoDate(mo.Sewing_End_Date) || sewS
+  const packS = parseZohoDate(mo.Packing_Start_Date) || sewE
+  const expD = parseZohoDate(mo.Expected_Delivery) || packS
+  const shipD = parseZohoDate(mo.Ship_Date) || expD
+
+  const bars = [
+    { phase: "Fab", range: barFor(orderD, cutS) },
+    { phase: "Cut", range: barFor(cutS, cutE) },
+    { phase: "Sew", range: barFor(sewS, sewE) },
+    { phase: "Pack", range: barFor(packS, expD) },
+    { phase: "Ship", range: barFor(expD, shipD) },
+  ].filter(b => b.range)
+
+  const progress = getProgress(mo)
+  const actualWidth = bars.length ? `${progress}%` : "0%"
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", borderBottom: `1px solid ${G.hair}`, minHeight: 52 }}>
+      <div
+        onClick={() => onClickMo && onClickMo(mo)}
+        title={`${getMoNumber(mo)} — 클릭하여 상세 보기 / 点击查看详情`}
+        style={{
+          width: 220, minWidth: 220, display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 10px 8px 4px", cursor: "pointer", borderRadius: 6,
+          transition: "background .15s",
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = G.nh }}
+        onMouseLeave={e => { e.currentTarget.style.background = "transparent" }}
+      >
+        <div style={{ width: 32, height: 40, borderRadius: 4, background: G.cardAlt, overflow: "hidden", flexShrink: 0, border: `1px solid ${G.hair}` }}>
+          <ZohoImage mo={mo} style={styleRecord} field="Style_Image" G={G} iconSize={14} placeholderText="" />
+        </div>
+        <div style={{ overflow: "hidden", flex: 1 }}>
+          <div className="num" style={{ fontSize: 11, fontWeight: 700, color: G.accent, lineHeight: 1.2 }}>{getMoNumber(mo)}</div>
+          <div style={{ fontSize: 10, color: G.mu, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{getMoSku(mo)}</div>
+          <div style={{ fontSize: 9, color: G.fa, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{getMoFactory(mo)}</div>
+        </div>
+        <div className="num" style={{ fontSize: 10, color: G.mu, textAlign: "right" }}>{getPlanQty(mo).toLocaleString()}</div>
+      </div>
+
+      <div style={{ flex: 1, position: "relative", height: 36 }}>
+        {bars.map((b, bi) => (
+          <div key={`p-${bi}`} title={`${b.phase} (Plan)`} style={{
+            position: "absolute", top: 4, height: 10, ...b.range,
+            background: `repeating-linear-gradient(45deg, ${STAGE_HUES[b.phase]}, ${STAGE_HUES[b.phase]} 4px, transparent 4px, transparent 8px)`,
+            border: `1px dashed ${STAGE_HUES[b.phase]}`, borderRadius: 3,
+          }} />
+        ))}
+        {bars.length > 0 && (
+          <div style={{ position: "absolute", bottom: 4, left: bars[0].range.left, width: actualWidth, height: 10, background: STAGE_HUES[bars[0].phase], borderRadius: 3 }} />
+        )}
+        {todayPct > 0 && todayPct < 1 && (
+          <div style={{ position: "absolute", top: 0, bottom: 0, left: `${todayPct * 100}%`, width: 1, background: "#EF4444" }} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
+  const totalDays = Math.ceil((monthEnd - monthStart) / 86400000)
+  const today = new Date()
+  const todayPct = Math.max(0, Math.min(1, (today - monthStart) / (monthEnd - monthStart)))
+
+  const ticks = []
+  for (let d = 0; d <= totalDays; d += 7) {
+    const dt = new Date(monthStart.getTime() + d * 86400000)
+    ticks.push({ pct: d / totalDays, label: `${dt.getMonth() + 1}/${dt.getDate()}` })
+  }
+
   return (
     <div>
-      {/* axis */}
       <div style={{ position: "relative", height: 22, marginLeft: 220, marginBottom: 8, borderBottom: `1px solid ${G.hair}` }}>
         {ticks.map((t, i) => (
           <div key={i} style={{ position: "absolute", left: `${t.pct * 100}%`, fontSize: 9, color: G.mu, transform: "translateX(-50%)" }}>{t.label}</div>
         ))}
       </div>
 
-      {/* rows */}
       <div style={{ position: "relative" }}>
-        {mos.slice(0, 20).map((mo, i) => {
-          const orderD = parseZohoDate(mo.Order_Date)
-          const cutS = parseZohoDate(mo.Cutting_Start_Date) || orderD
-          const cutE = parseZohoDate(mo.Cutting_End_Date) || cutS
-          const sewS = parseZohoDate(mo.Sewing_Start_Date) || cutE
-          const sewE = parseZohoDate(mo.Sewing_End_Date) || sewS
-          const packS = parseZohoDate(mo.Packing_Start_Date) || sewE
-          const expD = parseZohoDate(mo.Expected_Delivery) || packS
-          const shipD = parseZohoDate(mo.Ship_Date) || expD
-
-          const bars = [
-            { phase: "Fab",  range: barFor(orderD, cutS), kind: "P" },
-            { phase: "Cut",  range: barFor(cutS, cutE),    kind: "P" },
-            { phase: "Sew",  range: barFor(sewS, sewE),    kind: "P" },
-            { phase: "Pack", range: barFor(packS, expD),   kind: "P" },
-            { phase: "Ship", range: barFor(expD, shipD),   kind: "P" },
-          ].filter(b => b.range)
-
-          // Actual = same range but darker fill (we don't have separate actual dates)
-          const progress = getProgress(mo)
-          const actualWidth = bars.length ? `${progress}%` : "0%"
-
-          return (
-            <div key={mo.ID || i} style={{ display: "flex", alignItems: "center", borderBottom: `1px solid ${G.hair}`, minHeight: 52 }}>
-              {/* Left: meta (clickable) */}
-              <div
-                onClick={() => onClickMo && onClickMo(mo)}
-                title={`${getMoNumber(mo)} — 클릭하여 상세 보기 / 点击查看详情`}
-                style={{
-                  width: 220, minWidth: 220, display: "flex", alignItems: "center", gap: 8,
-                  padding: "8px 10px 8px 4px", cursor: "pointer", borderRadius: 6,
-                  transition: "background .15s",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = G.nh }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent" }}
-              >
-                <div style={{ width: 32, height: 40, borderRadius: 4, background: G.cardAlt, overflow: "hidden", flexShrink: 0, border: `1px solid ${G.hair}` }}>
-                  <ZohoImage record={mo} field="Style_Image" report="All_MO" G={G} iconSize={14} placeholderText="" />
-                </div>
-                <div style={{ overflow: "hidden", flex: 1 }}>
-                  <div className="num" style={{ fontSize: 11, fontWeight: 700, color: G.accent, lineHeight: 1.2 }}>{getMoNumber(mo)}</div>
-                  <div style={{ fontSize: 10, color: G.mu, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{getMoSku(mo)}</div>
-                  <div style={{ fontSize: 9, color: G.fa, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{getMoFactory(mo)}</div>
-                </div>
-                <div className="num" style={{ fontSize: 10, color: G.mu, textAlign: "right" }}>{getPlanQty(mo).toLocaleString()}</div>
-              </div>
-
-              {/* Right: gantt */}
-              <div style={{ flex: 1, position: "relative", height: 36 }}>
-                {/* P (plan) row, top half */}
-                {bars.map((b, bi) => (
-                  <div key={`p-${bi}`} title={`${b.phase} (Plan)`} style={{
-                    position: "absolute", top: 4, height: 10, ...b.range,
-                    background: `repeating-linear-gradient(45deg, ${STAGE_HUES[b.phase]}, ${STAGE_HUES[b.phase]} 4px, transparent 4px, transparent 8px)`,
-                    border: `1px dashed ${STAGE_HUES[b.phase]}`, borderRadius: 3,
-                  }} />
-                ))}
-                {/* A (actual) row, bottom half */}
-                {bars.length > 0 && (
-                  <div style={{ position: "absolute", bottom: 4, left: bars[0].range.left, width: actualWidth, height: 10, background: STAGE_HUES[bars[0].phase], borderRadius: 3 }} />
-                )}
-                {/* Today line */}
-                {todayPct > 0 && todayPct < 1 && (
-                  <div style={{ position: "absolute", top: 0, bottom: 0, left: `${todayPct * 100}%`, width: 1, background: "#EF4444" }} />
-                )}
-              </div>
-            </div>
-          )
-        })}
+        {mos.slice(0, 20).map((mo, i) => (
+          <TimelineRow key={mo.ID || i} G={G} mo={mo} monthStart={monthStart} monthEnd={monthEnd} todayPct={todayPct} onClickMo={onClickMo} />
+        ))}
       </div>
 
       <div style={{ marginTop: 10, fontSize: 10, color: G.mu, display: "flex", justifyContent: "space-between", alignItems: "center", marginLeft: 220 }}>
@@ -224,6 +222,7 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
 // MOCard for grid
 // ──────────────────────────────────────────────────────────
 function MOCard({ G, mo, onClick }) {
+  const { style: styleRecord } = useStyleData(mo)
   const overlay = statusOverlayColor(mo, G)
   const planQ = getPlanQty(mo)
   const actQ = getActualQty(mo)
@@ -243,7 +242,7 @@ function MOCard({ G, mo, onClick }) {
     >
       {/* Image */}
       <div style={{ aspectRatio: "3/4", background: G.cardAlt, position: "relative" }}>
-        <ZohoImage record={mo} field="Style_Image" report="All_MO" G={G} alt={getMoNumber(mo)} iconSize={28} />
+        <ZohoImage mo={mo} style={styleRecord} field="Style_Image" G={G} alt={getMoNumber(mo)} iconSize={28} />
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "5px 10px", background: overlay.bg, color: overlay.color, fontSize: 11, textAlign: "center", fontWeight: 600, letterSpacing: ".3px" }}>
           {overlay.stage}
         </div>
