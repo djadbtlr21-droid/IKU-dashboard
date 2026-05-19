@@ -680,8 +680,8 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
     return check(src) || check(styleRecord)
   }
   const hasStyleImg = hasField('Style_Image')
-  const hasTopFlat = hasField('Top_Flat_Image')
-  const hasBottomFlat = hasField('Bottom_Flat_Image')
+  const hasTopFlat = hasField('Top_Flat_Sketch') || hasField('Top_Flat_Image')
+  const hasBottomFlat = hasField('Bottom_Flat_Sketch') || hasField('Bottom_Flat_Image')
 
   // Plan/Actual lines
   const planLines = (fullRecord?.Plan_MO_Lines || []).filter(Boolean)
@@ -689,26 +689,65 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
 
   // Colors for COLOR IMAGE section
   const colorEntries = useMemo(() => {
+    const toSwatchUrl = (v) => {
+      if (!v) return null
+      if (Array.isArray(v) && v.length) {
+        const first = v[0]
+        const p = typeof first === 'string' ? first : (first?.url || first?.filepath || first?.path)
+        return p ? `/api/zoho-image?filepath=${encodeURIComponent(p)}` : null
+      }
+      if (typeof v === 'string') return `/api/zoho-image?filepath=${encodeURIComponent(v)}`
+      if (typeof v === 'object') {
+        const p = v.url || v.filepath || v.path
+        return p ? `/api/zoho-image?filepath=${encodeURIComponent(p)}` : null
+      }
+      return null
+    }
+
     const map = new Map()
+
+    // 1) Pull from Plan_MO_Lines (MO record subform) — preferred
     planLines.forEach(l => {
       const name = safe(l.Plan_Color || l.Color || l.color)
       if (!map.has(name)) {
-        // Try to extract a swatch URL from the subform row if Zoho returned one
-        const swatchUrl = l.Color_Image
-          ? (Array.isArray(l.Color_Image) && l.Color_Image.length
-              ? `/api/zoho-image?filepath=${encodeURIComponent(typeof l.Color_Image[0] === 'string' ? l.Color_Image[0] : (l.Color_Image[0]?.url || l.Color_Image[0]?.filepath || ''))}`
-              : (typeof l.Color_Image === 'string' ? `/api/zoho-image?filepath=${encodeURIComponent(l.Color_Image)}` : null))
-          : null
         map.set(name, {
           name,
           code: l.Plan_Color_Code || l.Color_Code || '',
           ptone: l.Pantone || l.PTone || '',
-          swatchUrl,
+          swatchUrl: toSwatchUrl(l.Color_Image),
         })
       }
     })
-    return Array.from(map.values()).filter(c => c.name && c.name !== '—')
-  }, [planLines])
+
+    // 2) Fall back to Style record's own colors subform (if MO subform empty)
+    if (map.size === 0 && styleRecord) {
+      const styleColorList = styleRecord?.Colors || styleRecord?.Color_List || styleRecord?.Style_Colors || []
+      if (Array.isArray(styleColorList)) {
+        styleColorList.forEach(c => {
+          const name = safe(c.Color || c.Color_Name || c.Plan_Color)
+          if (!map.has(name)) {
+            map.set(name, {
+              name,
+              code: c.Color_Code || '',
+              ptone: c.Pantone || '',
+              swatchUrl: toSwatchUrl(c.Color_Image),
+            })
+          }
+        })
+      }
+
+      // 3) Last fallback — single Color_Image on the Style record proper
+      if (map.size === 0 && styleRecord?.Color_Image) {
+        const url = toSwatchUrl(styleRecord.Color_Image)
+          || (styleRecord.ID ? `/api/zoho-image?report=All_Styles&recordId=${encodeURIComponent(styleRecord.ID)}&field=Color_Image&index=0` : null)
+        if (url) {
+          map.set('—', { name: '—', code: '', ptone: '', swatchUrl: url })
+        }
+      }
+    }
+
+    return Array.from(map.values()).filter(c => c.name)
+  }, [planLines, styleRecord])
 
   // Inner Pack & Bulto
   const INNER_PACK_PCS = 12
@@ -817,24 +856,28 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
             ────────────────────────────────────────────── */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 22 }}>
               <ImageCell G={T} label="Style Image" sublabel="스타일 · 款式" mo={src} style={styleRecord} field="Style_Image" hasImage={hasStyleImg} onZoom={setZoomSrc} />
-              <ImageCell G={T} label="Top Flat" sublabel="상의도안 · 上衣图" mo={src} style={styleRecord} field="Top_Flat_Image" hasImage={hasTopFlat} onZoom={setZoomSrc} />
-              <ImageCell G={T} label="Bottom Flat" sublabel="하의도안 · 下装图" mo={src} style={styleRecord} field="Bottom_Flat_Image" hasImage={hasBottomFlat} onZoom={setZoomSrc} />
+              <ImageCell G={T} label="Top Flat" sublabel="상의도안 · 上衣图" mo={src} style={styleRecord} field="Top_Flat_Sketch" hasImage={hasTopFlat} onZoom={setZoomSrc} />
+              <ImageCell G={T} label="Bottom Flat" sublabel="하의도안 · 下装图" mo={src} style={styleRecord} field="Bottom_Flat_Sketch" hasImage={hasBottomFlat} onZoom={setZoomSrc} />
               <QRCell G={T} mo={moNumber} sku={sku} factory={factoryName} qrSku={src?.QR_SKU} />
             </div>
 
             {/* ──────────────────────────────────────────────
-                C. Color Image (color discs)
+                C. Color Image (color discs) — always shown
             ────────────────────────────────────────────── */}
-            {colorEntries.length > 0 && (
-              <div style={{ marginBottom: 22 }}>
-                <SectionTitle G={T} icon={<Shirt size={14} style={{ color: T.accent }} />} label="Color Image · 색상 · 色卡" />
+            <div style={{ marginBottom: 22 }}>
+              <SectionTitle G={T} icon={<Shirt size={14} style={{ color: T.accent }} />} label="Color Image · 색상 · 色卡" />
+              {colorEntries.length > 0 ? (
                 <div style={{ background: T.cardAlt, border: `1px solid ${T.border}`, borderRadius: 12, padding: 24, display: 'flex', gap: 28, flexWrap: 'wrap', justifyContent: 'flex-start' }}>
                   {colorEntries.map((c, i) => (
                     <ColorDisc key={c.name + i} G={T} name={c.name} code={c.code} ptone={c.ptone} swatchUrl={c.swatchUrl} />
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div style={{ background: T.cardAlt, border: `1px dashed ${T.border}`, borderRadius: 10, padding: '28px 20px', textAlign: 'center', color: T.mu, fontSize: 12 }}>
+                  색상 정보 없음 · 暂无颜色数据
+                </div>
+              )}
+            </div>
 
             {/* ──────────────────────────────────────────────
                 D. Basic Info (3-col grid)
@@ -1065,18 +1108,22 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
             </div>
 
             {/* ──────────────────────────────────────────────
-                K. Production Log (생산 로그)
+                K. Production Log (생산 로그) — always shown
             ────────────────────────────────────────────── */}
-            {(() => {
-              const productionLogs = pickArray(src, ['Production_Logs', 'Process_Logs', 'Operations', 'Logs', 'Cutting_Logs', 'Fabric_Logs', 'Production_Records'])
-              if (!productionLogs.length) return null
-              return (
-                <div style={{ marginBottom: 22 }}>
-                  <SectionTitle G={T} icon={<FileText size={14} style={{ color: T.accent }} />} label="생산 로그 · 生产记录 · Production Log" />
-                  <ProductionLogTable G={T} logs={productionLogs} />
-                </div>
-              )
-            })()}
+            <div style={{ marginBottom: 22 }}>
+              <SectionTitle G={T} icon={<FileText size={14} style={{ color: T.accent }} />} label="생산 로그 · 生产记录 · Production Log" />
+              {(() => {
+                const productionLogs = pickArray(src, ['Production_Logs', 'Process_Logs', 'Operations', 'Logs', 'Cutting_Logs', 'Fabric_Logs', 'Production_Records'])
+                if (!productionLogs.length) {
+                  return (
+                    <div style={{ background: T.cardAlt, border: `1px dashed ${T.border}`, borderRadius: 10, padding: '28px 20px', textAlign: 'center', color: T.mu, fontSize: 12 }}>
+                      아직 등록된 생산 로그가 없습니다 · 暂无生产记录
+                    </div>
+                  )
+                }
+                return <ProductionLogTable G={T} logs={productionLogs} />
+              })()}
+            </div>
 
             {/* ──────────────────────────────────────────────
                 L. Packaging Status (포장 현황)
