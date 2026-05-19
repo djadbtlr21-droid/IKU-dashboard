@@ -535,8 +535,8 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
           {/* Body scroll */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
             {error && (
-              <div style={{ padding: 12, borderRadius: 8, fontSize: 12, color: T.bad, background: `${T.bad}1A`, border: `1px solid ${T.bad}40`, marginBottom: 16 }}>
-                오류 · 错误: {error}
+              <div style={{ padding: 12, borderRadius: 8, fontSize: 12, color: T.warn, background: `${T.warn}14`, border: `1px solid ${T.warn}33`, marginBottom: 16 }}>
+                일부 데이터를 불러오지 못했습니다 · 部分数据加载失败
               </div>
             )}
 

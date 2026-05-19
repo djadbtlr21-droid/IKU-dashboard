@@ -52,7 +52,13 @@ export function useStyleData(mo) {
     // Fresh fetch
     setLoading(true)
     const promise = fetch(`/api/style-detail?id=${encodeURIComponent(styleId)}`)
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) {
+          const body = await r.text().catch(() => '')
+          throw new Error(`style-detail ${r.status}${body ? ': ' + body.slice(0, 200) : ''}`)
+        }
+        return r.json()
+      })
       .then(json => {
         const rec = extractRecord(json)
         styleCache.set(styleId, rec)
@@ -60,6 +66,8 @@ export function useStyleData(mo) {
         return rec
       })
       .catch(err => {
+        // Cache null on failure so we don't keep retrying every render
+        styleCache.set(styleId, null)
         pendingPromises.delete(styleId)
         throw err
       })
