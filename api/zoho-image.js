@@ -46,28 +46,28 @@ export default async function handler(req, res) {
     const account = process.env.ZOHO_ACCOUNT || 'jeramoda';
     const app = process.env.ZOHO_APP || 'eom';
 
-    console.log('[ZOHO_IMAGE_REQUEST]', {
-      report, recordId, field, index, filepath: filepath ? '(set)' : '(none)',
-    });
-
-    // ── Path 1: direct filepath passthrough (preferred when client has Zoho's raw URL) ──
+    // ── Path 1: direct filepath passthrough (preferred — client extracts from field value) ──
     if (filepath) {
       let url;
       if (/^https?:\/\//i.test(filepath)) {
+        // Already an absolute URL
         url = filepath;
+      } else if (filepath.startsWith('/api/') || filepath.startsWith('/creator/')) {
+        // Zoho relative path — prepend the API domain as-is
+        url = `${domain}${filepath}`;
       } else if (filepath.startsWith('/')) {
+        // Generic absolute path
         url = `${domain}${filepath}`;
       } else {
-        url = `${domain}/${filepath}`;
+        // Bare filename — assume canonical download endpoint
+        if (report && recordId && field) {
+          url = `${domain}/creator/v2.1/data/${account}/${app}/report/${encodeURIComponent(report)}/${encodeURIComponent(recordId)}/${encodeURIComponent(field)}/download?filepath=${encodeURIComponent(filepath)}`;
+        } else {
+          url = `${domain}/${filepath}`;
+        }
       }
-      console.log('[zoho-image] filepath →', url);
+
       const zres = await fetch(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
-      console.log('[ZOHO_IMAGE_RESPONSE]', {
-        path: 'filepath',
-        status: zres.status,
-        contentType: zres.headers.get('content-type'),
-        contentLength: zres.headers.get('content-length'),
-      });
       if (!zres.ok) {
         console.error('[zoho-image] filepath upstream', zres.status, url);
         return placeholder(res, 'No Image');
@@ -89,19 +89,8 @@ export default async function handler(req, res) {
     }
     segments.push('download');
     const imageUrl = `${domain}/${segments.join('/')}`;
-    console.log('[zoho-image] fetching →', imageUrl);
-
     const zres = await fetch(imageUrl, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
-    console.log('[ZOHO_IMAGE_RESPONSE]', {
-      path: 'report',
-      constructedUrl: imageUrl,
-      status: zres.status,
-      contentType: zres.headers.get('content-type'),
-      contentLength: zres.headers.get('content-length'),
-    });
-
     if (zres.ok) return streamUpstream(zres, res);
-
     console.error('[zoho-image] upstream', zres.status, imageUrl);
 
     // 404 retry: drop index if present

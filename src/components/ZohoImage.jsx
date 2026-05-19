@@ -1,62 +1,83 @@
 import { useState, useEffect } from 'react'
 
 // ─────────────────────────────────────────────────────────────
-// ZohoImage — direct download via /api/zoho-image proxy.
-// Uses mo.ID + field + index only. No /api/style-detail dependency.
+// ZohoImage
 //
-// URL pattern (matches Zoho Creator v2.1):
-//   /api/zoho-image?report=All_MO&recordId={mo.ID}&field={field}&index={index}
-// which on the server resolves to:
-//   /creator/v2.1/data/jeramoda/eom/report/{report}/{recordId}/{field}/{index}/download
+// Zoho Creator v2.1 returns image fields like:
+//   mo.Style_Image = [
+//     "/api/v2.1/jeramoda/eom/report/All_MO/{recordId}/Style_Image/download?filepath=…"
+//   ]
+//
+// We extract the path from mo[field][0] and pass it through our proxy as
+// `filepath`. The proxy prepends https://www.zohoapis.com and adds the
+// Zoho-oauthtoken header server-side.
 // ─────────────────────────────────────────────────────────────
 
-function Placeholder({ G, label, iconSize }) {
-  const T = G || { cardAlt: '#FBF9F4', fa: '#C8C0B2', mu: '#7A7268' }
+function buildZohoImageUrl(mo, fieldName) {
+  if (!mo) return null
+  const v = mo[fieldName]
+  if (!v) return null
+
+  let rawPath = null
+  if (Array.isArray(v)) {
+    if (v.length === 0) return null
+    const first = v[0]
+    if (typeof first === 'string') rawPath = first
+    else if (first && typeof first === 'object') rawPath = first.url || first.filepath || first.path
+  } else if (typeof v === 'string') {
+    rawPath = v
+  } else if (typeof v === 'object') {
+    rawPath = v.url || v.filepath || v.path
+  }
+
+  if (!rawPath) return null
+  return `/api/zoho-image?filepath=${encodeURIComponent(rawPath)}`
+}
+
+function Placeholder({ G, label, iconSize = 36 }) {
+  const T = G || { cardAlt: '#FBF9F4', fa: '#C8C0B2' }
   return (
     <div style={{
       width: '100%', height: '100%', background: T.cardAlt,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       color: T.fa, gap: 6,
     }}>
-      <svg width={iconSize || 40} height={iconSize || 40} viewBox="0 0 40 40" fill="none" aria-hidden="true">
-        <rect x="6" y="8" width="28" height="22" rx="2" stroke="currentColor" strokeWidth="1.5" />
-        <circle cx="14" cy="16" r="3" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M6 26l8-7 6 5 5-4 9 8" stroke="currentColor" strokeWidth="1.5" />
+      <svg width={iconSize} height={iconSize} viewBox="0 0 36 36" fill="none" aria-hidden="true">
+        <rect x="4" y="6" width="28" height="22" rx="3" stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="13" cy="14" r="3" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M4 24l8-7 6 5 5-4 9 8" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
       </svg>
-      {label !== '' && <span style={{ fontSize: 10, letterSpacing: '.3px' }}>{label || 'No Image · 无图片'}</span>}
+      {label !== '' && (
+        <span style={{ fontSize: 11, letterSpacing: '.5px' }}>{label || 'No Image · 无图片'}</span>
+      )}
     </div>
   )
 }
 
-export default function ZohoImage({
+export function ZohoImage({
   mo,
   field = 'Style_Image',
-  report = 'All_MO',
-  index = 0,
-  alt = '',
   G,
+  alt = '',
   placeholderText,
-  iconSize = 32,
-  // Legacy props (silently ignored): style, record, customCandidates
+  iconSize = 36,
+  // legacy props (silently ignored): report, index, style, record, customCandidates, imgStyle
 }) {
-  // Reset error state when the target changes
-  const [errored, setErrored] = useState(false)
-  const moId = mo?.ID || mo?.id || null
+  const [hasError, setHasError] = useState(false)
+  const url = buildZohoImageUrl(mo, field)
 
-  useEffect(() => { setErrored(false) }, [moId, field, report, index])
+  useEffect(() => { setHasError(false) }, [mo?.ID, field])
 
-  if (!moId || errored) {
-    return <Placeholder G={G} label={placeholderText} iconSize={iconSize} />
-  }
-
-  const url = `/api/zoho-image?report=${encodeURIComponent(report)}&recordId=${encodeURIComponent(moId)}&field=${encodeURIComponent(field)}&index=${index}`
+  if (!url || hasError) return <Placeholder G={G} label={placeholderText} iconSize={iconSize} />
 
   return (
     <img
       src={url}
       alt={alt || field}
       style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-      onError={() => setErrored(true)}
+      onError={() => setHasError(true)}
     />
   )
 }
+
+export default ZohoImage
