@@ -238,7 +238,7 @@ function MOCard({ G, mo, onClick }) {
       onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; e.currentTarget.style.borderColor = G.border }}
     >
       {/* Image — fixed height, top-anchored crop so model face/torso stays visible */}
-      <div style={{ height: 240, background: G.cardAlt, position: "relative", overflow: "hidden" }}>
+      <div style={{ height: 276, background: G.cardAlt, position: "relative", overflow: "hidden" }}>
         <ZohoImage mo={mo} field="Style_Image" G={G} alt={getMoNumber(mo)} iconSize={28} />
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "5px 10px", background: overlay.bg, color: overlay.color, fontSize: 11, textAlign: "center", fontWeight: 600, letterSpacing: ".3px" }}>
           {overlay.stage}
