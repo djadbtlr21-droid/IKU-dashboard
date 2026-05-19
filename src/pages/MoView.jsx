@@ -8,7 +8,6 @@ import MoDetailModal from '../components/MoDetailModal'
 import PipelineStageModal from '../components/PipelineStageModal'
 import ZohoImage from '../components/ZohoImage'
 import { SkeletonCard } from '../components/SkeletonLoader'
-import { useStyleData } from '../hooks/useStyleData'
 import {
   getMoNumber, getMoSku, getMoFactory,
   getPlanQty, getActualQty, getEndDate, getProgress,
@@ -113,8 +112,6 @@ function LegendDot({ color, label }) {
 // Timeline gantt row
 // ──────────────────────────────────────────────────────────
 function TimelineRow({ G, mo, monthStart, monthEnd, todayPct, onClickMo }) {
-  const { style: styleRecord } = useStyleData(mo)
-
   const barFor = (start, end) => {
     if (!start || !end) return null
     const s = Math.max(0, Math.min(1, (start - monthStart) / (monthEnd - monthStart)))
@@ -157,7 +154,7 @@ function TimelineRow({ G, mo, monthStart, monthEnd, todayPct, onClickMo }) {
         onMouseLeave={e => { e.currentTarget.style.background = "transparent" }}
       >
         <div style={{ width: 32, height: 40, borderRadius: 4, background: G.cardAlt, overflow: "hidden", flexShrink: 0, border: `1px solid ${G.hair}` }}>
-          <ZohoImage mo={mo} style={styleRecord} field="Style_Image" G={G} iconSize={14} placeholderText="" />
+          <ZohoImage mo={mo} field="Style_Image" report="All_MO" G={G} iconSize={14} placeholderText="" />
         </div>
         <div style={{ overflow: "hidden", flex: 1 }}>
           <div className="num" style={{ fontSize: 11, fontWeight: 700, color: G.accent, lineHeight: 1.2 }}>{getMoNumber(mo)}</div>
@@ -223,7 +220,6 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
 // MOCard for grid
 // ──────────────────────────────────────────────────────────
 function MOCard({ G, mo, onClick }) {
-  const { style: styleRecord } = useStyleData(mo)
   const overlay = statusOverlayColor(mo, G)
   const planQ = getPlanQty(mo)
   const actQ = getActualQty(mo)
@@ -243,7 +239,7 @@ function MOCard({ G, mo, onClick }) {
     >
       {/* Image */}
       <div style={{ aspectRatio: "3/4", background: G.cardAlt, position: "relative" }}>
-        <ZohoImage mo={mo} style={styleRecord} field="Style_Image" G={G} alt={getMoNumber(mo)} iconSize={28} />
+        <ZohoImage mo={mo} field="Style_Image" report="All_MO" G={G} alt={getMoNumber(mo)} iconSize={28} />
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "5px 10px", background: overlay.bg, color: overlay.color, fontSize: 11, textAlign: "center", fontWeight: 600, letterSpacing: ".3px" }}>
           {overlay.stage}
         </div>
@@ -654,13 +650,13 @@ export default function MoView({ G }) {
         </div>
 
         {loading ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
             {[...Array(8)].map((_, i) => <SkeletonCard key={i} G={G} />)}
           </div>
         ) : filteredMOs.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: G.fa, fontSize: 12 }}>일치하는 MO 없음 · 无匹配MO</div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
             {filteredMOs.map(mo => (
               <MOCard key={mo.ID} G={G} mo={mo} onClick={() => setSelectedMo({ id: mo.ID, row: mo })} />
             ))}
@@ -706,9 +702,9 @@ export default function MoView({ G }) {
                       setSelectedStage({ stage, mos: stageMos })
                     }}
                     style={{
-                      minWidth: 130, flex: 1, padding: "20px 12px",
-                      minHeight: 180,
-                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12,
+                      minWidth: 120, flex: 1, padding: "16px 12px",
+                      minHeight: 140,
+                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8,
                       borderRadius: 12, cursor: "pointer",
                       background: G.dk ? "rgba(245,240,232,0.025)" : "rgba(201,168,110,0.04)",
                       transition: "background .15s, transform .15s",
@@ -718,7 +714,7 @@ export default function MoView({ G }) {
                     onMouseLeave={e => { e.currentTarget.style.background = G.dk ? "rgba(245,240,232,0.025)" : "rgba(201,168,110,0.04)"; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.transform = "" }}
                   >
                     <stage.Icon size={36} strokeWidth={1.5} style={{ color: stage.hue }} />
-                    <span className="num syne" style={{ fontSize: 56, fontWeight: 800, color: stage.hue, lineHeight: 1, letterSpacing: "-2px" }}>{count}</span>
+                    <span className="num syne" style={{ fontSize: 28, fontWeight: 800, color: stage.hue, lineHeight: 1, letterSpacing: "-1px" }}>{count}</span>
                     <div style={{ textAlign: "center", lineHeight: 1.3 }}>
                       <div style={{ fontSize: 15, color: G.tx, fontWeight: 600, letterSpacing: ".3px" }}>{stage.kr}</div>
                       <div style={{ fontSize: 13, color: G.mu, marginTop: 3 }}>{stage.cn}</div>

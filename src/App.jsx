@@ -34,7 +34,7 @@ export const useTheme = () => useContext(ThemeContext)
 const mkCSS = G => `
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body,#root{height:100%}
-body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14.3px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color:${G.tx};background:${G.bg};overscroll-behavior-y:none}
+body{font-family:'Inter','Noto Sans KR',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;font-size:14.3px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color:${G.tx};background:${G.bg};overscroll-behavior-y:none}
 button{font-family:inherit;touch-action:manipulation}
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -52,7 +52,8 @@ button{font-family:inherit;touch-action:manipulation}
 .chip{padding:7px 14px;font-size:11px;border-radius:999px;cursor:pointer;transition:all .15s;font-weight:500;letter-spacing:.1px;line-height:1.5;min-height:32px}
 .chip:hover{border-color:${G.primary}}
 
-.syne{font-family:'Syne','Plus Jakarta Sans',sans-serif;letter-spacing:-.3px}
+.syne{font-family:'Outfit','Inter','Noto Sans KR',sans-serif;letter-spacing:-.3px}
+.brand-syne{font-family:'Syne','Outfit',sans-serif;letter-spacing:-.5px}
 .num{font-variant-numeric:tabular-nums;letter-spacing:-.2px}
 
 .rail{position:absolute;top:14px;left:14px;width:6px;height:6px;border-radius:50%;background:${G.primary};box-shadow:0 0 0 3px ${G.dk ? "rgba(232,200,152,0.15)" : "rgba(201,168,110,0.14)"}}
@@ -137,8 +138,8 @@ export default function App() {
           <aside className="sb" style={{ width: 224, minWidth: 224, background: G.surf, borderRight: `1px solid ${G.border}`, display: "flex", flexDirection: "column", padding: "28px 0", transition: "background .2s" }}>
             <div style={{ padding: "0 24px 22px", borderBottom: `1px solid ${G.hair}`, marginBottom: 14 }}>
               <div style={{ textAlign: "center" }}>
-                <div className="syne" style={{ fontSize: 34, fontWeight: 700, color: G.primary, lineHeight: .95, letterSpacing: "-.8px" }}>IKU</div>
-                <div className="syne" style={{ fontSize: 11, fontWeight: 400, color: G.accent, letterSpacing: "6px", marginTop: 6, textTransform: "uppercase" }}>ERP Dashboard</div>
+                <div className="brand-syne" style={{ fontSize: 34, fontWeight: 700, color: G.primary, lineHeight: .95, letterSpacing: "-.8px" }}>IKU</div>
+                <div className="brand-syne" style={{ fontSize: 11, fontWeight: 400, color: G.accent, letterSpacing: "6px", marginTop: 6, textTransform: "uppercase" }}>ERP Dashboard</div>
                 <div style={{ height: 1, background: `linear-gradient(90deg, transparent 0%, ${G.primary} 30%, ${G.primary} 70%, transparent 100%)`, marginTop: 12, marginBottom: 10 }} />
                 <div style={{ fontSize: 9, color: G.mu, letterSpacing: "2.2px", textTransform: "uppercase", fontWeight: 600 }}>Operations · 2026</div>
               </div>

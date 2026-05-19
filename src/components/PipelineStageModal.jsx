@@ -1,13 +1,11 @@
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
 import ZohoImage from './ZohoImage'
-import { useStyleData } from '../hooks/useStyleData'
 import {
   getMoNumber, getMoSku, getMoFactory, getPlanQty, getActualQty,
 } from '../utils/moHelpers'
 
 function StageMoRow({ G, mo, stage, onClick }) {
-  const { style: styleRecord } = useStyleData(mo)
   return (
     <div
       onClick={() => onClick(mo)}
@@ -34,7 +32,7 @@ function StageMoRow({ G, mo, stage, onClick }) {
       }}
     >
       <div style={{ width: 48, height: 60, borderRadius: 6, background: G.cardAlt, flexShrink: 0, overflow: 'hidden', border: `1px solid ${G.hair}` }}>
-        <ZohoImage mo={mo} style={styleRecord} field="Style_Image" G={G} iconSize={16} placeholderText="" />
+        <ZohoImage mo={mo} field="Style_Image" report="All_MO" G={G} iconSize={16} placeholderText="" />
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>

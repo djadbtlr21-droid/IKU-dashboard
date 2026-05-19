@@ -1,11 +1,9 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { X, Shirt, Package, Truck, Scissors, ChevronRight, ChevronDown, ZoomIn, FileText, CheckCircle2, Layers } from 'lucide-react'
-import QRCode from 'qrcode'
+import { QRCodeCanvas } from 'qrcode.react'
 import { fetchMoDetail } from '../api/client'
 import { parseSpecJSON, parseZohoDate, isOverdue, isDelayed } from '../utils/moHelpers'
 import { getColorHex, getTextColorOnBg } from '../utils/colorMap'
-import { getImageUrl, getMoImageCandidates } from '../utils/imageUrl'
-import { useStyleData } from '../hooks/useStyleData'
 import ZohoImage from './ZohoImage'
 
 // ──────────────────────────────────────────────────────────
@@ -65,25 +63,23 @@ function Field({ G, label, value, badge, badgeColor }) {
   )
 }
 
-function ImageCell({ G, label, sublabel, mo, style, field, onZoom, hasImage }) {
+function StyleImageCell({ G, mo, onZoom, hasImage }) {
   return (
     <div style={{ background: G.cardAlt, border: `1px solid ${G.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '8px 12px', borderBottom: `1px solid ${G.hair}` }}>
-        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', color: G.accent, textTransform: 'uppercase' }}>{label}</div>
-        {sublabel && <div style={{ fontSize: 10, color: G.mu, marginTop: 1 }}>{sublabel}</div>}
+      <div style={{ padding: '10px 14px', borderBottom: `1px solid ${G.hair}` }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', color: G.accent, textTransform: 'uppercase' }}>Style Image</div>
+        <div style={{ fontSize: 10, color: G.mu, marginTop: 1 }}>스타일 · 款式</div>
       </div>
       <div style={{ aspectRatio: '3/4', position: 'relative', cursor: hasImage ? 'zoom-in' : 'default' }}
         onClick={() => {
           if (!hasImage || !onZoom) return
-          // Try MO record first, then Style record
-          const moUrl = mo ? getImageUrl(mo, field, 'All_MO', 0) : null
-          const styleUrl = style ? getImageUrl(style, field, 'All_Styles', 0) : null
-          onZoom(moUrl || styleUrl)
+          const url = `/api/zoho-image?report=All_MO&recordId=${encodeURIComponent(mo?.ID || '')}&field=Style_Image&index=0`
+          onZoom(url)
         }}>
-        <ZohoImage mo={mo} style={style} field={field} G={G} alt={label} iconSize={28} />
+        <ZohoImage mo={mo} field="Style_Image" report="All_MO" G={G} alt="Style" iconSize={36} />
         {hasImage && (
-          <div style={{ position: 'absolute', top: 6, right: 6, padding: 4, borderRadius: 6, background: 'rgba(26,23,20,0.55)', color: '#FFF', display: 'flex' }}>
-            <ZoomIn size={11} />
+          <div style={{ position: 'absolute', top: 8, right: 8, padding: 5, borderRadius: 6, background: 'rgba(26,23,20,0.55)', color: '#FFF', display: 'flex' }}>
+            <ZoomIn size={12} />
           </div>
         )}
       </div>
@@ -92,24 +88,21 @@ function ImageCell({ G, label, sublabel, mo, style, field, onZoom, hasImage }) {
 }
 
 function QRCell({ G, mo, sku, factory, qrSku }) {
-  const canvasRef = useRef(null)
   const text = qrSku || `MO:${mo}|SKU:${sku || ''}|FACTORY:${factory || ''}`
-  useEffect(() => {
-    if (!canvasRef.current) return
-    QRCode.toCanvas(canvasRef.current, text, {
-      width: 200, margin: 1,
-      color: { dark: '#1A1714', light: '#FFFFFF' },
-    }).catch(err => console.error('[QR]', err))
-  }, [text])
+  // Sync QR canvas tone with theme: in dark mode use light-on-dark for contrast
+  const fg = G?.dk ? '#F5F0E8' : '#1A1714'
+  const bg = G?.dk ? '#1A1916' : '#FFFFFF'
   return (
-    <div style={{ background: G.cardAlt, border: `1px solid ${G.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '8px 12px', borderBottom: `1px solid ${G.hair}` }}>
-        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', color: G.accent, textTransform: 'uppercase' }}>QR Code</div>
-        <div style={{ fontSize: 10, color: G.mu, marginTop: 1 }}>스캔 / 扫码</div>
+    <div style={{ background: G?.cardAlt, border: `1px solid ${G?.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '10px 14px', borderBottom: `1px solid ${G?.hair}` }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '2px', color: G?.accent, textTransform: 'uppercase' }}>QR Code</div>
+        <div style={{ fontSize: 10, color: G?.mu, marginTop: 1 }}>스캔 · 扫码</div>
       </div>
-      <div style={{ flex: 1, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: G.surf, minHeight: 0 }}>
-        <canvas ref={canvasRef} style={{ width: '100%', maxWidth: 160, height: 'auto', borderRadius: 4 }} />
-        <div className="num" style={{ fontSize: 9, color: G.mu, textAlign: 'center', lineHeight: 1.5, wordBreak: 'break-all' }}>
+      <div style={{ aspectRatio: '3/4', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 16, background: G?.surf }}>
+        <div style={{ padding: 8, background: bg, borderRadius: 6, border: `1px solid ${G?.hair}` }}>
+          <QRCodeCanvas value={text} size={140} level="M" fgColor={fg} bgColor={bg} />
+        </div>
+        <div className="num" style={{ fontSize: 9, color: G?.mu, textAlign: 'center', lineHeight: 1.5, wordBreak: 'break-all', maxWidth: 200 }}>
           {text}
         </div>
       </div>
@@ -117,32 +110,28 @@ function QRCell({ G, mo, sku, factory, qrSku }) {
   )
 }
 
-function ColorDisc({ G, name, code, ptone, swatchUrl, size = 110 }) {
-  const [imgFailed, setImgFailed] = useState(false)
+function ColorDisc({ G, name, code, ptone, size = 100 }) {
   const hex = colorFor(name)
   const textColor = readableText(hex)
-  const useImage = swatchUrl && !imgFailed
+  const firstWord = String(name || '').split(/\s+/)[0]
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 130 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 120 }}>
       <div style={{
-        width: size, height: size, borderRadius: '50%',
-        background: useImage ? `${G.cardAlt}` : hex,
+        width: size, height: size, borderRadius: '50%', background: hex,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: G.dk ? '0 4px 16px rgba(0,0,0,0.4)' : '0 4px 16px rgba(26,23,20,0.12)',
         border: `2px solid ${G.dk ? G.hair : '#FFFFFF'}`,
-        overflow: 'hidden', position: 'relative',
       }}>
-        {useImage ? (
-          <img src={swatchUrl} alt={name || ''}
-            onError={() => setImgFailed(true)}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        ) : (
-          <span className="syne" style={{ fontSize: 13, fontWeight: 700, color: textColor, letterSpacing: '1px', textTransform: 'uppercase' }}>
-            {String(name || '').slice(0, 6)}
-          </span>
-        )}
+        <span style={{
+          fontSize: 12, fontWeight: 700, color: textColor,
+          letterSpacing: '.5px', textTransform: 'uppercase',
+          padding: '0 8px', textAlign: 'center', wordBreak: 'keep-all',
+          fontFamily: "'Outfit', 'Inter', sans-serif",
+        }}>
+          {firstWord}
+        </span>
       </div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: G.tx, letterSpacing: '.3px', textTransform: 'uppercase' }}>{name || '—'}</div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: G.tx, letterSpacing: '.2px' }}>{name || '—'}</div>
       {code && <div className="num" style={{ fontSize: 11, color: G.accent, fontWeight: 600 }}>#{code}</div>}
       {ptone && <div className="num" style={{ fontSize: 10, color: G.mu }}>{ptone}</div>}
     </div>
@@ -641,8 +630,8 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
 
   const src = fullRecord || seed || {}
 
-  // Fetch linked Style record for image fallback
-  const { style: styleRecord } = useStyleData(src)
+  // No style-detail fetch — ZohoImage talks to /api/zoho-image directly via mo.ID
+  const styleRecord = null
 
   // Fallback G — never let dark hardcoding leak
   const T = G || {
@@ -669,44 +658,21 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
   const actualQty = Number(src.Acture_Total_Quantity || 0)
   const shipRate = planQty ? (actualQty / planQty) * 100 : 0
 
-  // Image field availability — checks MO record AND Style record
-  const hasField = (f) => {
-    const check = (r) => {
-      const v = r?.[f]
-      if (!v) return false
-      if (Array.isArray(v)) return v.length > 0
-      return true
-    }
-    return check(src) || check(styleRecord)
-  }
-  const hasStyleImg = hasField('Style_Image')
-  const hasTopFlat = hasField('Top_Flat_Sketch') || hasField('Top_Flat_Image')
-  const hasBottomFlat = hasField('Bottom_Flat_Sketch') || hasField('Bottom_Flat_Image')
+  // Image field availability — only need Style_Image now
+  const hasStyleImg = (() => {
+    const v = src?.Style_Image
+    if (!v) return false
+    if (Array.isArray(v)) return v.length > 0
+    return true
+  })()
 
   // Plan/Actual lines
   const planLines = (fullRecord?.Plan_MO_Lines || []).filter(Boolean)
   const actualLines = (fullRecord?.Acture_Order_Lines || []).filter(Boolean)
 
-  // Colors for COLOR IMAGE section
+  // Colors for COLOR IMAGE section — distinct colors from Plan_MO_Lines
   const colorEntries = useMemo(() => {
-    const toSwatchUrl = (v) => {
-      if (!v) return null
-      if (Array.isArray(v) && v.length) {
-        const first = v[0]
-        const p = typeof first === 'string' ? first : (first?.url || first?.filepath || first?.path)
-        return p ? `/api/zoho-image?filepath=${encodeURIComponent(p)}` : null
-      }
-      if (typeof v === 'string') return `/api/zoho-image?filepath=${encodeURIComponent(v)}`
-      if (typeof v === 'object') {
-        const p = v.url || v.filepath || v.path
-        return p ? `/api/zoho-image?filepath=${encodeURIComponent(p)}` : null
-      }
-      return null
-    }
-
     const map = new Map()
-
-    // 1) Pull from Plan_MO_Lines (MO record subform) — preferred
     planLines.forEach(l => {
       const name = safe(l.Plan_Color || l.Color || l.color)
       if (!map.has(name)) {
@@ -714,40 +680,11 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
           name,
           code: l.Plan_Color_Code || l.Color_Code || '',
           ptone: l.Pantone || l.PTone || '',
-          swatchUrl: toSwatchUrl(l.Color_Image),
         })
       }
     })
-
-    // 2) Fall back to Style record's own colors subform (if MO subform empty)
-    if (map.size === 0 && styleRecord) {
-      const styleColorList = styleRecord?.Colors || styleRecord?.Color_List || styleRecord?.Style_Colors || []
-      if (Array.isArray(styleColorList)) {
-        styleColorList.forEach(c => {
-          const name = safe(c.Color || c.Color_Name || c.Plan_Color)
-          if (!map.has(name)) {
-            map.set(name, {
-              name,
-              code: c.Color_Code || '',
-              ptone: c.Pantone || '',
-              swatchUrl: toSwatchUrl(c.Color_Image),
-            })
-          }
-        })
-      }
-
-      // 3) Last fallback — single Color_Image on the Style record proper
-      if (map.size === 0 && styleRecord?.Color_Image) {
-        const url = toSwatchUrl(styleRecord.Color_Image)
-          || (styleRecord.ID ? `/api/zoho-image?report=All_Styles&recordId=${encodeURIComponent(styleRecord.ID)}&field=Color_Image&index=0` : null)
-        if (url) {
-          map.set('—', { name: '—', code: '', ptone: '', swatchUrl: url })
-        }
-      }
-    }
-
-    return Array.from(map.values()).filter(c => c.name)
-  }, [planLines, styleRecord])
+    return Array.from(map.values()).filter(c => c.name && c.name !== '—')
+  }, [planLines])
 
   // Inner Pack & Bulto
   const INNER_PACK_PCS = 12
@@ -852,12 +789,10 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
             )}
 
             {/* ──────────────────────────────────────────────
-                B. Image grid (Style / Top / Bottom / QR)
+                B. Image grid — 2 cells (Style + QR)
             ────────────────────────────────────────────── */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 22 }}>
-              <ImageCell G={T} label="Style Image" sublabel="스타일 · 款式" mo={src} style={styleRecord} field="Style_Image" hasImage={hasStyleImg} onZoom={setZoomSrc} />
-              <ImageCell G={T} label="Top Flat" sublabel="상의도안 · 上衣图" mo={src} style={styleRecord} field="Top_Flat_Sketch" hasImage={hasTopFlat} onZoom={setZoomSrc} />
-              <ImageCell G={T} label="Bottom Flat" sublabel="하의도안 · 下装图" mo={src} style={styleRecord} field="Bottom_Flat_Sketch" hasImage={hasBottomFlat} onZoom={setZoomSrc} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14, marginBottom: 22 }}>
+              <StyleImageCell G={T} mo={src} hasImage={hasStyleImg} onZoom={setZoomSrc} />
               <QRCell G={T} mo={moNumber} sku={sku} factory={factoryName} qrSku={src?.QR_SKU} />
             </div>
 
@@ -869,7 +804,7 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
               {colorEntries.length > 0 ? (
                 <div style={{ background: T.cardAlt, border: `1px solid ${T.border}`, borderRadius: 12, padding: 24, display: 'flex', gap: 28, flexWrap: 'wrap', justifyContent: 'flex-start' }}>
                   {colorEntries.map((c, i) => (
-                    <ColorDisc key={c.name + i} G={T} name={c.name} code={c.code} ptone={c.ptone} swatchUrl={c.swatchUrl} />
+                    <ColorDisc key={c.name + i} G={T} name={c.name} code={c.code} ptone={c.ptone} />
                   ))}
                 </div>
               ) : (
