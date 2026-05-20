@@ -4,6 +4,9 @@ import CoverPage from "./components/CoverPage"
 import MoView from "./pages/MoView"
 import OverviewPage from "./pages/OverviewPage"
 import ErrorBoundary from "./components/ErrorBoundary"
+import { DataProvider } from "./contexts/DataContext"
+import AIPanel from "./components/ai/AIPanel"
+import AIToggleButton from "./components/ai/AIToggleButton"
 
 // ── THEME (Golden Hour) ──
 const LT = {
@@ -115,6 +118,7 @@ export default function App() {
   const [dark, setDark] = useState(false)
   const [tab, setTab] = useState("overview")
   const [refreshing, setRefreshing] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
   const G = dark ? DK : LT
 
   if (showCover) {
@@ -132,6 +136,7 @@ export default function App() {
 
   return (
     <ThemeContext.Provider value={{ G, dark, setDark }}>
+      <DataProvider>
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: G.bg, color: G.tx, overflow: "hidden" }}>
         <style>{mkCSS(G)}</style>
 
@@ -186,6 +191,7 @@ export default function App() {
                 >
                   {dark ? <Sun size={13} /> : <Moon size={13} />}
                 </button>
+                <AIToggleButton onClick={() => setAiOpen(o => !o)} isOpen={aiOpen} G={G} />
               </div>
             </div>
           </aside>
@@ -221,6 +227,8 @@ export default function App() {
           ))}
         </nav>
       </div>
+      <AIPanel open={aiOpen} onClose={() => setAiOpen(false)} G={G} />
+      </DataProvider>
     </ThemeContext.Provider>
   )
 }

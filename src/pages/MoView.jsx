@@ -14,6 +14,7 @@ import {
   getPlanQty, getActualQty, getEndDate, getProgress,
   isDelayed, getMonthKey, parseZohoDate,
 } from '../utils/moHelpers'
+import { useData } from '../contexts/DataContext'
 
 const SOFT_PALETTE = ["#C4B5FD", "#FCA5A5", "#6EE7B7", "#93C5FD", "#FCD34D", "#F9A8D4", "#A5F3FC", "#D9F99D"]
 
@@ -808,6 +809,31 @@ export default function MoView({ G }) {
     })
     return counts
   }, [monthMOs])
+
+  // ── DataContext sync ──────────────────────────────────────
+  const { setData } = useData()
+  useEffect(() => {
+    const factoryMap = {}
+    filteredMOs.forEach(m => {
+      const f = getMoFactory(m) || '—'
+      if (!factoryMap[f]) factoryMap[f] = { factory: f, planQty: 0, actualQty: 0 }
+      factoryMap[f].planQty += getPlanQty(m)
+      factoryMap[f].actualQty += getActualQty(m)
+    })
+    setData({
+      currentPage: 'mo-view',
+      moList: filteredMOs.slice(0, 50),
+      filteredMonth: selectedMonth,
+      kpi: {
+        totalMo: stats.total,
+        inProgress: stats.inProgress,
+        completed: filteredMOs.filter(m => ['Completed'].includes(prodGroup(m))).length,
+        delayed: stats.delayed.length,
+      },
+      factoryStats: Object.values(factoryMap),
+      pipelineStats: Object.entries(stageCounts).map(([stage, count]) => ({ stage, count })),
+    })
+  }, [filteredMOs, selectedMonth, stats, stageCounts, setData])
 
   // Timeline month range
   const monthRange = useMemo(() => {

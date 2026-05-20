@@ -10,6 +10,7 @@ import {
 } from '../utils/moHelpers'
 import MoListModal from '../components/MoListModal'
 import MoDetailModal from '../components/MoDetailModal'
+import { useData } from '../contexts/DataContext'
 
 // ─────────────────────────────────────────────────────────────
 // Stage helpers — keep aligned with MoView's STAGES list.
@@ -203,6 +204,22 @@ export default function OverviewPage({ G }) {
   }, [filteredMOs])
 
   const renderTooltip = useMemo(() => ChartTooltip({ G }), [G])
+
+  // ── DataContext sync ──────────────────────────────────────
+  const { setData } = useData()
+  useEffect(() => {
+    const IN_PROGRESS = ['샘플제작', '원단', '재단', '재봉', '포장']
+    const inProgress = statusData.filter(s => IN_PROGRESS.includes(s.name)).reduce((sum, s) => sum + s.value, 0)
+    const completed = statusData.filter(s => ['완료', '출고'].includes(s.name)).reduce((sum, s) => sum + s.value, 0)
+    setData({
+      currentPage: 'overview',
+      moList: filteredMOs.slice(0, 50),
+      filteredMonth: selectedMonth,
+      kpi: { totalMo: filteredMOs.length, inProgress, completed, delayed: delayedCount },
+      factoryStats: factoryData.map(f => ({ factory: f.factory, planQty: f.plan, actualQty: f.actual })),
+      pipelineStats: statusData.map(s => ({ stage: s.name, count: s.value })),
+    })
+  }, [filteredMOs, selectedMonth, statusData, factoryData, delayedCount, setData])
 
   return (
     <div style={{ animation: 'fadeIn 0.4s ease' }}>
