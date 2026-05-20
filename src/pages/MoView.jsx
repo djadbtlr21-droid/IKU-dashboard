@@ -259,7 +259,10 @@ function phaseBars(mo, phaseDef, monthStart, monthEnd, today, dayWidth) {
 }
 
 function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, dayWidth, onClickMo }) {
-  const rowH = 50
+  const rowH = 60          // was 50, ×1.2
+  const barH = 19          // was 16, ×1.2 rounded
+  const planTop = Math.round(rowH * 0.2)    // was 6
+  const actualTop = Math.round(rowH * 0.55) // was rowH - 22 = 28
 
   return (
     <div style={{ display: "flex", alignItems: "stretch", borderBottom: `1px solid ${G.hair}`, minHeight: rowH }}>
@@ -278,8 +281,8 @@ function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, dayWidth,
         onMouseEnter={e => { e.currentTarget.style.background = G.nh }}
         onMouseLeave={e => { e.currentTarget.style.background = G.card }}
       >
-        <div style={{ width: 30, height: 38, borderRadius: 4, background: G.cardAlt, overflow: "hidden", flexShrink: 0, border: `1px solid ${G.hair}` }}>
-          <ZohoImage mo={mo} field="Style_Image" report="All_MO" G={G} iconSize={14} placeholderText="" />
+        <div style={{ width: 36, height: 46, borderRadius: 5, background: G.cardAlt, overflow: "hidden", flexShrink: 0, border: `1px solid ${G.hair}` }}>
+          <ZohoImage mo={mo} field="Style_Image" report="All_MO" G={G} iconSize={16} placeholderText="" />
         </div>
         <div style={{ overflow: "hidden", flex: 1 }}>
           <div className="num" style={{ fontSize: 11, fontWeight: 700, color: G.accent, lineHeight: 1.2 }}>{getMoNumber(mo)}</div>
@@ -304,13 +307,13 @@ function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, dayWidth,
                 <div
                   title={`${p.label} Plan`}
                   style={{
-                    position: "absolute", top: 6, height: 16,
+                    position: "absolute", top: planTop, height: barH,
                     left: b.plan.left, width: planW,
                     background: `repeating-linear-gradient(45deg, ${p.hue}33, ${p.hue}33 4px, transparent 4px, transparent 8px)`,
                     border: `1px dashed ${p.hue}`,
                     borderRadius: 3,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 9, fontWeight: 700, color: p.tx,
+                    fontSize: 10, fontWeight: 700, color: p.tx,
                     overflow: "hidden", whiteSpace: "nowrap",
                   }}
                 >
@@ -321,13 +324,13 @@ function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, dayWidth,
                 <div
                   title={`${p.label} Actual`}
                   style={{
-                    position: "absolute", top: rowH - 22, height: 16,
+                    position: "absolute", top: actualTop, height: barH,
                     left: b.actual.left, width: actualW,
                     background: p.bg,
                     border: `1px solid ${p.hue}`,
                     borderRadius: 3,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 9, fontWeight: 700, color: p.tx,
+                    fontSize: 10, fontWeight: 700, color: p.tx,
                     overflow: "hidden", whiteSpace: "nowrap",
                   }}
                 >
@@ -469,9 +472,9 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
               const td = isToday(dt)
               return (
                 <div key={i} style={{
-                  width: dayWidth, minWidth: dayWidth, height: 28,
+                  width: dayWidth, minWidth: dayWidth, height: 34,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 10, fontWeight: td ? 700 : (we ? 600 : 500),
+                  fontSize: 11, fontWeight: td ? 700 : (we ? 600 : 500),
                   color: td ? "#EF4444" : (we ? "#DC6B6B" : G.tx),
                   background: td ? "rgba(239,68,68,0.08)" : (we ? "#FFE5E5" : "transparent"),
                   borderRight: `1px solid ${G.hair}`,
@@ -644,40 +647,49 @@ function MOCard({ G, mo, onClick }) {
 // ──────────────────────────────────────────────────────────
 // Filter row (search + 4 selects)
 // ──────────────────────────────────────────────────────────
+// mode: 'full' (default) · 'selects' (4 dropdowns only) · 'search' (search box only)
 function FilterRow({ G, search, setSearch, category, setCategory, factory, setFactory,
   prodStatus, setProdStatus, orderStatus, setOrderStatus,
-  categories, factories, prodStatuses, orderStatuses }) {
+  categories, factories, prodStatuses, orderStatuses, mode = 'full' }) {
   const inputStyle = {
     padding: "8px 12px", borderRadius: 8, fontSize: 12, border: `1px solid ${G.border}`,
     background: G.card, color: G.tx, outline: "none", fontFamily: "inherit",
   }
+  const showSearch = mode === 'full' || mode === 'search'
+  const showSelects = mode === 'full' || mode === 'selects'
   return (
-    <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-      <div style={{ position: "relative", flex: "1 1 240px", minWidth: 200 }}>
-        <Search size={13} style={{ position: "absolute", top: 11, left: 10, color: G.mu, pointerEvents: "none" }} />
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="MO# · SKU · 스타일 · 공장 / 搜索"
-          style={{ ...inputStyle, width: "100%", paddingLeft: 30 }}
-        />
-      </div>
-      <select value={category} onChange={e => setCategory(e.target.value)} style={inputStyle}>
-        <option value="">분류 / 分类</option>
-        {categories.map(c => <option key={c} value={c}>{c}</option>)}
-      </select>
-      <select value={factory} onChange={e => setFactory(e.target.value)} style={inputStyle}>
-        <option value="">공장 / 工厂</option>
-        {factories.map(f => <option key={f} value={f}>{f}</option>)}
-      </select>
-      <select value={prodStatus} onChange={e => setProdStatus(e.target.value)} style={inputStyle}>
-        <option value="">생산 / 生产</option>
-        {prodStatuses.map(s => <option key={s} value={s}>{s}</option>)}
-      </select>
-      <select value={orderStatus} onChange={e => setOrderStatus(e.target.value)} style={inputStyle}>
-        <option value="">오더 / 订单</option>
-        {orderStatuses.map(s => <option key={s} value={s}>{s}</option>)}
-      </select>
+    <div style={{ display: "flex", gap: 8, marginBottom: mode === 'selects' ? 0 : 14, flexWrap: "wrap", alignItems: "center" }}>
+      {showSearch && (
+        <div style={{ position: "relative", flex: "1 1 240px", minWidth: 200 }}>
+          <Search size={13} style={{ position: "absolute", top: 11, left: 10, color: G.mu, pointerEvents: "none" }} />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="MO# · SKU · 스타일 · 공장 / 搜索"
+            style={{ ...inputStyle, width: "100%", paddingLeft: 30 }}
+          />
+        </div>
+      )}
+      {showSelects && (
+        <>
+          <select value={category} onChange={e => setCategory(e.target.value)} style={inputStyle}>
+            <option value="">분류 / 分类</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={factory} onChange={e => setFactory(e.target.value)} style={inputStyle}>
+            <option value="">공장 / 工厂</option>
+            {factories.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+          <select value={prodStatus} onChange={e => setProdStatus(e.target.value)} style={inputStyle}>
+            <option value="">생산 / 生产</option>
+            {prodStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={orderStatus} onChange={e => setOrderStatus(e.target.value)} style={inputStyle}>
+            <option value="">오더 / 订单</option>
+            {orderStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </>
+      )}
     </div>
   )
 }
@@ -1099,14 +1111,25 @@ export default function MoView({ G }) {
       {/* ── Card Grid ── (moved here — between Pipeline and Timeline) */}
       <div className="card" style={{ padding: "20px 24px", marginBottom: 18 }}>
         <Rail G={G} />
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 12, alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Calendar size={14} style={{ color: G.accent }} />
             <span className="syne" style={{ fontSize: 14, fontWeight: 700, color: G.tx, letterSpacing: "-.2px" }}>{monthLabel} 생산 스케줄 · 生产安排</span>
+            <span className="num" style={{ fontSize: 11, color: G.mu, marginLeft: 8 }}>
+              {loading ? "—" : `${filteredMOs.length} / ${monthMOs.length}`}
+            </span>
           </div>
-          <span className="num" style={{ fontSize: 11, color: G.mu }}>
-            {loading ? "—" : `${filteredMOs.length} / ${monthMOs.length}`}
-          </span>
+          {/* Selects-only filter row (search bar stays in the Timeline section) */}
+          <FilterRow
+            G={G} mode="selects"
+            search={search} setSearch={setSearch}
+            category={filtCategory} setCategory={setFiltCategory}
+            factory={filtFactory} setFactory={setFiltFactory}
+            prodStatus={filtProd} setProdStatus={setFiltProd}
+            orderStatus={filtOrder} setOrderStatus={setFiltOrder}
+            categories={categories} factories={factories}
+            prodStatuses={prodStatuses} orderStatuses={orderStatuses}
+          />
         </div>
 
         {loading ? (
@@ -1143,7 +1166,10 @@ export default function MoView({ G }) {
           </div>
         </div>
 
-        <FilterRow G={G} search={search} setSearch={setSearch}
+        {/* Search-only filter (selects live in the Schedule section header) */}
+        <FilterRow
+          G={G} mode="search"
+          search={search} setSearch={setSearch}
           category={filtCategory} setCategory={setFiltCategory}
           factory={filtFactory} setFactory={setFiltFactory}
           prodStatus={filtProd} setProdStatus={setFiltProd}
