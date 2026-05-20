@@ -13,13 +13,13 @@ import {
 // Stage helpers — keep aligned with MoView's STAGES list.
 // ─────────────────────────────────────────────────────────────
 const STAGES = [
-  { kr: '샘플제작', cn: '产前样', en: 'Sampling', hue: '#A8A29E' },
-  { kr: '원단',     cn: '面料',   en: 'Fabric',   hue: '#93C5FD' },
-  { kr: '재단',     cn: '裁剪',   en: 'Cutting',  hue: '#C9A86E' },
-  { kr: '재봉',     cn: '缝制',   en: 'Sewing',   hue: '#F9A8D4' },
-  { kr: '포장',     cn: '包装',   en: 'Packing',  hue: '#FDBA74' },
-  { kr: '완료',     cn: '完成',   en: 'Done',     hue: '#FCD34D' },
-  { kr: '출고',     cn: '出货',   en: 'Shipped',  hue: '#86EFAC' },
+  { kr: '샘플제작', cn: '产前样', en: 'Sampling', hue: '#D4C5E2' }, // 파스텔 라벤더
+  { kr: '원단',     cn: '面料',   en: 'Fabric',   hue: '#B8E0D2' }, // 파스텔 민트
+  { kr: '재단',     cn: '裁剪',   en: 'Cutting',  hue: '#FAD4B4' }, // 파스텔 피치
+  { kr: '재봉',     cn: '缝制',   en: 'Sewing',   hue: '#B8D4E8' }, // 파스텔 스카이블루
+  { kr: '포장',     cn: '包装',   en: 'Packing',  hue: '#F9E4B7' }, // 파스텔 옐로우
+  { kr: '완료',     cn: '完成',   en: 'Done',     hue: '#C8E6C9' }, // 파스텔 그린
+  { kr: '출고',     cn: '出货',   en: 'Shipped',  hue: '#FFD6D6' }, // 파스텔 핑크
 ]
 
 function moStage(mo) {
@@ -38,10 +38,11 @@ function moStage(mo) {
   return '샘플제작'
 }
 
-// Golden Hour gold palette for charts
-const GOLD_PRIMARY = '#C9A86E'
-const GOLD_DEEP    = '#8B6914'
-const GOLD_LIGHT   = '#F0D5A0'
+// Pastel chart palette (replaces the gold trio used in the first pass)
+const PASTEL_PLAN   = '#B8D4E8' // 파스텔 블루
+const PASTEL_ACTUAL = '#F2C4A0' // 파스텔 코랄/피치
+const GRID_LINE     = '#E8E0D5' // warm cream grid
+const TOOLTIP_BORDER = '#E8E0D5'
 
 // ─────────────────────────────────────────────────────────────
 // Reusable presentational helpers
@@ -76,8 +77,9 @@ function ChartTooltip({ G }) {
     if (!active || !payload?.length) return null
     return (
       <div style={{
-        background: G.card, border: `1px solid ${G.border}`, borderRadius: 8,
-        padding: '10px 14px', fontSize: 12, color: G.tx, boxShadow: G.cardShadow,
+        background: G.card, border: `1px solid ${TOOLTIP_BORDER}`, borderRadius: 8,
+        padding: '10px 14px', fontSize: 12, color: G.tx,
+        boxShadow: G.dk ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(232,224,213,0.5)',
       }}>
         {label != null && (
           <div style={{ fontSize: 10, color: G.mu, letterSpacing: '.5px', marginBottom: 4, textTransform: 'uppercase' }}>{label}</div>
@@ -245,9 +247,9 @@ export default function OverviewPage({ G }) {
 
       {/* KPI row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 18 }}>
-        <KPI G={G} label="총 MO · 总订单" value={loading ? '—' : totalMo.toLocaleString()} sub={delayedCount ? `지연 ${delayedCount}건` : '지연 없음'} accent={GOLD_PRIMARY} />
-        <KPI G={G} label="총 계획 수량 · 总计划数量" value={loading ? '—' : `${totalPlan.toLocaleString()} pcs`} sub={`평균 ${totalMo ? Math.round(totalPlan / totalMo).toLocaleString() : 0} pcs/MO`} accent={GOLD_LIGHT} />
-        <KPI G={G} label="총 실제 수량 · 总实际数量" value={loading ? '—' : `${totalActual.toLocaleString()} pcs`} sub={`출고율 ${completionRate.toFixed(1)}%`} accent={GOLD_DEEP} />
+        <KPI G={G} label="총 MO · 总订单" value={loading ? '—' : totalMo.toLocaleString()} sub={delayedCount ? `지연 ${delayedCount}건` : '지연 없음'} accent={G.primary} />
+        <KPI G={G} label="총 계획 수량 · 总计划数量" value={loading ? '—' : `${totalPlan.toLocaleString()} pcs`} sub={`평균 ${totalMo ? Math.round(totalPlan / totalMo).toLocaleString() : 0} pcs/MO`} accent={PASTEL_PLAN} />
+        <KPI G={G} label="총 실제 수량 · 总实际数量" value={loading ? '—' : `${totalActual.toLocaleString()} pcs`} sub={`출고율 ${completionRate.toFixed(1)}%`} accent={PASTEL_ACTUAL} />
       </div>
 
       {/* Section 1: Factory horizontal bar chart */}
@@ -261,13 +263,13 @@ export default function OverviewPage({ G }) {
         ) : (
           <ResponsiveContainer width="100%" height={Math.max(280, factoryData.length * 38)}>
             <BarChart data={factoryData} layout="vertical" margin={{ top: 4, right: 30, bottom: 4, left: 100 }}>
-              <CartesianGrid stroke={G.hair} strokeDasharray="2 4" horizontal={false} />
+              <CartesianGrid stroke={GRID_LINE} strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" stroke={G.border} tick={{ fill: G.mu, fontSize: 11 }} />
               <YAxis type="category" dataKey="factory" stroke={G.border} tick={{ fill: G.tx, fontSize: 11, fontWeight: 600 }} width={100} />
               <Tooltip content={renderTooltip} cursor={{ fill: G.nh }} />
               <Legend wrapperStyle={{ fontSize: 11, color: G.mu }} />
-              <Bar dataKey="plan" name="Plan · 计划" fill={GOLD_LIGHT} radius={[0, 3, 3, 0]} />
-              <Bar dataKey="actual" name="Actual · 实际" fill={GOLD_PRIMARY} radius={[0, 3, 3, 0]} />
+              <Bar dataKey="plan" name="Plan · 计划" fill={PASTEL_PLAN} radius={[0, 4, 4, 0]} barSize={14} />
+              <Bar dataKey="actual" name="Actual · 实际" fill={PASTEL_ACTUAL} radius={[0, 4, 4, 0]} barSize={14} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -324,13 +326,13 @@ export default function OverviewPage({ G }) {
           ) : (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={monthlyData} margin={{ top: 8, right: 14, bottom: 4, left: 4 }}>
-                <CartesianGrid stroke={G.hair} strokeDasharray="2 4" vertical={false} />
+                <CartesianGrid stroke={GRID_LINE} strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="month" stroke={G.border} tick={{ fill: G.mu, fontSize: 11 }} />
                 <YAxis stroke={G.border} tick={{ fill: G.mu, fontSize: 11 }} />
                 <Tooltip content={renderTooltip} cursor={{ fill: G.nh }} />
                 <Legend wrapperStyle={{ fontSize: 11, color: G.mu }} />
-                <Bar dataKey="plan" name="Plan · 计划" fill={GOLD_LIGHT} radius={[3, 3, 0, 0]} />
-                <Bar dataKey="actual" name="Actual · 实际" fill={GOLD_DEEP} radius={[3, 3, 0, 0]} />
+                <Bar dataKey="plan" name="Plan · 计划" fill={PASTEL_PLAN} radius={[4, 4, 0, 0]} barSize={20} />
+                <Bar dataKey="actual" name="Actual · 实际" fill={PASTEL_ACTUAL} radius={[4, 4, 0, 0]} barSize={20} />
               </BarChart>
             </ResponsiveContainer>
           )}
