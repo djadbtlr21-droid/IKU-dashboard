@@ -93,3 +93,16 @@
   60% { transform: translateX(-6px); }
   80% { transform: translateX(6px); }
 }
+
+.schedule-scroll::-webkit-scrollbar {
+  height: 12px;
+}
+.schedule-scroll::-webkit-scrollbar-track {
+  background: #F5F1E8;
+  border-radius: 6px;
+}
+.schedule-scroll::-webkit-scrollbar-thumb {
+  background-color: #C9A86E;
+  border-radius: 6px;
+  border: 2px solid #F5F1E8;
+}

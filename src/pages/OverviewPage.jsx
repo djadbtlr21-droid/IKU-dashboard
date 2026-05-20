@@ -323,7 +323,7 @@ export default function OverviewPage({ G }) {
               style={{ cursor: 'pointer' }}
             >
               <CartesianGrid stroke={GRID_LINE} strokeDasharray="3 3" horizontal={false} />
-              <XAxis type="number" stroke={G.border} tick={{ fill: G.mu, fontSize: 11 }} />
+              <XAxis type="number" stroke={G.border} tick={{ fill: G.mu, fontSize: 11 }} ticks={[0,4800,9600,14400,19200,24000,28800,33600]} domain={[0,33600]} />
               <YAxis type="category" dataKey="factory" stroke={G.border} tick={{ fill: G.tx, fontSize: 10, fontWeight: 600 }} width={190} tickFormatter={formatFactoryWithPinyin} />
               <Tooltip content={renderTooltip} cursor={{ fill: G.nh }} />
               <Legend wrapperStyle={{ fontSize: 11, color: G.mu }} />
@@ -396,7 +396,7 @@ export default function OverviewPage({ G }) {
         {/* Section 3: Monthly plan vs actual */}
         <div className="card" style={{ padding: '20px 24px' }}>
           <Rail G={G} />
-          <SectionTitle G={G} icon={<Activity size={14} style={{ color: G.accent }} />} label="월별 Plan vs Actual · 月度计划 vs 实际" />
+          <SectionTitle G={G} icon={<Activity size={14} style={{ color: G.accent }} />} label="월별 실출고 수량 · 月度实际出货" />
           {loading ? (
             <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: G.mu, fontSize: 12 }}>로딩 중…</div>
           ) : monthlyData.length === 0 ? (
@@ -405,8 +405,8 @@ export default function OverviewPage({ G }) {
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={monthlyData} margin={{ top: 8, right: 14, bottom: 4, left: 4 }}>
                 <CartesianGrid stroke={GRID_LINE} strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="month" stroke={G.border} tick={{ fill: G.mu, fontSize: 11 }} />
-                <YAxis stroke={G.border} tick={{ fill: G.mu, fontSize: 11 }} />
+                <XAxis dataKey="month" stroke={G.border} tick={{ fill: G.mu, fontSize: 11, textAnchor: 'middle' }} interval={0} padding={{ left: 20, right: 20 }} />
+                <YAxis stroke={G.border} tick={{ fill: G.mu, fontSize: 11 }} ticks={[0,9600,19200,28800,38400]} domain={[0,38400]} />
                 <Tooltip content={renderTooltip} cursor={{ fill: G.nh }} />
                 <Legend wrapperStyle={{ fontSize: 11, color: G.mu }} />
                 <Bar dataKey="plan" name="Plan · 计划" fill={PASTEL_PLAN} radius={[4, 4, 0, 0]} barSize={20} />

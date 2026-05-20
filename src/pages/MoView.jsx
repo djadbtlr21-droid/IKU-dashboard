@@ -1165,10 +1165,10 @@ export default function MoView({ G }) {
         ) : filteredMOs.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: G.fa, fontSize: 12 }}>일치하는 MO 없음 · 无匹配MO</div>
         ) : (
-          <div style={{
+          <div className="schedule-scroll" style={{
             display: "flex", flexWrap: "nowrap", overflowX: "auto", gap: 12,
             paddingBottom: 6,
-            scrollbarWidth: "thin", scrollbarColor: "#E4DED2 transparent",
+            scrollbarWidth: "thin", scrollbarColor: "#C9A86E transparent",
           }}>
             {filteredMOs.map(mo => (
               <div key={mo.ID} style={{ flexShrink: 0, width: 220 }}>
