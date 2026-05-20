@@ -142,45 +142,51 @@ const META_COL_WIDTH = 220
 // Per-process visual + field map. Field names probe Plan_X / Acture_X /
 // Actual_X / bare so the same code works regardless of which Zoho schema
 // is live. Single-date phases (FAB/SHIP) use the same field for start+end.
+// Confirmed Zoho Creator link names (verified against the live All_MO report).
+//   FAB    Plan: Plan_Fabric_Date            Actual: Fabric_In_house_Date
+//   CUT    Plan: Plan_Cutting_Start/End      Actual: Cutting_Start_Date/Cutting_End_Date
+//   SEW    Plan: Plan_Sewing_Start/End       Actual: Sewing_Start_Date/Sewing_Completion_Date
+//   PACK   Plan: Plan_Packing_Start/End      Actual: Packing_Start_Date/Packing_End_Date
+//   SHIP   Plan: Expected_Delivery           Actual: Ship_Date
 const PHASE_DEFS = [
   {
     key: 'FAB', label: 'FAB',
-    planStart: ['Plan_Fabric_In_Date', 'Fabric_In_Date'],
-    planEnd:   ['Plan_Fabric_In_Date', 'Fabric_In_Date'],
-    actualStart: ['Actual_Fabric_In_Date', 'Acture_Fabric_In_Date', 'Fabric_In_Actual_Date'],
-    actualEnd:   ['Actual_Fabric_In_Date', 'Acture_Fabric_In_Date', 'Fabric_In_Actual_Date'],
+    planStart: ['Plan_Fabric_Date'],
+    planEnd:   ['Plan_Fabric_Date'],
+    actualStart: ['Fabric_In_house_Date'],
+    actualEnd:   ['Fabric_In_house_Date'],
     bg: '#D1FAE5', tx: '#15803D', hue: '#16A34A',
   },
   {
     key: 'CUT', label: 'CUT',
-    planStart: ['Plan_Cutting_Start_Date', 'Cutting_Start_Date'],
-    planEnd:   ['Plan_Cutting_End_Date', 'Cutting_End_Date'],
-    actualStart: ['Actual_Cutting_Start_Date', 'Acture_Cutting_Start_Date'],
-    actualEnd:   ['Actual_Cutting_End_Date', 'Acture_Cutting_End_Date'],
+    planStart: ['Plan_Cutting_Start'],
+    planEnd:   ['Plan_Cutting_End'],
+    actualStart: ['Cutting_Start_Date'],
+    actualEnd:   ['Cutting_End_Date'],
     bg: '#FEF3C7', tx: '#92400E', hue: '#F59E0B',
   },
   {
     key: 'SEW', label: 'SEW',
-    planStart: ['Plan_Sewing_Start_Date', 'Sewing_Start_Date'],
-    planEnd:   ['Plan_Sewing_End_Date', 'Sewing_End_Date'],
-    actualStart: ['Actual_Sewing_Start_Date', 'Acture_Sewing_Start_Date'],
-    actualEnd:   ['Actual_Sewing_End_Date', 'Acture_Sewing_End_Date'],
+    planStart: ['Plan_Sewing_Start'],
+    planEnd:   ['Plan_Sewing_End'],
+    actualStart: ['Sewing_Start_Date'],
+    actualEnd:   ['Sewing_Completion_Date'],
     bg: '#DBEAFE', tx: '#1E40AF', hue: '#2563EB',
   },
   {
     key: 'PACK', label: 'PACK',
-    planStart: ['Plan_Packing_Start_Date', 'Packing_Start_Date'],
-    planEnd:   ['Plan_Packing_End_Date', 'Packing_End_Date', 'Expected_Delivery'],
-    actualStart: ['Actual_Packing_Start_Date', 'Acture_Packing_Start_Date'],
-    actualEnd:   ['Actual_Packing_End_Date', 'Acture_Packing_End_Date'],
+    planStart: ['Plan_Packing_Start'],
+    planEnd:   ['Plan_Packing_End'],
+    actualStart: ['Packing_Start_Date'],
+    actualEnd:   ['Packing_End_Date'],
     bg: '#EDE9FE', tx: '#5B21B6', hue: '#7C3AED',
   },
   {
     key: 'SHIP', label: 'SHIP',
-    planStart: ['Plan_Ship_Date', 'Ship_Date', 'Expected_Delivery'],
-    planEnd:   ['Plan_Ship_Date', 'Ship_Date', 'Expected_Delivery'],
-    actualStart: ['Actual_Ship_Date', 'Acture_Ship_Date'],
-    actualEnd:   ['Actual_Ship_Date', 'Acture_Ship_Date'],
+    planStart: ['Expected_Delivery'],
+    planEnd:   ['Expected_Delivery'],
+    actualStart: ['Ship_Date'],
+    actualEnd:   ['Ship_Date'],
     bg: '#FCE7F3', tx: '#9F1239', hue: '#DB2777',
   },
 ]
@@ -331,16 +337,24 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
     const m = mos[0]
     // eslint-disable-next-line no-console
     console.log('[TIMELINE_DATES]', m.MO_Number || m.ID, {
-      Fabric_In_Date: m.Fabric_In_Date,
+      // Plan
+      Plan_Fabric_Date: m.Plan_Fabric_Date,
+      Plan_Cutting_Start: m.Plan_Cutting_Start,
+      Plan_Cutting_End: m.Plan_Cutting_End,
+      Plan_Sewing_Start: m.Plan_Sewing_Start,
+      Plan_Sewing_End: m.Plan_Sewing_End,
+      Plan_Packing_Start: m.Plan_Packing_Start,
+      Plan_Packing_End: m.Plan_Packing_End,
+      Expected_Delivery: m.Expected_Delivery,
+      // Actual
+      Fabric_In_house_Date: m.Fabric_In_house_Date,
       Cutting_Start_Date: m.Cutting_Start_Date,
       Cutting_End_Date: m.Cutting_End_Date,
       Sewing_Start_Date: m.Sewing_Start_Date,
-      Sewing_End_Date: m.Sewing_End_Date,
+      Sewing_Completion_Date: m.Sewing_Completion_Date,
       Packing_Start_Date: m.Packing_Start_Date,
       Packing_End_Date: m.Packing_End_Date,
       Ship_Date: m.Ship_Date,
-      Expected_Delivery: m.Expected_Delivery,
-      Order_Date: m.Order_Date,
     })
   }, [mos])
 
