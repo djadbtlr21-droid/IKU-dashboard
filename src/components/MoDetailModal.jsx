@@ -364,9 +364,14 @@ const PACK_STATUS_DEFS = [
   { key: 'Delivered', emoji: '✓', kr: '도착 완료', cn: '已交付' },
 ]
 
-function StatusList({ G, statuses, packs }) {
-  const getStatus = p => pick(p, ['Status', 'State', 'Pack_Status']) || 'Unknown'
-  const counts = packs.reduce((m, p) => { const k = getStatus(p); m[k] = (m[k] || 0) + 1; return m }, {})
+function StatusList({ G, statuses, packs, statusFields, weightField, precomputedCounts }) {
+  const getStatus = p => pick(p, statusFields || ['Bag_Status', 'Status', 'State', 'Pack_Status']) || 'Unknown'
+  const getWeight = p => weightField ? Number(pick(p, [weightField]) || 0) : 1
+  const counts = precomputedCounts || packs.reduce((m, p) => {
+    const k = getStatus(p)
+    m[k] = (m[k] || 0) + getWeight(p)
+    return m
+  }, {})
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       {statuses.map(s => {
@@ -400,36 +405,50 @@ function StatusList({ G, statuses, packs }) {
   )
 }
 
-function PackTable({ G, packs }) {
+function PackTable({ G, packs, kind = 'inner' }) {
   if (!packs.length) {
     return <div style={{ textAlign: 'center', padding: 20, color: G.mu, fontSize: 12 }}>데이터 없음 · 无数据</div>
   }
   const th = { padding: '8px 10px', textAlign: 'left', fontSize: 10, fontWeight: 600, color: G.mu, borderBottom: `1px solid ${G.border}`, letterSpacing: '.3px', textTransform: 'uppercase' }
   const td = { padding: '7px 10px', color: G.tx, fontSize: 11 }
+  const isMaster = kind === 'master'
   return (
     <div style={{ maxHeight: 360, overflow: 'auto', border: `1px solid ${G.hair}`, borderRadius: 8 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead style={{ position: 'sticky', top: 0, background: G.cardAlt, zIndex: 1 }}>
           <tr>
-            <th style={th}>Pack# · 编号</th>
+            <th style={th}>{isMaster ? 'Bag # · 编号' : 'Pack # · 编号'}</th>
             <th style={th}>Status · 状态</th>
             <th style={{ ...th, textAlign: 'right' }}>Qty · 数量</th>
+            {isMaster && <th style={{ ...th, textAlign: 'right' }}>Inner · 中包</th>}
             <th style={th}>Worker · 担当</th>
             <th style={th}>Created · 创建</th>
           </tr>
         </thead>
         <tbody>
           {packs.map((p, i) => {
-            const num = pick(p, ['Pack_Number', 'Bag_Number', 'Sequence', 'Pack_Sequence', 'ID']) || (i + 1)
-            const status = pick(p, ['Status', 'State']) || '—'
-            const qty = pick(p, ['Quantity', 'Qty', 'Pack_Quantity']) || ''
+            // Bag/Pack sequence — prefer business-key fields over Zoho internal ID
+            const num = pick(p, isMaster
+              ? ['Bag_Sequence', 'Bag_Number', 'Sequence', 'Pack_Sequence']
+              : ['Pack_Sequence', 'Pack_Number', 'Sequence', 'Bag_Sequence', 'Bag_Number']
+            ) || pick(p, ['ID']) || (i + 1)
+            const status = pick(p, isMaster
+              ? ['Bag_Status', 'Status', 'State']
+              : ['Pack_Status', 'Status', 'State']
+            ) || '—'
+            const qty = pick(p, isMaster
+              ? ['Total_Qty', 'Total_Quantity', 'Quantity', 'Qty']
+              : ['Total_Expected', 'Quantity', 'Qty', 'Pack_Quantity']
+            )
+            const innerCount = isMaster ? pick(p, ['Inner_Pack_Count', 'InnerPackCount']) : null
             const worker = pick(p, ['Worker', 'Operator', 'Added_User']) || '—'
             const created = pick(p, ['Created_Time', 'Added_Time', 'Modified_Time']) || '—'
             return (
               <tr key={p.ID || i} style={{ borderBottom: `1px solid ${G.hair}`, background: i % 2 === 0 ? 'transparent' : G.rh }}>
                 <td className="num" style={{ ...td, fontWeight: 600, color: G.accent }}>#{String(num).slice(-6)}</td>
                 <td style={td}>{status}</td>
-                <td className="num" style={{ ...td, textAlign: 'right', fontWeight: 600 }}>{qty}</td>
+                <td className="num" style={{ ...td, textAlign: 'right', fontWeight: 600 }}>{qty != null && qty !== '' ? Number(qty).toLocaleString() : '—'}</td>
+                {isMaster && <td className="num" style={{ ...td, textAlign: 'right', color: G.mu }}>{innerCount != null && innerCount !== '' ? innerCount : '—'}</td>}
                 <td style={td}>{worker}</td>
                 <td className="num" style={td}>{created}</td>
               </tr>
@@ -483,8 +502,14 @@ function ProductionLogTable({ G, logs }) {
   )
 }
 
-// PackagingSection — fetches Inner_Packs and Master_Bags either from
-// subform on the MO record or from /api/packs-list.
+// PackagingSection — Zoho's NEW packaging model:
+//   • Inner Pack is a single "standard" record per MO carrying Total_Expected
+//     (how many inner packs we plan to print). There's no per-pack record.
+//   • Master Bag records each carry Inner_Pack_Count (how many inner packs
+//     are inside that bag). So:
+//       innerCreated = standardInner.Total_Expected
+//       innerBagged  = Σ masterBag.Inner_Pack_Count
+//   • Master Bag list still shows individual bag records.
 function PackagingSection({ G, src }) {
   const moNumber = src?.MO_Number
   const planQty = Number(src?.Plan_Total_Quantity || 0)
@@ -516,28 +541,68 @@ function PackagingSection({ G, src }) {
     }).finally(() => setLoading(false))
   }, [moNumber, subformInner.length, subformMaster.length])
 
-  const innerTotal = planQty ? Math.ceil(planQty / 12) : 0
+  // ── Pick the "standard" inner pack record (Is_Remainder=false, or the first one) ──
+  const standardInner = useMemo(() => {
+    if (!innerPacks.length) return null
+    const standard = innerPacks.find(p => {
+      const ir = pick(p, ['Is_Remainder', 'is_remainder', 'IsRemainder'])
+      if (ir === false || ir === 'false' || ir === 0) return true
+      if (ir === undefined || ir === null) return true
+      return false
+    })
+    return standard || innerPacks[0]
+  }, [innerPacks])
+
+  const standardTotalExpected = Number(
+    pick(standardInner, ['Total_Expected', 'Total_Expected_Quantity', 'Expected_Total', 'Plan_Total', 'Total_Pack_Quantity']) || 0
+  )
+
+  // ── Inner Pack Bagged = Σ Inner_Pack_Count across Master Bags ──
+  const innerBagged = useMemo(() => masterBags.reduce(
+    (s, b) => s + Number(pick(b, ['Inner_Pack_Count', 'InnerPackCount']) || 0), 0
+  ), [masterBags])
+
+  // ── Totals (denominator) ──
+  // Prefer Total_Expected from the standard record; fall back to plan/12 if absent.
+  const innerTotal = standardTotalExpected || (planQty ? Math.ceil(planQty / 12) : 0)
   const masterTotal = planQty ? Math.ceil(planQty / 120) : 0
-  const innerCreated = innerPacks.length
+
+  // ── Created / Bagged for the progress bar ──
+  // "Created" = printed (Total_Expected) under the new model.
+  // "Bagged" = currently allocated to bags (Σ Inner_Pack_Count).
+  const innerCreated = standardTotalExpected || innerPacks.length  // legacy fallback
+  const innerBaggedDisplay = innerBagged
   const masterCreated = masterBags.length
+
+  // ── Inner Pack status distribution (weighted by Inner_Pack_Count on the master bag) ──
+  const innerStatusCounts = useMemo(() => {
+    const counts = { Created: standardTotalExpected || 0, Bagged: innerBagged }
+    masterBags.forEach(b => {
+      const st = pick(b, ['Bag_Status', 'Status', 'State'])
+      const ipc = Number(pick(b, ['Inner_Pack_Count', 'InnerPackCount']) || 0)
+      if (!st || st === 'Created' || st === 'Bagged') return // Created/Bagged already covered above
+      counts[st] = (counts[st] || 0) + ipc
+    })
+    return counts
+  }, [masterBags, standardTotalExpected, innerBagged])
 
   return (
     <div style={{ background: G.cardAlt, border: `1px solid ${G.border}`, borderRadius: 12, padding: 16 }}>
-      <ProgressBar G={G} label="Inner Pack 진행률 · 中间包装进度" current={innerCreated} total={innerTotal} color={G.primary} />
+      <ProgressBar G={G} label={`Inner Pack 진행률 · 中间包装进度 (Bagged / Total Expected)`} current={innerBaggedDisplay} total={innerTotal} color={G.primary} />
       <ProgressBar G={G} label="Master Bag 진행률 · 麻袋进度" current={masterCreated} total={masterTotal} color={G.primary} />
 
       <div style={{ marginTop: 18 }}>
         <div className="syne" style={{ fontSize: 11, fontWeight: 700, color: G.mu, letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 8 }}>
           Inner Pack 상태별 · 包状态分布
         </div>
-        <StatusList G={G} statuses={PACK_STATUS_DEFS} packs={innerPacks} />
+        <StatusList G={G} statuses={PACK_STATUS_DEFS} packs={masterBags} precomputedCounts={innerStatusCounts} statusFields={['Bag_Status', 'Status', 'State']} />
       </div>
 
       <div style={{ marginTop: 16 }}>
         <div className="syne" style={{ fontSize: 11, fontWeight: 700, color: G.mu, letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 8 }}>
           Master Bag 상태별 · 麻袋状态分布
         </div>
-        <StatusList G={G} statuses={PACK_STATUS_DEFS.filter(s => s.key !== 'Bagged')} packs={masterBags} />
+        <StatusList G={G} statuses={PACK_STATUS_DEFS.filter(s => s.key !== 'Bagged')} packs={masterBags} statusFields={['Bag_Status', 'Status', 'State']} />
       </div>
 
       <div style={{ marginTop: 18, borderTop: `1px solid ${G.hair}`, paddingTop: 12 }}>
@@ -546,10 +611,28 @@ function PackagingSection({ G, src }) {
           background: 'transparent', border: 'none', color: G.tx, cursor: 'pointer',
           padding: '6px 0', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
         }}>
-          <span>개별 Inner Pack 리스트 · 中间包装明细 ({innerCreated})</span>
+          <span>표준 중간포장 · 标准中包袋 ({standardTotalExpected || 0}개 인쇄)</span>
           <span style={{ color: G.mu, fontSize: 11 }}>{showInnerList ? '▲' : '▼'}</span>
         </button>
-        {showInnerList && <div style={{ marginTop: 8 }}><PackTable G={G} packs={innerPacks} /></div>}
+        {showInnerList && (
+          <div style={{ marginTop: 8 }}>
+            {standardInner ? (
+              <div style={{ border: `1px solid ${G.hair}`, borderRadius: 8, padding: '12px 14px', background: G.surf, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: G.mu, letterSpacing: '.5px' }}>표준 중간포장 · 标准中包袋</div>
+                  <div style={{ fontSize: 13, color: G.tx, fontWeight: 600, marginTop: 2 }}>
+                    {standardTotalExpected ? `${standardTotalExpected.toLocaleString()}개 인쇄 · 已印刷 ${standardTotalExpected.toLocaleString()}` : '인쇄 수량 미정 · 未确定'}
+                  </div>
+                </div>
+                <div className="num syne" style={{ fontSize: 22, fontWeight: 700, color: G.accent }}>
+                  {innerBagged.toLocaleString()} / {(standardTotalExpected || innerTotal).toLocaleString()}
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: 20, color: G.mu, fontSize: 12 }}>표준 중간포장 데이터 없음 · 无标准中包袋数据</div>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={{ marginTop: 8, borderTop: `1px solid ${G.hair}`, paddingTop: 12 }}>
@@ -561,7 +644,7 @@ function PackagingSection({ G, src }) {
           <span>개별 Master Bag 리스트 · 麻袋明细 ({masterCreated})</span>
           <span style={{ color: G.mu, fontSize: 11 }}>{showMasterList ? '▲' : '▼'}</span>
         </button>
-        {showMasterList && <div style={{ marginTop: 8 }}><PackTable G={G} packs={masterBags} /></div>}
+        {showMasterList && <div style={{ marginTop: 8 }}><PackTable G={G} packs={masterBags} kind="master" /></div>}
       </div>
 
       {loading && (
