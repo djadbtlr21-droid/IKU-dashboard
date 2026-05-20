@@ -191,7 +191,7 @@ export default function App() {
                 >
                   {dark ? <Sun size={13} /> : <Moon size={13} />}
                 </button>
-                <AIToggleButton onClick={() => setAiOpen(o => !o)} isOpen={aiOpen} G={G} />
+                <AIToggleButton onClick={() => setAiOpen(o => !o)} isOpen={aiOpen} G={G} tab={tab} />
               </div>
             </div>
           </aside>

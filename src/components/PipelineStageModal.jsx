@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { X } from 'lucide-react'
 import ZohoImage from './ZohoImage'
 import {
-  getMoNumber, getMoSku, getMoFactory, getPlanQty, getActualQty,
+  getMoNumber, getMoSku, getMoFactory, getPlanQty, getActualQty, cleanProdStatus,
 } from '../utils/moHelpers'
 
 function StageMoRow({ G, mo, stage, onClick }) {
@@ -50,7 +50,7 @@ function StageMoRow({ G, mo, stage, onClick }) {
             P {getPlanQty(mo).toLocaleString()} / A {getActualQty(mo).toLocaleString()}
           </span>
           <span style={{ color: stage.hue, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 120 }} title={mo.Production_Status}>
-            {mo.Production_Status || '—'}
+            {cleanProdStatus(mo.Production_Status) || '—'}
           </span>
         </div>
       </div>

@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { X } from 'lucide-react'
 import ZohoImage from './ZohoImage'
 import {
-  getMoNumber, getMoSku, getMoFactory, getPlanQty, getActualQty,
+  getMoNumber, getMoSku, getMoFactory, getPlanQty, getActualQty, cleanProdStatus,
 } from '../utils/moHelpers'
 
 function MoRow({ G, mo, onClick }) {
@@ -43,7 +43,7 @@ function MoRow({ G, mo, onClick }) {
             P {getPlanQty(mo).toLocaleString()} / A {getActualQty(mo).toLocaleString()}
           </span>
           <span style={{ color: G.accent, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }} title={mo.Production_Status}>
-            {mo.Production_Status || '—'}
+            {cleanProdStatus(mo.Production_Status) || '—'}
           </span>
         </div>
       </div>

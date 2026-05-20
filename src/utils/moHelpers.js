@@ -115,6 +115,11 @@ export function getChartBucket(mo) {
 
 // Parse Zoho's multi-JSON string: '{"pom":"...","s":"..."},...'
 // → JSON.parse('[' + str + ']') → [{pom, s, m, l, xl, notes}, ...]
+export function cleanProdStatus(raw) {
+  if (!raw) return raw
+  return String(raw).replace(/봉제/g, '재봉').replace(/缝制/g, '裁缝')
+}
+
 export function parseSpecJSON(str) {
   if (!str) return null
   if (typeof str !== 'string') return null

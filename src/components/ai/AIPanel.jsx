@@ -138,13 +138,13 @@ export default function AIPanel({ open, onClose, G }) {
                   IKU 오더현황이나 최신 북중미 애슬레져 트랜드에 대해 물어보세요
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%', maxWidth: 280 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%', maxWidth: 320 }}>
                 {[
-                  '이번 달 지연 MO 분석해줘',
                   '공장별 생산 현황 요약해줘',
+                  '이번 달 출고 지연된 아이템 찾아줘',
                   '북중미 애슬레저 시장 동향은?',
-                  'IKU 디자인과 현재 글로벌 트랜드 비교 · 분석해줘',
-                  'IKU 주요 컬러와 현재 트랜드 컬러의 공통점 · 차이점은?',
+                  'IKU 디자인과 글로벌 트랜드 비교 · 분석해줘',
+                  'IKU 주요 컬러와 트랜드 컬러의 공통 · 차이점은?',
                 ].map((q, i) => (
                   <button
                     key={i}
@@ -152,9 +152,10 @@ export default function AIPanel({ open, onClose, G }) {
                     disabled={isStreaming}
                     style={{
                       background: '#fff', border: `1px solid ${BORDER}`,
-                      borderRadius: 8, padding: '8px 12px', fontSize: 12,
+                      borderRadius: 8, padding: '7px 10px', fontSize: 12,
                       color: TEXT, cursor: 'pointer', textAlign: 'center',
-                      transition: 'border-color .15s', lineHeight: 1.5,
+                      transition: 'border-color .15s', lineHeight: 1.4,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = BORDER }}
