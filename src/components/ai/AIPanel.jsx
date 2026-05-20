@@ -49,7 +49,7 @@ export default function AIPanel({ open, onClose, G }) {
       <div style={{
         position: 'fixed', right: 0, top: 0,
         height: '100vh',
-        width: 'clamp(360px, 22vw, 460px)',
+        width: 'clamp(396px, 24vw, 506px)',
         background: CREAM,
         borderLeft: `1px solid ${BORDER}`,
         zIndex: 50,
@@ -112,11 +112,8 @@ export default function AIPanel({ open, onClose, G }) {
           background: CREAM,
           flexShrink: 0,
         }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>
-            AI 분석가 · AI 分析师
-          </div>
-          <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>
-            JERA MODA · Senior ERP Analyst
+          <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, whiteSpace: 'nowrap' }}>
+            IKU AI 분석가 · Senior ERP Analyst
           </div>
         </div>
 

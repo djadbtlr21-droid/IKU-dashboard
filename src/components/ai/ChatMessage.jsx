@@ -32,7 +32,7 @@ export default function ChatMessage({ message }) {
         background: isUser ? GOLD : CREAM,
         color: TEXT,
         border: isUser ? 'none' : `1px solid ${BORDER}`,
-        fontSize: 13,
+        fontSize: isUser ? 13 : 14,
         lineHeight: 1.65,
         boxShadow: isUser ? 'none' : '0 1px 4px rgba(26,23,20,0.06)',
       }}>

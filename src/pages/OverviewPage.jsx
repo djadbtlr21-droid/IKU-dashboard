@@ -8,6 +8,7 @@ import { fetchMoList } from '../api/client'
 import {
   getMoFactory, getPlanQty, getActualQty, getMonthKey, isDelayed,
 } from '../utils/moHelpers'
+import { formatFactoryWithPinyin } from '../utils/formatFactory'
 import MoListModal from '../components/MoListModal'
 import MoDetailModal from '../components/MoDetailModal'
 import { useData } from '../contexts/DataContext'
@@ -19,7 +20,7 @@ const STAGES = [
   { kr: '샘플제작', cn: '产前样', en: 'Sampling', hue: '#D4C5E2' }, // 파스텔 라벤더
   { kr: '원단',     cn: '面料',   en: 'Fabric',   hue: '#B8E0D2' }, // 파스텔 민트
   { kr: '재단',     cn: '裁剪',   en: 'Cutting',  hue: '#FAD4B4' }, // 파스텔 피치
-  { kr: '재봉',     cn: '缝制',   en: 'Sewing',   hue: '#B8D4E8' }, // 파스텔 스카이블루
+  { kr: '재봉',     cn: '裁缝',   en: 'Sewing',   hue: '#B8D4E8' }, // 파스텔 스카이블루
   { kr: '포장',     cn: '包装',   en: 'Packing',  hue: '#F9E4B7' }, // 파스텔 옐로우
   { kr: '완료',     cn: '完成',   en: 'Done',     hue: '#C8E6C9' }, // 파스텔 그린
   { kr: '출고',     cn: '出货',   en: 'Shipped',  hue: '#FFD6D6' }, // 파스텔 핑크
@@ -304,7 +305,7 @@ export default function OverviewPage({ G }) {
       {/* Section 1: Factory horizontal bar chart */}
       <div className="card" style={{ padding: '20px 24px', marginBottom: 18 }}>
         <Rail G={G} />
-        <SectionTitle G={G} icon={<FactoryIcon size={14} style={{ color: G.accent }} />} label="공장별 현황 · 工厂别 Plan vs Actual" />
+        <SectionTitle G={G} icon={<FactoryIcon size={14} style={{ color: G.accent }} />} label="공장별 오더 현황 · 各工厂订单现状" />
         {loading ? (
           <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: G.mu, fontSize: 12 }}>로딩 중 · 加载中…</div>
         ) : factoryData.length === 0 ? (
@@ -312,7 +313,7 @@ export default function OverviewPage({ G }) {
         ) : (
           <ResponsiveContainer width="100%" height={Math.max(280, factoryData.length * 38)}>
             <BarChart
-              data={factoryData} layout="vertical" margin={{ top: 4, right: 30, bottom: 4, left: 100 }}
+              data={factoryData} layout="vertical" margin={{ top: 4, right: 30, bottom: 4, left: 10 }}
               onClick={(e) => {
                 const fac = e?.activePayload?.[0]?.payload?.factory
                 if (!fac) return
@@ -323,7 +324,7 @@ export default function OverviewPage({ G }) {
             >
               <CartesianGrid stroke={GRID_LINE} strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" stroke={G.border} tick={{ fill: G.mu, fontSize: 11 }} />
-              <YAxis type="category" dataKey="factory" stroke={G.border} tick={{ fill: G.tx, fontSize: 11, fontWeight: 600 }} width={100} />
+              <YAxis type="category" dataKey="factory" stroke={G.border} tick={{ fill: G.tx, fontSize: 10, fontWeight: 600 }} width={190} tickFormatter={formatFactoryWithPinyin} />
               <Tooltip content={renderTooltip} cursor={{ fill: G.nh }} />
               <Legend wrapperStyle={{ fontSize: 11, color: G.mu }} />
               <Bar dataKey="plan" name="Plan · 计划" fill={PASTEL_PLAN} radius={[0, 4, 4, 0]} barSize={14} />

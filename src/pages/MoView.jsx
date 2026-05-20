@@ -30,7 +30,7 @@ const STAGES = [
   { kr: "샘플제작", cn: "产前样", hue: "#A8A29E", Icon: Shirt, en: "Sampling" },
   { kr: "원단",   cn: "面料",   hue: "#93C5FD", Icon: Layers },
   { kr: "재단",   cn: "裁剪",   hue: "#C9A86E", Icon: Scissors },
-  { kr: "재봉",   cn: "缝制",   hue: "#F9A8D4", Icon: Spool },
+  { kr: "재봉",   cn: "裁缝",   hue: "#F9A8D4", Icon: Spool },
   { kr: "포장",   cn: "包装",   hue: "#FDBA74", Icon: Package },
   { kr: "완료",   cn: "完成",   hue: "#FCD34D", Icon: CheckCircle2 },
   { kr: "출고",   cn: "出货",   hue: "#86EFAC", Icon: Truck },
@@ -87,7 +87,7 @@ function prodGroup(mo) {
   if (/sampling|샘플|产前样|not\s*start|미시작|未开始|未开/i.test(raw)) return 'Sampling'
   if (/fabric\s*received|fabric|면료|원단|面料/i.test(s)) return 'Fabric'
   if (/cutting|cut|재단|裁剪|裁/i.test(s)) return 'Cutting'
-  if (/sewing|sew|봉제|재봉|缝制|缝/i.test(s)) return 'Sewing'
+  if (/sewing|sew|봉제|재봉|裁缝|缝/i.test(s)) return 'Sewing'
   if (/packing|pack|포장|包装/i.test(s)) return 'Packing'
   if (/completed|complete|finish|완료|完成/i.test(s)) return 'Completed'
   return 'Unknown'
@@ -1165,9 +1165,15 @@ export default function MoView({ G }) {
         ) : filteredMOs.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: G.fa, fontSize: 12 }}>일치하는 MO 없음 · 无匹配MO</div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+          <div style={{
+            display: "flex", flexWrap: "nowrap", overflowX: "auto", gap: 12,
+            paddingBottom: 6,
+            scrollbarWidth: "thin", scrollbarColor: "#E4DED2 transparent",
+          }}>
             {filteredMOs.map(mo => (
-              <MOCard key={mo.ID} G={G} mo={mo} onClick={() => setSelectedMo({ id: mo.ID, row: mo })} />
+              <div key={mo.ID} style={{ flexShrink: 0, width: 220 }}>
+                <MOCard G={G} mo={mo} onClick={() => setSelectedMo({ id: mo.ID, row: mo })} />
+              </div>
             ))}
           </div>
         )}
