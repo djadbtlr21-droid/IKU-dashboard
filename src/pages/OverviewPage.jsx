@@ -305,7 +305,7 @@ export default function OverviewPage({ G }) {
       {/* Section 1: Factory horizontal bar chart */}
       <div className="card" style={{ padding: '20px 24px', marginBottom: 18 }}>
         <Rail G={G} />
-        <SectionTitle G={G} icon={<FactoryIcon size={14} style={{ color: G.accent }} />} label="공장별 오더 현황 · 各工厂订单现状" />
+        <SectionTitle G={G} icon={<FactoryIcon size={14} style={{ color: G.accent }} />} label="공장별 오더/출고 현황 · 各工厂接单/出货现状" />
         {loading ? (
           <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: G.mu, fontSize: 12 }}>로딩 중 · 加载中…</div>
         ) : factoryData.length === 0 ? (

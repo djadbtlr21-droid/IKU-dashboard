@@ -4,6 +4,7 @@ import { QRCodeCanvas } from 'qrcode.react'
 import { fetchMoDetail } from '../api/client'
 import { parseSpecJSON, parseZohoDate, isOverdue, isDelayed, getMoFactory } from '../utils/moHelpers'
 import { getColorHex, getTextColorOnBg } from '../utils/colorMap'
+import { formatCategory, formatTopType, formatSleeve, formatFit, formatDetails, formatBottomType, formatBottomLength } from '../utils/formatGarmentCode'
 import ZohoImage from './ZohoImage'
 
 // ──────────────────────────────────────────────────────────
@@ -905,7 +906,7 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
                 <Field G={T} label="영문 스타일명 / Eng Name" value={safe(src.Eng_Style_Name)} />
                 <Field G={T} label="중문 스타일명 / 中文款名" value={safe(src.Chi_Style_Name)} />
                 <Field G={T} label="시즌 / 季节" value={safe(src.Season)} />
-                <Field G={T} label="카테고리 / 大类" value={safe(src.Category)} />
+                <Field G={T} label="카테고리 / 大类" value={formatCategory(src.Category)} />
                 <Field G={T} label="공장 / 工厂" value={factoryName} />
                 <Field G={T} label="주문일 / 订单日" value={safe(src.Order_Date)} />
                 <Field G={T} label="주문 상태 / 订单状态" value={orderStatus} badge badgeColor={T.ok} />
@@ -921,12 +922,12 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
             <div style={{ marginBottom: 22 }}>
               <SectionTitle G={T} icon={<Shirt size={14} style={{ color: T.accent }} />} label="제품 정의 · 产品定义 · Product Definition" />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-                <Field G={T} label="상의 유형 / 上衣类型" value={safe(src.Top_Type)} />
-                <Field G={T} label="소매 유형 / 衣袖类型" value={safe(src.Sleeve)} />
-                <Field G={T} label="핏 / 版型" value={safe(src.Fit)} />
-                <Field G={T} label="디테일 / 类型详情" value={safe(src.Details)} />
-                <Field G={T} label="하의 유형 / 下装类型" value={safe(src.Bottom_Type)} />
-                <Field G={T} label="하의 기장 / 下装长短" value={safe(src.Bottom_Length)} />
+                <Field G={T} label="상의 유형 / 上衣类型" value={formatTopType(src.Top_Type)} />
+                <Field G={T} label="소매 유형 / 衣袖类型" value={formatSleeve(src.Sleeve)} />
+                <Field G={T} label="핏 / 版型" value={formatFit(src.Fit)} />
+                <Field G={T} label="디테일 / 类型详情" value={formatDetails(src.Details)} />
+                <Field G={T} label="하의 유형 / 下装类型" value={formatBottomType(src.Bottom_Type)} />
+                <Field G={T} label="하의 기장 / 下装长短" value={formatBottomLength(src.Bottom_Length)} />
               </div>
             </div>
 

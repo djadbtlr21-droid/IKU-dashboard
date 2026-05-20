@@ -15,6 +15,7 @@ import {
   isDelayed, getMonthKey, parseZohoDate,
 } from '../utils/moHelpers'
 import { useData } from '../contexts/DataContext'
+import { formatCategory } from '../utils/formatGarmentCode'
 
 const SOFT_PALETTE = ["#C4B5FD", "#FCA5A5", "#6EE7B7", "#93C5FD", "#FCD34D", "#F9A8D4", "#A5F3FC", "#D9F99D"]
 
@@ -599,8 +600,8 @@ function MOCard({ G, mo, onClick }) {
 
         <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px", fontSize: 9, color: G.mu, marginTop: 6 }}>
           {category && <>
-            <span style={{ whiteSpace: "nowrap" }}>분류</span>
-            <span title={category} style={{ color: G.tx, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{category}</span>
+            <span style={{ whiteSpace: "nowrap" }}>카테고리</span>
+            <span title={formatCategory(category)} style={{ color: G.tx, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", wordBreak: "break-all" }}>{formatCategory(category)}</span>
           </>}
           <span style={{ whiteSpace: "nowrap" }}>공장</span>
           <span title={getMoFactory(mo)} style={{ color: G.tx, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{getMoFactory(mo)}</span>
@@ -674,8 +675,8 @@ function FilterRow({ G, search, setSearch, category, setCategory, factory, setFa
       {showSelects && (
         <>
           <select value={category} onChange={e => setCategory(e.target.value)} style={inputStyle}>
-            <option value="">분류 / 分类</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            <option value="">카테고리 / 分类</option>
+            {categories.map(c => <option key={c} value={c}>{formatCategory(c)}</option>)}
           </select>
           <select value={factory} onChange={e => setFactory(e.target.value)} style={inputStyle}>
             <option value="">공장 / 工厂</option>
