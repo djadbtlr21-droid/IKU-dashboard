@@ -1,7 +1,8 @@
 import { useState, createContext, useContext } from "react"
-import { Package, ClipboardList, Truck, Building, Sun, Moon, RefreshCw } from "lucide-react"
+import { Package, BarChart2, Truck, Building, Sun, Moon, RefreshCw } from "lucide-react"
 import CoverPage from "./components/CoverPage"
 import MoView from "./pages/MoView"
+import OverviewPage from "./pages/OverviewPage"
 import ErrorBoundary from "./components/ErrorBoundary"
 
 // ── THEME (Golden Hour) ──
@@ -86,8 +87,8 @@ button{font-family:inherit;touch-action:manipulation}
 `
 
 const TABS = [
+  { id: "overview", label: "Overview", sub: "대시보드 · 仪表盘", icon: BarChart2, active: true },
   { id: "mo", label: "MO View", sub: "생산진행 · 生产进度", icon: Package, active: true },
-  { id: "style", label: "Style View", sub: "스타일 · 款式", icon: ClipboardList, active: false },
   { id: "shipment", label: "Shipment", sub: "선적 · 装箱出货", icon: Truck, active: false },
   { id: "factory", label: "Factory", sub: "공장 · 工厂", icon: Building, active: false },
 ]
@@ -112,7 +113,7 @@ export default function App() {
     try { return sessionStorage.getItem("iku_auth") !== "1" } catch { return true }
   })
   const [dark, setDark] = useState(false)
-  const [tab, setTab] = useState("mo")
+  const [tab, setTab] = useState("overview")
   const [refreshing, setRefreshing] = useState(false)
   const G = dark ? DK : LT
 
@@ -191,12 +192,17 @@ export default function App() {
 
           <main style={{ flex: 1, overflow: "auto", background: G.bg, WebkitOverflowScrolling: "touch" }}>
             <div className="page-wrap">
+              {tab === "overview" && (
+                <ErrorBoundary>
+                  <OverviewPage G={G} />
+                </ErrorBoundary>
+              )}
               {tab === "mo" && (
                 <ErrorBoundary>
                   <MoView G={G} />
                 </ErrorBoundary>
               )}
-              {tab !== "mo" && activeTab && <ComingSoon G={G} label={activeTab.label} />}
+              {tab !== "overview" && tab !== "mo" && activeTab && <ComingSoon G={G} label={activeTab.label} />}
             </div>
           </main>
         </div>

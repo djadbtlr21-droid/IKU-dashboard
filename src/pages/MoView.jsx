@@ -25,7 +25,7 @@ const STAGE_HUES = {
 }
 
 const STAGES = [
-  { kr: "미시작", cn: "未开始", hue: "#A8A29E", Icon: Clock },
+  { kr: "샘플제작", cn: "产前样", hue: "#A8A29E", Icon: Clock, en: "Sampling" },
   { kr: "원단",   cn: "面料",   hue: "#93C5FD", Icon: Package },
   { kr: "재단",   cn: "裁剪",   hue: "#C9A86E", Icon: Scissors },
   { kr: "재봉",   cn: "缝制",   hue: "#F9A8D4", Icon: Layers },
@@ -38,7 +38,7 @@ function Rail({ G }) { return G.dk ? <span className="rail" /> : null }
 
 // Map a MO record to a pipeline stage key (kr label).
 // Priority: explicit late-stage signals first, then earlier stages, then explicit
-// "not started" markers, finally fall back to 미시작 (NOT 재봉) so unknown
+// "not started" markers, finally fall back to 샘플제작 (NOT 재봉) so unknown
 // statuses don't get misclassified as mid-flight.
 function moStage(mo) {
   const raw = String(mo.Production_Status || '').trim()
@@ -48,8 +48,8 @@ function moStage(mo) {
 
   // Explicit empty / not-started — match before partial-keyword regex so e.g.
   // "Not Started" doesn't accidentally hit the 'sew' / 'pack' / etc. branches.
-  if (!raw) return "미시작"
-  if (/not\s*start|미시작|未开始|未开|not started/i.test(raw)) return "미시작"
+  if (!raw) return "샘플제작"
+  if (/not\s*start|미시작|未开始|未开|not started|sampling|샘플|产前样/i.test(raw)) return "샘플제작"
 
   if (/ship|出货|出货完|delivered|出库/.test(ds) || /ship|出货|出货完|delivered|出库/.test(ps)) return "출고"
   if (/complet|완료|done|finish|finished|完成/.test(ps) || /complet|完成/.test(os)) return "완료"
@@ -61,7 +61,16 @@ function moStage(mo) {
   // Unknown / unmapped status — treat as not yet started rather than
   // assuming mid-flight (was previously returning 재봉, which mis-labeled
   // any MO with a status string we hadn't seen before).
-  return "미시작"
+  return "샘플제작"
+}
+
+// Display-only helper: shows English "Sampling" wherever the raw Zoho value
+// would have read "Not Started" (and the corresponding KR/CN tokens).
+function displayStatus(raw) {
+  if (!raw) return 'Sampling'
+  const s = String(raw)
+  if (/not\s*start|미시작|未开始|未开/i.test(s)) return 'Sampling'
+  return raw
 }
 
 function statusOverlayColor(mo, G) {
@@ -500,8 +509,8 @@ function MOCard({ G, mo, onClick }) {
         </div>
 
         {mo.Order_Status && (
-          <div title={mo.Order_Status} style={{ marginTop: 6, padding: "3px 8px", background: G.dk ? "rgba(134,239,172,0.15)" : "#D1FAE5", borderRadius: 4, fontSize: 10, textAlign: "center", color: G.dk ? "#86EFAC" : "#065F46", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {mo.Order_Status}
+          <div title={displayStatus(mo.Order_Status)} style={{ marginTop: 6, padding: "3px 8px", background: G.dk ? "rgba(134,239,172,0.15)" : "#D1FAE5", borderRadius: 4, fontSize: 10, textAlign: "center", color: G.dk ? "#86EFAC" : "#065F46", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {displayStatus(mo.Order_Status)}
           </div>
         )}
 
@@ -895,17 +904,18 @@ export default function MoView({ G }) {
               <div style={{ padding: 20, fontSize: 12, color: G.fa, textAlign: "center" }}>공장 데이터 없음</div>
             ) : (
               <>
-                {/* Stage header row — sticky labels aligned with the per-factory count cells below */}
-                <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 6, borderBottom: `1px solid ${G.hair}` }}>
-                  <div style={{ width: 140, fontSize: 10, color: G.mu, fontWeight: 600, letterSpacing: ".3px", textTransform: "uppercase" }}>공장 · 工厂</div>
+                {/* Stage header row — sticky labels aligned with the per-factory count cells below.
+                    Font sizes bumped ~1.5x per spec: 10→15, 9→13, factory label 11→16, counts 11→16. */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 8, borderBottom: `1px solid ${G.hair}` }}>
+                  <div style={{ width: 140, fontSize: 15, color: G.mu, fontWeight: 600, letterSpacing: ".3px", textTransform: "uppercase" }}>공장 · 工厂</div>
                   <div style={{ flex: 1, display: "flex", gap: 4 }}>
                     {STAGES.map(stage => (
                       <div key={stage.kr} style={{
-                        flex: 1, minWidth: 40, padding: "4px 6px",
-                        textAlign: "center", fontSize: 10, color: G.mu, fontWeight: 600, lineHeight: 1.2,
+                        flex: 1, minWidth: 60, padding: "6px 8px",
+                        textAlign: "center", fontSize: 15, color: G.mu, fontWeight: 600, lineHeight: 1.25,
                       }}>
                         <div style={{ color: stage.hue, fontWeight: 700 }}>{stage.kr}</div>
-                        <div style={{ fontSize: 9, color: G.fa, marginTop: 1 }}>{stage.cn}</div>
+                        <div style={{ fontSize: 13, color: G.fa, marginTop: 2 }}>{stage.cn}</div>
                       </div>
                     ))}
                   </div>
@@ -917,16 +927,16 @@ export default function MoView({ G }) {
                   facMOs.forEach(m => { const k = moStage(m); facCounts[k] = (facCounts[k] || 0) + 1 })
                   return (
                     <div key={fac} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 140, fontSize: 11, color: G.tx, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fac}</div>
+                      <div style={{ width: 140, fontSize: 16, color: G.tx, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fac}</div>
                       <div style={{ flex: 1, display: "flex", gap: 4 }}>
                         {STAGES.map(stage => {
                           const count = facCounts[stage.kr] || 0
                           return (
                             <div key={stage.kr} title={`${fac} · ${stage.kr}: ${count}`} style={{
-                              flex: 1, minWidth: 40, padding: "6px 8px", borderRadius: 6,
+                              flex: 1, minWidth: 60, padding: "9px 10px", borderRadius: 6,
                               background: count ? `${stage.hue}22` : G.cardAlt,
                               border: `1px solid ${count ? stage.hue : G.hair}`,
-                              textAlign: "center", fontSize: 11, color: count ? G.tx : G.fa, fontWeight: count ? 600 : 400,
+                              textAlign: "center", fontSize: 16, color: count ? G.tx : G.fa, fontWeight: count ? 700 : 400,
                             }}>
                               <span className="num">{count}</span>
                             </div>
