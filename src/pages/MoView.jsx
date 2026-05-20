@@ -122,51 +122,115 @@ function LegendDot({ color, label }) {
 }
 
 // ──────────────────────────────────────────────────────────
-// Timeline gantt row
+// Timeline gantt — daily axis, per-process bars (FAB/CUT/SEW/PACK/SHIP),
+// Plan (dashed) + Actual (solid) stacked rows per MO.
 // ──────────────────────────────────────────────────────────
-function TimelineRow({ G, mo, monthStart, monthEnd, todayPct, onClickMo }) {
-  const barFor = (start, end) => {
+
+const DAY_WIDTH = 24
+const META_COL_WIDTH = 220
+
+// Per-process visual + field map. Field names probe Plan_X / Acture_X /
+// Actual_X / bare so the same code works regardless of which Zoho schema
+// is live. Single-date phases (FAB/SHIP) use the same field for start+end.
+const PHASE_DEFS = [
+  {
+    key: 'FAB', label: 'FAB',
+    planStart: ['Plan_Fabric_In_Date', 'Fabric_In_Date'],
+    planEnd:   ['Plan_Fabric_In_Date', 'Fabric_In_Date'],
+    actualStart: ['Actual_Fabric_In_Date', 'Acture_Fabric_In_Date', 'Fabric_In_Actual_Date'],
+    actualEnd:   ['Actual_Fabric_In_Date', 'Acture_Fabric_In_Date', 'Fabric_In_Actual_Date'],
+    bg: '#D1FAE5', tx: '#15803D', hue: '#16A34A',
+  },
+  {
+    key: 'CUT', label: 'CUT',
+    planStart: ['Plan_Cutting_Start_Date', 'Cutting_Start_Date'],
+    planEnd:   ['Plan_Cutting_End_Date', 'Cutting_End_Date'],
+    actualStart: ['Actual_Cutting_Start_Date', 'Acture_Cutting_Start_Date'],
+    actualEnd:   ['Actual_Cutting_End_Date', 'Acture_Cutting_End_Date'],
+    bg: '#FEF3C7', tx: '#92400E', hue: '#F59E0B',
+  },
+  {
+    key: 'SEW', label: 'SEW',
+    planStart: ['Plan_Sewing_Start_Date', 'Sewing_Start_Date'],
+    planEnd:   ['Plan_Sewing_End_Date', 'Sewing_End_Date'],
+    actualStart: ['Actual_Sewing_Start_Date', 'Acture_Sewing_Start_Date'],
+    actualEnd:   ['Actual_Sewing_End_Date', 'Acture_Sewing_End_Date'],
+    bg: '#DBEAFE', tx: '#1E40AF', hue: '#2563EB',
+  },
+  {
+    key: 'PACK', label: 'PACK',
+    planStart: ['Plan_Packing_Start_Date', 'Packing_Start_Date'],
+    planEnd:   ['Plan_Packing_End_Date', 'Packing_End_Date', 'Expected_Delivery'],
+    actualStart: ['Actual_Packing_Start_Date', 'Acture_Packing_Start_Date'],
+    actualEnd:   ['Actual_Packing_End_Date', 'Acture_Packing_End_Date'],
+    bg: '#EDE9FE', tx: '#5B21B6', hue: '#7C3AED',
+  },
+  {
+    key: 'SHIP', label: 'SHIP',
+    planStart: ['Plan_Ship_Date', 'Ship_Date', 'Expected_Delivery'],
+    planEnd:   ['Plan_Ship_Date', 'Ship_Date', 'Expected_Delivery'],
+    actualStart: ['Actual_Ship_Date', 'Acture_Ship_Date'],
+    actualEnd:   ['Actual_Ship_Date', 'Acture_Ship_Date'],
+    bg: '#FCE7F3', tx: '#9F1239', hue: '#DB2777',
+  },
+]
+
+function firstDate(mo, keys) {
+  for (const k of keys) {
+    const d = parseZohoDate(mo?.[k])
+    if (d) return d
+  }
+  return null
+}
+
+// Resolve a phase's bar geometry for one MO within the timeline range
+function phaseBars(mo, phaseDef, monthStart, monthEnd, today) {
+  const planStart = firstDate(mo, phaseDef.planStart)
+  const planEnd = firstDate(mo, phaseDef.planEnd) || planStart
+  if (!planStart) return null
+
+  // Actual: explicit field first, else today-clip of plan (only past portion)
+  const actualStart = firstDate(mo, phaseDef.actualStart) || (today >= planStart ? planStart : null)
+  const actualEnd = firstDate(mo, phaseDef.actualEnd) || (today >= planStart ? new Date(Math.min(today.getTime(), (planEnd || planStart).getTime())) : null)
+
+  const clip = (start, end) => {
     if (!start || !end) return null
-    const s = Math.max(0, Math.min(1, (start - monthStart) / (monthEnd - monthStart)))
-    const e = Math.max(0, Math.min(1, (end - monthStart) / (monthEnd - monthStart)))
+    const s = Math.max(start.getTime(), monthStart.getTime())
+    const e = Math.min(end.getTime(), monthEnd.getTime() + 86400000) // include end day
     if (e <= s) return null
-    return { left: `${s * 100}%`, width: `${(e - s) * 100}%` }
+    const left = (s - monthStart.getTime()) / 86400000 * DAY_WIDTH
+    const days = Math.max(1, (e - s) / 86400000)
+    const width = Math.max(DAY_WIDTH * 0.6, days * DAY_WIDTH - 2)
+    return { left, width }
   }
 
-  const orderD = parseZohoDate(mo.Order_Date)
-  const cutS = parseZohoDate(mo.Cutting_Start_Date) || orderD
-  const cutE = parseZohoDate(mo.Cutting_End_Date) || cutS
-  const sewS = parseZohoDate(mo.Sewing_Start_Date) || cutE
-  const sewE = parseZohoDate(mo.Sewing_End_Date) || sewS
-  const packS = parseZohoDate(mo.Packing_Start_Date) || sewE
-  const expD = parseZohoDate(mo.Expected_Delivery) || packS
-  const shipD = parseZohoDate(mo.Ship_Date) || expD
+  return {
+    plan: clip(planStart, new Date((planEnd || planStart).getTime() + 86400000 - 1)), // include end day
+    actual: clip(actualStart, actualEnd && new Date(actualEnd.getTime() + 86400000 - 1)),
+  }
+}
 
-  const bars = [
-    { phase: "Fab", range: barFor(orderD, cutS) },
-    { phase: "Cut", range: barFor(cutS, cutE) },
-    { phase: "Sew", range: barFor(sewS, sewE) },
-    { phase: "Pack", range: barFor(packS, expD) },
-    { phase: "Ship", range: barFor(expD, shipD) },
-  ].filter(b => b.range)
-
-  const progress = getProgress(mo)
-  const actualWidth = bars.length ? `${progress}%` : "0%"
+function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, onClickMo }) {
+  const rowH = 50
 
   return (
-    <div style={{ display: "flex", alignItems: "center", borderBottom: `1px solid ${G.hair}`, minHeight: 52 }}>
+    <div style={{ display: "flex", alignItems: "stretch", borderBottom: `1px solid ${G.hair}`, minHeight: rowH }}>
+      {/* Left meta — sticky to viewport left within the scroll container */}
       <div
         onClick={() => onClickMo && onClickMo(mo)}
         title={`${getMoNumber(mo)} — 클릭하여 상세 보기 / 点击查看详情`}
         style={{
-          width: 220, minWidth: 220, display: "flex", alignItems: "center", gap: 8,
-          padding: "8px 10px 8px 4px", cursor: "pointer", borderRadius: 6,
+          position: "sticky", left: 0, zIndex: 2,
+          width: META_COL_WIDTH, minWidth: META_COL_WIDTH, display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 10px 8px 6px", cursor: "pointer",
+          background: G.card,
+          borderRight: `1px solid ${G.hair}`,
           transition: "background .15s",
         }}
         onMouseEnter={e => { e.currentTarget.style.background = G.nh }}
-        onMouseLeave={e => { e.currentTarget.style.background = "transparent" }}
+        onMouseLeave={e => { e.currentTarget.style.background = G.card }}
       >
-        <div style={{ width: 32, height: 40, borderRadius: 4, background: G.cardAlt, overflow: "hidden", flexShrink: 0, border: `1px solid ${G.hair}` }}>
+        <div style={{ width: 30, height: 38, borderRadius: 4, background: G.cardAlt, overflow: "hidden", flexShrink: 0, border: `1px solid ${G.hair}` }}>
           <ZohoImage mo={mo} field="Style_Image" report="All_MO" G={G} iconSize={14} placeholderText="" />
         </div>
         <div style={{ overflow: "hidden", flex: 1 }}>
@@ -177,53 +241,184 @@ function TimelineRow({ G, mo, monthStart, monthEnd, todayPct, onClickMo }) {
         <div className="num" style={{ fontSize: 10, color: G.mu, textAlign: "right" }}>{getPlanQty(mo).toLocaleString()}</div>
       </div>
 
-      <div style={{ flex: 1, position: "relative", height: 36 }}>
-        {bars.map((b, bi) => (
-          <div key={`p-${bi}`} title={`${b.phase} (Plan)`} style={{
-            position: "absolute", top: 4, height: 10, ...b.range,
-            background: `repeating-linear-gradient(45deg, ${STAGE_HUES[b.phase]}, ${STAGE_HUES[b.phase]} 4px, transparent 4px, transparent 8px)`,
-            border: `1px dashed ${STAGE_HUES[b.phase]}`, borderRadius: 3,
-          }} />
-        ))}
-        {bars.length > 0 && (
-          <div style={{ position: "absolute", bottom: 4, left: bars[0].range.left, width: actualWidth, height: 10, background: STAGE_HUES[bars[0].phase], borderRadius: 3 }} />
-        )}
-        {todayPct > 0 && todayPct < 1 && (
-          <div style={{ position: "absolute", top: 0, bottom: 0, left: `${todayPct * 100}%`, width: 1, background: "#EF4444" }} />
-        )}
+      {/* Gantt — Plan row (top half) + Actual row (bottom half) */}
+      <div style={{ position: "relative", width: totalWidth, minWidth: totalWidth, height: rowH }}>
+        {PHASE_DEFS.map(p => {
+          const b = phaseBars(mo, p, monthStart, monthEnd, today)
+          if (!b) return null
+          return (
+            <span key={p.key}>
+              {b.plan && (
+                <div
+                  title={`${p.label} Plan`}
+                  style={{
+                    position: "absolute", top: 6, height: 16,
+                    left: b.plan.left, width: b.plan.width,
+                    background: `repeating-linear-gradient(45deg, ${p.hue}33, ${p.hue}33 4px, transparent 4px, transparent 8px)`,
+                    border: `1px dashed ${p.hue}`,
+                    borderRadius: 3,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 9, fontWeight: 700, color: p.tx,
+                    overflow: "hidden", whiteSpace: "nowrap",
+                  }}
+                >
+                  {b.plan.width >= 30 ? p.label : ''}
+                </div>
+              )}
+              {b.actual && (
+                <div
+                  title={`${p.label} Actual`}
+                  style={{
+                    position: "absolute", top: rowH - 22, height: 16,
+                    left: b.actual.left, width: b.actual.width,
+                    background: p.bg,
+                    border: `1px solid ${p.hue}`,
+                    borderRadius: 3,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 9, fontWeight: 700, color: p.tx,
+                    overflow: "hidden", whiteSpace: "nowrap",
+                  }}
+                >
+                  {b.actual.width >= 30 ? p.label : ''}
+                </div>
+              )}
+            </span>
+          )
+        })}
       </div>
     </div>
   )
 }
 
 function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
-  const totalDays = Math.ceil((monthEnd - monthStart) / 86400000)
   const today = new Date()
-  const todayPct = Math.max(0, Math.min(1, (today - monthStart) / (monthEnd - monthStart)))
+  // Inclusive day count (start + 1 day per step until > end)
+  const totalDays = Math.round((monthEnd - monthStart) / 86400000) + 1
+  const totalWidth = totalDays * DAY_WIDTH
 
-  const ticks = []
-  for (let d = 0; d <= totalDays; d += 7) {
-    const dt = new Date(monthStart.getTime() + d * 86400000)
-    ticks.push({ pct: d / totalDays, label: `${dt.getMonth() + 1}/${dt.getDate()}` })
+  // Build per-day cells
+  const days = []
+  for (let i = 0; i < totalDays; i++) {
+    const dt = new Date(monthStart.getTime() + i * 86400000)
+    days.push(dt)
   }
 
+  // Month band: contiguous spans per month
+  const monthSpans = []
+  let span = null
+  days.forEach((dt, i) => {
+    const key = `${dt.getFullYear()}-${dt.getMonth()}`
+    if (!span || span.key !== key) {
+      if (span) monthSpans.push(span)
+      span = { key, year: dt.getFullYear(), month: dt.getMonth(), startIdx: i, count: 1 }
+    } else {
+      span.count++
+    }
+  })
+  if (span) monthSpans.push(span)
+
+  const todayInRange = today >= monthStart && today <= monthEnd
+  const todayLeft = todayInRange ? (today - monthStart) / 86400000 * DAY_WIDTH : 0
+  const todayLabel = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+  const isWeekend = (dt) => {
+    const dow = dt.getDay()
+    return dow === 0 || dow === 6
+  }
+  const isToday = (dt) => dt.toDateString() === today.toDateString()
+
   return (
-    <div>
-      <div style={{ position: "relative", height: 22, marginLeft: 220, marginBottom: 8, borderBottom: `1px solid ${G.hair}` }}>
-        {ticks.map((t, i) => (
-          <div key={i} style={{ position: "absolute", left: `${t.pct * 100}%`, fontSize: 9, color: G.mu, transform: "translateX(-50%)" }}>{t.label}</div>
-        ))}
-      </div>
+    <div style={{ overflowX: "auto", position: "relative" }}>
+      <div style={{ minWidth: META_COL_WIDTH + totalWidth }}>
+        {/* Header row 1 — month band */}
+        <div style={{ display: "flex", borderBottom: `1px solid ${G.hair}` }}>
+          <div style={{ position: "sticky", left: 0, zIndex: 3, width: META_COL_WIDTH, minWidth: META_COL_WIDTH, background: G.cardAlt, borderRight: `1px solid ${G.hair}`, padding: "8px 10px", fontSize: 10, fontWeight: 700, color: G.mu, letterSpacing: ".5px", textTransform: "uppercase" }}>
+            MO · Style
+          </div>
+          <div style={{ display: "flex", width: totalWidth }}>
+            {monthSpans.map((m, i) => (
+              <div key={i} style={{
+                width: m.count * DAY_WIDTH,
+                background: i % 2 === 0 ? G.cardAlt : G.surf,
+                borderRight: i < monthSpans.length - 1 ? `1px solid ${G.border}` : "none",
+                padding: "6px 10px", fontSize: 11, fontWeight: 700, color: G.tx,
+                textAlign: "center", letterSpacing: ".3px",
+              }}>
+                {String(m.year).slice(-2)}.{String(m.month + 1).padStart(2, '0')}
+                <span style={{ marginLeft: 6, fontSize: 10, color: G.mu, fontWeight: 500 }}>
+                  · {m.month === 4 ? '5月' : m.month === 5 ? '6月' : `${m.month + 1}月`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
 
-      <div style={{ position: "relative" }}>
-        {mos.slice(0, 20).map((mo, i) => (
-          <TimelineRow key={mo.ID || i} G={G} mo={mo} monthStart={monthStart} monthEnd={monthEnd} todayPct={todayPct} onClickMo={onClickMo} />
-        ))}
-      </div>
+        {/* Header row 2 — daily numbers */}
+        <div style={{ display: "flex", borderBottom: `2px solid ${G.hair}` }}>
+          <div style={{ position: "sticky", left: 0, zIndex: 3, width: META_COL_WIDTH, minWidth: META_COL_WIDTH, background: G.surf, borderRight: `1px solid ${G.hair}` }} />
+          <div style={{ display: "flex", width: totalWidth }}>
+            {days.map((dt, i) => {
+              const we = isWeekend(dt)
+              const td = isToday(dt)
+              return (
+                <div key={i} style={{
+                  width: DAY_WIDTH, minWidth: DAY_WIDTH, height: 28,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, fontWeight: td ? 700 : 500,
+                  color: td ? "#EF4444" : (we ? G.fa : G.tx),
+                  background: td ? "rgba(239,68,68,0.08)" : (we ? G.cardAlt : "transparent"),
+                  borderRight: `1px solid ${G.hair}`,
+                }}>
+                  {dt.getDate()}
+                </div>
+              )
+            })}
+          </div>
+        </div>
 
-      <div style={{ marginTop: 10, fontSize: 10, color: G.mu, display: "flex", justifyContent: "space-between", alignItems: "center", marginLeft: 220 }}>
-        <span>P = Plan (dashed) · A = Actual (solid)</span>
-        <span><span style={{ color: "#EF4444", fontWeight: 600 }}>● Today</span> {today.getFullYear()}-{String(today.getMonth() + 1).padStart(2, '0')}-{String(today.getDate()).padStart(2, '0')}</span>
+        {/* MO rows */}
+        <div style={{ position: "relative" }}>
+          {/* Day-column background grid (weekend tinting) — drawn behind bars */}
+          <div style={{ position: "absolute", inset: 0, left: META_COL_WIDTH, display: "flex", pointerEvents: "none", zIndex: 0 }}>
+            {days.map((dt, i) => (
+              <div key={i} style={{
+                width: DAY_WIDTH, minWidth: DAY_WIDTH,
+                borderRight: `1px solid ${G.hair}`,
+                background: isWeekend(dt) ? (G.dk ? "rgba(255,255,255,0.02)" : "rgba(26,23,20,0.015)") : "transparent",
+              }} />
+            ))}
+          </div>
+
+          {mos.slice(0, 30).map((mo, i) => (
+            <TimelineRow key={mo.ID || i} G={G} mo={mo} monthStart={monthStart} monthEnd={monthEnd} totalWidth={totalWidth} today={today} onClickMo={onClickMo} />
+          ))}
+
+          {/* Today red vertical line — spans all MO rows */}
+          {todayInRange && (
+            <div style={{
+              position: "absolute", top: 0, bottom: 0, left: META_COL_WIDTH + todayLeft,
+              width: 2, background: "#EF4444", pointerEvents: "none", zIndex: 1,
+              boxShadow: "0 0 0 1px rgba(239,68,68,0.2)",
+            }} />
+          )}
+        </div>
+
+        {/* Footer — legend + today badge */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, padding: "0 4px", fontSize: 10, color: G.mu, gap: 14, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <span><span style={{ display: "inline-block", width: 18, height: 8, borderRadius: 2, border: `1px dashed ${G.tx}`, background: `repeating-linear-gradient(45deg, ${G.mu}33, ${G.mu}33 3px, transparent 3px, transparent 6px)`, verticalAlign: "middle" }} /> Plan (dashed)</span>
+            <span><span style={{ display: "inline-block", width: 18, height: 8, borderRadius: 2, background: G.primary, verticalAlign: "middle" }} /> Actual (solid)</span>
+            {PHASE_DEFS.map(p => (
+              <span key={p.key} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: p.hue }} />
+                {p.label}
+              </span>
+            ))}
+          </div>
+          {todayInRange && (
+            <span><span style={{ color: "#EF4444", fontWeight: 700 }}>● Today</span> <span className="num" style={{ color: G.tx }}>{todayLabel}</span></span>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -808,9 +1003,7 @@ export default function MoView({ G }) {
         ) : filteredMOs.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: G.fa, fontSize: 12 }}>일치하는 MO 없음 · 无匹配MO</div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <TimelineGrid G={G} mos={filteredMOs} monthStart={timelineRange.start} monthEnd={timelineRange.end} onClickMo={(m) => setSelectedMo({ id: m.ID, row: m })} />
-          </div>
+          <TimelineGrid G={G} mos={filteredMOs} monthStart={timelineRange.start} monthEnd={timelineRange.end} onClickMo={(m) => setSelectedMo({ id: m.ID, row: m })} />
         )}
       </div>
 
