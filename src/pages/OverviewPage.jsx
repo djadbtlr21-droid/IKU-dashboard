@@ -8,6 +8,8 @@ import { fetchMoList } from '../api/client'
 import {
   getMoFactory, getPlanQty, getActualQty, getMonthKey, isDelayed,
 } from '../utils/moHelpers'
+import MoListModal from '../components/MoListModal'
+import MoDetailModal from '../components/MoDetailModal'
 
 // ─────────────────────────────────────────────────────────────
 // Stage helpers — keep aligned with MoView's STAGES list.
@@ -104,6 +106,8 @@ export default function OverviewPage({ G }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedMonth, setSelectedMonth] = useState(null) // null = 전체
+  const [drilldown, setDrilldown] = useState(null) // { title, subtitle, accent, mos }
+  const [selectedMo, setSelectedMo] = useState(null)
 
   const loadData = useCallback(() => {
     setLoading(true)
@@ -262,7 +266,16 @@ export default function OverviewPage({ G }) {
           <div style={{ padding: 30, textAlign: 'center', color: G.fa, fontSize: 12 }}>데이터 없음 · 无数据</div>
         ) : (
           <ResponsiveContainer width="100%" height={Math.max(280, factoryData.length * 38)}>
-            <BarChart data={factoryData} layout="vertical" margin={{ top: 4, right: 30, bottom: 4, left: 100 }}>
+            <BarChart
+              data={factoryData} layout="vertical" margin={{ top: 4, right: 30, bottom: 4, left: 100 }}
+              onClick={(e) => {
+                const fac = e?.activePayload?.[0]?.payload?.factory
+                if (!fac) return
+                const mos = filteredMOs.filter(m => getMoFactory(m) === fac)
+                setDrilldown({ title: fac, subtitle: `${mos.length} MO · 工厂别 드릴다운`, accent: PASTEL_ACTUAL, mos })
+              }}
+              style={{ cursor: 'pointer' }}
+            >
               <CartesianGrid stroke={GRID_LINE} strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" stroke={G.border} tick={{ fill: G.mu, fontSize: 11 }} />
               <YAxis type="category" dataKey="factory" stroke={G.border} tick={{ fill: G.tx, fontSize: 11, fontWeight: 600 }} width={100} />
@@ -292,7 +305,17 @@ export default function OverviewPage({ G }) {
                   <PieChart>
                     <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2}>
                       {statusData.map((d, i) => (
-                        <Cell key={i} fill={d.hue} stroke={G.surf} strokeWidth={2} />
+                        <Cell
+                          key={i}
+                          fill={d.hue}
+                          stroke={G.surf}
+                          strokeWidth={2}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => {
+                            const mos = filteredMOs.filter(m => moStage(m) === d.name)
+                            setDrilldown({ title: `${d.name} · ${d.cn}`, subtitle: `${mos.length} MO · 상태 드릴다운`, accent: d.hue, mos })
+                          }}
+                        />
                       ))}
                     </Pie>
                     <Tooltip content={renderTooltip} />
@@ -301,7 +324,16 @@ export default function OverviewPage({ G }) {
               </div>
               <div style={{ flex: '1 1 140px', minWidth: 140, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {statusData.map(d => (
-                  <div key={d.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
+                  <div
+                    key={d.name}
+                    onClick={() => {
+                      const mos = filteredMOs.filter(m => moStage(m) === d.name)
+                      setDrilldown({ title: `${d.name} · ${d.cn}`, subtitle: `${mos.length} MO · 상태 드릴다운`, accent: d.hue, mos })
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, cursor: 'pointer', padding: '4px 6px', borderRadius: 4 }}
+                    onMouseEnter={e => { e.currentTarget.style.background = G.nh }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                  >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                       <span style={{ width: 9, height: 9, borderRadius: 2, background: d.hue }} />
                       <span style={{ color: G.tx, fontWeight: 600 }}>{d.name}</span>
@@ -361,7 +393,16 @@ export default function OverviewPage({ G }) {
               </thead>
               <tbody>
                 {statusSummary.map((r, i) => (
-                  <tr key={r.kr} style={{ borderBottom: i < statusSummary.length - 1 ? `1px solid ${G.hair}` : 'none', background: i % 2 === 0 ? 'transparent' : G.rh }}>
+                  <tr
+                    key={r.kr}
+                    onClick={() => {
+                      const mos = filteredMOs.filter(m => moStage(m) === r.kr)
+                      setDrilldown({ title: `${r.kr} · ${r.cn}`, subtitle: `${mos.length} MO · 상태 드릴다운`, accent: r.hue, mos })
+                    }}
+                    style={{ borderBottom: i < statusSummary.length - 1 ? `1px solid ${G.hair}` : 'none', background: i % 2 === 0 ? 'transparent' : G.rh, cursor: 'pointer', transition: 'background .15s' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = G.nh }}
+                    onMouseLeave={e => { e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : G.rh }}
+                  >
                     <td style={{ padding: '10px 14px', color: G.tx }}>
                       <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: r.hue, marginRight: 8, verticalAlign: 'middle' }} />
                       <span style={{ fontWeight: 600 }}>{r.kr}</span>
@@ -378,6 +419,27 @@ export default function OverviewPage({ G }) {
           </div>
         )}
       </div>
+
+      {/* Drilldown: chart click → MO list → MO detail */}
+      {drilldown && (
+        <MoListModal
+          G={G}
+          title={drilldown.title}
+          subtitle={drilldown.subtitle}
+          accentColor={drilldown.accent}
+          mos={drilldown.mos}
+          onClose={() => setDrilldown(null)}
+          onMoClick={(mo) => setSelectedMo({ id: mo.ID, row: mo })}
+        />
+      )}
+      {selectedMo && (
+        <MoDetailModal
+          G={G}
+          mo={selectedMo.row}
+          moId={selectedMo.id}
+          onClose={() => setSelectedMo(null)}
+        />
+      )}
     </div>
   )
 }

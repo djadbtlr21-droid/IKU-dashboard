@@ -662,6 +662,8 @@ function PackagingSection({ G, src }) {
 export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [logOpen, setLogOpen] = useState(false)
+  const [packOpen, setPackOpen] = useState(false)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('plan')
   const [zoomSrc, setZoomSrc] = useState(null)
@@ -845,14 +847,6 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
               )}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-              <button style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-                background: T.primarySoft, color: T.dk ? T.tx : '#1A1714', border: 'none',
-                borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                letterSpacing: '.3px', fontFamily: 'inherit',
-              }}>
-                <Shirt size={13} /> Style Info / 스타일
-              </button>
               <button onClick={onClose} aria-label="close" style={{
                 width: 36, height: 36, borderRadius: '50%', background: 'transparent',
                 border: `1px solid ${T.border}`, color: T.mu, cursor: 'pointer',
@@ -943,9 +937,9 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
               <SectionTitle G={T} icon={<Layers size={14} style={{ color: T.accent }} />} label="원단 정보 · 面料信息 · Material" />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
                 <Field G={T} label="원단 종류 / 面料种类" value={safe(src.Material_Type)} />
-                <Field G={T} label="혼방% / 混纺%" value={safe(src.blended)} />
-                <Field G={T} label="안감 / 里料类型" value={safe(src.Lining_Type)} />
+                <Field G={T} label="혼방 % / 混纺 %" value={safe(src.blended)} />
                 <Field G={T} label="원단 중량 / 面料克重" value={safe(src.Fabric_Weight)} />
+                <Field G={T} label="안감 / 里料类型" value={safe(src.Lining_Type)} />
                 <Field G={T} label="안감 중량 / 里料克重" value={safe(src.Lining_Weight)} />
                 <Field G={T} label="안감 비고 / 里料备注" value={safe(src.Lining_Notes)} />
               </div>
@@ -1129,11 +1123,20 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
             </div>
 
             {/* ──────────────────────────────────────────────
-                K. Production Log (생산 로그) — always shown
+                K. Production Log (생산 로그) — collapsible, default closed
             ────────────────────────────────────────────── */}
             <div style={{ marginBottom: 22 }}>
-              <SectionTitle G={T} icon={<FileText size={14} style={{ color: T.accent }} />} label="생산 로그 · 生产记录 · Production Log" />
-              {(() => {
+              <div
+                onClick={() => setLogOpen(o => !o)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: logOpen ? 12 : 0, paddingBottom: 8, borderBottom: `1px solid ${T.hair}`, cursor: 'pointer' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <FileText size={14} style={{ color: T.accent }} />
+                  <h3 className="syne" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: T.accent }}>생산 로그 · 生产记录 · Production Log</h3>
+                </div>
+                <span style={{ fontSize: 12, color: T.mu, fontWeight: 600 }}>{logOpen ? '▲' : '▼'}</span>
+              </div>
+              {logOpen && (() => {
                 const productionLogs = pickArray(src, ['Production_Logs', 'Process_Logs', 'Operations', 'Logs', 'Cutting_Logs', 'Fabric_Logs', 'Production_Records'])
                 if (!productionLogs.length) {
                   return (
@@ -1147,11 +1150,20 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
             </div>
 
             {/* ──────────────────────────────────────────────
-                L. Packaging Status (포장 현황)
+                L. Packaging Status (포장 현황) — collapsible, default closed
             ────────────────────────────────────────────── */}
             <div style={{ marginBottom: 22 }}>
-              <SectionTitle G={T} icon={<Package size={14} style={{ color: T.accent }} />} label="포장 현황 · 包装现况 · Packaging Status" />
-              <PackagingSection G={T} src={src} />
+              <div
+                onClick={() => setPackOpen(o => !o)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: packOpen ? 12 : 0, paddingBottom: 8, borderBottom: `1px solid ${T.hair}`, cursor: 'pointer' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Package size={14} style={{ color: T.accent }} />
+                  <h3 className="syne" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: T.accent }}>포장 현황 · 包装现况 · Packaging Status</h3>
+                </div>
+                <span style={{ fontSize: 12, color: T.mu, fontWeight: 600 }}>{packOpen ? '▲' : '▼'}</span>
+              </div>
+              {packOpen && <PackagingSection G={T} src={src} />}
             </div>
 
             {loading && (

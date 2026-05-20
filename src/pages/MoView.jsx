@@ -262,6 +262,10 @@ function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, dayWidth,
         {PHASE_DEFS.map(p => {
           const b = phaseBars(mo, p, monthStart, monthEnd, today, dayWidth)
           if (!b) return null
+          // Single-day phases (FAB / SHIP) — bump the bar to dayWidth × 1.5 so the label fits.
+          const isSingleDay = p.key === 'FAB' || p.key === 'SHIP'
+          const planW = isSingleDay ? Math.max(b.plan?.width || 0, dayWidth * 1.5) : (b.plan?.width || 0)
+          const actualW = isSingleDay ? Math.max(b.actual?.width || 0, dayWidth * 1.5) : (b.actual?.width || 0)
           return (
             <span key={p.key}>
               {b.plan && (
@@ -269,7 +273,7 @@ function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, dayWidth,
                   title={`${p.label} Plan`}
                   style={{
                     position: "absolute", top: 6, height: 16,
-                    left: b.plan.left, width: b.plan.width,
+                    left: b.plan.left, width: planW,
                     background: `repeating-linear-gradient(45deg, ${p.hue}33, ${p.hue}33 4px, transparent 4px, transparent 8px)`,
                     border: `1px dashed ${p.hue}`,
                     borderRadius: 3,
@@ -278,7 +282,7 @@ function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, dayWidth,
                     overflow: "hidden", whiteSpace: "nowrap",
                   }}
                 >
-                  {b.plan.width >= 30 ? p.label : ''}
+                  {(isSingleDay || planW >= 30) ? p.label : ''}
                 </div>
               )}
               {b.actual && (
@@ -286,7 +290,7 @@ function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, dayWidth,
                   title={`${p.label} Actual`}
                   style={{
                     position: "absolute", top: rowH - 22, height: 16,
-                    left: b.actual.left, width: b.actual.width,
+                    left: b.actual.left, width: actualW,
                     background: p.bg,
                     border: `1px solid ${p.hue}`,
                     borderRadius: 3,
@@ -295,7 +299,7 @@ function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, dayWidth,
                     overflow: "hidden", whiteSpace: "nowrap",
                   }}
                 >
-                  {b.actual.width >= 30 ? p.label : ''}
+                  {(isSingleDay || actualW >= 30) ? p.label : ''}
                 </div>
               )}
             </span>
@@ -400,20 +404,27 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
             MO · Style
           </div>
           <div style={{ display: "flex", width: totalWidth }}>
-            {monthSpans.map((m, i) => (
-              <div key={i} style={{
-                width: m.count * dayWidth,
-                background: i % 2 === 0 ? G.cardAlt : G.surf,
-                borderRight: i < monthSpans.length - 1 ? `1px solid ${G.border}` : "none",
-                padding: "6px 10px", fontSize: 11, fontWeight: 700, color: G.tx,
-                textAlign: "center", letterSpacing: ".3px",
-              }}>
-                {String(m.year).slice(-2)}.{String(m.month + 1).padStart(2, '0')}
-                <span style={{ marginLeft: 6, fontSize: 10, color: G.mu, fontWeight: 500 }}>
-                  · {m.month === 4 ? '5月' : m.month === 5 ? '6月' : `${m.month + 1}月`}
-                </span>
-              </div>
-            ))}
+            {monthSpans.map((m, i) => {
+              // May/Jun get distinct pastel headers per spec
+              const isMay = m.month === 4
+              const isJun = m.month === 5
+              const headerBg = isMay ? '#D1F2D4' : (isJun ? '#D1E8F5' : (i % 2 === 0 ? G.cardAlt : G.surf))
+              const headerColor = isMay ? '#2D7D35' : (isJun ? '#1A6491' : G.tx)
+              return (
+                <div key={i} style={{
+                  width: m.count * dayWidth,
+                  background: headerBg,
+                  borderRight: i < monthSpans.length - 1 ? `1px solid ${G.border}` : "none",
+                  padding: "6px 10px", fontSize: 11, fontWeight: 700, color: headerColor,
+                  textAlign: "center", letterSpacing: ".3px",
+                }}>
+                  {String(m.year).slice(-2)}.{String(m.month + 1).padStart(2, '0')}
+                  <span style={{ marginLeft: 6, fontSize: 10, color: headerColor, opacity: .75, fontWeight: 500 }}>
+                    · {isMay ? '5月' : isJun ? '6月' : `${m.month + 1}月`}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
 
@@ -428,9 +439,9 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
                 <div key={i} style={{
                   width: dayWidth, minWidth: dayWidth, height: 28,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 10, fontWeight: td ? 700 : 500,
-                  color: td ? "#EF4444" : (we ? G.fa : G.tx),
-                  background: td ? "rgba(239,68,68,0.08)" : (we ? G.cardAlt : "transparent"),
+                  fontSize: 10, fontWeight: td ? 700 : (we ? 600 : 500),
+                  color: td ? "#EF4444" : (we ? "#DC6B6B" : G.tx),
+                  background: td ? "rgba(239,68,68,0.08)" : (we ? "#FFEEEE" : "transparent"),
                   borderRight: `1px solid ${G.hair}`,
                 }}>
                   {dt.getDate()}
@@ -444,13 +455,22 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
         <div style={{ position: "relative" }}>
           {/* Day-column background grid (weekend tinting) — drawn behind bars */}
           <div style={{ position: "absolute", inset: 0, left: META_COL_WIDTH, display: "flex", pointerEvents: "none", zIndex: 0 }}>
-            {days.map((dt, i) => (
-              <div key={i} style={{
-                width: dayWidth, minWidth: dayWidth,
-                borderRight: `1px solid ${G.hair}`,
-                background: isWeekend(dt) ? (G.dk ? "rgba(255,255,255,0.02)" : "rgba(26,23,20,0.015)") : "transparent",
-              }} />
-            ))}
+            {days.map((dt, i) => {
+              const we = isWeekend(dt)
+              const isMay = dt.getMonth() === 4
+              const isJun = dt.getMonth() === 5
+              // Subtle month tint behind bars + weekend pink wins over month tint
+              const bg = we
+                ? (G.dk ? "rgba(255,180,180,0.10)" : "rgba(255,238,238,0.7)")
+                : (isMay ? "rgba(209, 242, 212, 0.15)" : (isJun ? "rgba(209, 232, 245, 0.15)" : "transparent"))
+              return (
+                <div key={i} style={{
+                  width: dayWidth, minWidth: dayWidth,
+                  borderRight: `1px solid ${G.hair}`,
+                  background: bg,
+                }} />
+              )
+            })}
           </div>
 
           {mos.slice(0, 30).map((mo, i) => (
