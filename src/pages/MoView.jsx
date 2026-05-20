@@ -499,6 +499,22 @@ export default function MoView({ G }) {
 
   const monthLabel = selectedMonth ? `${selectedMonth.split('.')[0]}.${selectedMonth.split('.')[1]}` : "Current"
 
+  // Timeline range — fixed at May 1 → Jun 30 regardless of selectedMonth filter.
+  // Year is taken from selectedMonth when available, else the current year.
+  const timelineRange = useMemo(() => {
+    let year = new Date().getFullYear()
+    if (selectedMonth) {
+      const yy = Number(selectedMonth.split('.')[0])
+      if (!Number.isNaN(yy)) year = 2000 + yy
+    }
+    return {
+      start: new Date(year, 4, 1),     // May 1 (month index 4)
+      end: new Date(year, 6, 0),       // Jun 30 (day 0 of month 6 = last day of month 5)
+      year,
+      label: `${String(year).slice(-2)}.05 - ${String(year).slice(-2)}.06`,
+    }
+  }, [selectedMonth])
+
   return (
     <div style={{ animation: 'fadeIn 0.4s ease' }}>
       {/* ── Header card ── */}
@@ -612,72 +628,7 @@ export default function MoView({ G }) {
         </div>
       </div>
 
-      {/* ── Timeline ── */}
-      <div className="card" style={{ padding: "20px 24px", marginBottom: 18 }}>
-        <Rail G={G} />
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 12, alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Calendar size={14} style={{ color: G.accent }} />
-            <span className="syne" style={{ fontSize: 14, fontWeight: 700, color: G.tx, letterSpacing: "-.2px" }}>{monthLabel} 생산 타임라인 · 生产排期</span>
-          </div>
-          <div style={{ display: "flex", gap: 14, fontSize: 11, color: G.mu, flexWrap: "wrap" }}>
-            <span style={{ fontWeight: 600 }}>P=Plan</span>
-            <span style={{ fontWeight: 600 }}>A=Actual</span>
-            <LegendDot color={STAGE_HUES.Fab} label="Fab" />
-            <LegendDot color={STAGE_HUES.Cut} label="Cut" />
-            <LegendDot color={STAGE_HUES.Sew} label="Sew" />
-            <LegendDot color={STAGE_HUES.Pack} label="Pack" />
-            <LegendDot color={STAGE_HUES.Ship} label="Ship" />
-          </div>
-        </div>
-
-        <FilterRow G={G} search={search} setSearch={setSearch}
-          category={filtCategory} setCategory={setFiltCategory}
-          factory={filtFactory} setFactory={setFiltFactory}
-          prodStatus={filtProd} setProdStatus={setFiltProd}
-          orderStatus={filtOrder} setOrderStatus={setFiltOrder}
-          categories={categories} factories={factories}
-          prodStatuses={prodStatuses} orderStatuses={orderStatuses}
-        />
-
-        {loading ? (
-          <SkeletonCard G={G} />
-        ) : filteredMOs.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: G.fa, fontSize: 12 }}>일치하는 MO 없음 · 无匹配MO</div>
-        ) : (
-          <TimelineGrid G={G} mos={filteredMOs} monthStart={monthRange.start} monthEnd={monthRange.end} onClickMo={(m) => setSelectedMo({ id: m.ID, row: m })} />
-        )}
-      </div>
-
-      {/* ── Card Grid ── */}
-      <div className="card" style={{ padding: "20px 24px", marginBottom: 18 }}>
-        <Rail G={G} />
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Calendar size={14} style={{ color: G.accent }} />
-            <span className="syne" style={{ fontSize: 14, fontWeight: 700, color: G.tx, letterSpacing: "-.2px" }}>{monthLabel} 생산 스케줄 · 生产安排</span>
-          </div>
-          <span className="num" style={{ fontSize: 11, color: G.mu }}>
-            {loading ? "—" : `${filteredMOs.length} / ${monthMOs.length}`}
-          </span>
-        </div>
-
-        {loading ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
-            {[...Array(8)].map((_, i) => <SkeletonCard key={i} G={G} />)}
-          </div>
-        ) : filteredMOs.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: G.fa, fontSize: 12 }}>일치하는 MO 없음 · 无匹配MO</div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
-            {filteredMOs.map(mo => (
-              <MOCard key={mo.ID} G={G} mo={mo} onClick={() => setSelectedMo({ id: mo.ID, row: mo })} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── Pipeline ── */}
+      {/* ── Pipeline ── (moved up — sits right after KPI row) */}
       <div className="card" style={{ padding: "20px 24px", marginBottom: 18 }}>
         <Rail G={G} />
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 10, alignItems: "center" }}>
@@ -744,34 +695,121 @@ export default function MoView({ G }) {
             })}
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {factories.length === 0 ? (
               <div style={{ padding: 20, fontSize: 12, color: G.fa, textAlign: "center" }}>공장 데이터 없음</div>
-            ) : factories.map(fac => {
-              const facMOs = monthMOs.filter(m => getMoFactory(m) === fac)
-              const facCounts = {}
-              facMOs.forEach(m => { const k = moStage(m); facCounts[k] = (facCounts[k] || 0) + 1 })
-              return (
-                <div key={fac} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 140, fontSize: 11, color: G.tx, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fac}</div>
-                  <div style={{ flex: 1, display: "flex", gap: 4, overflowX: "auto" }}>
-                    {STAGES.map(stage => {
-                      const count = facCounts[stage.kr] || 0
-                      return (
-                        <div key={stage.kr} title={`${stage.kr}: ${count}`} style={{
-                          flex: 1, minWidth: 40, padding: "6px 8px", borderRadius: 6,
-                          background: count ? `${stage.hue}22` : G.cardAlt,
-                          border: `1px solid ${count ? stage.hue : G.hair}`,
-                          textAlign: "center", fontSize: 11, color: count ? G.tx : G.fa, fontWeight: count ? 600 : 400,
-                        }}>
-                          <span className="num">{count}</span>
-                        </div>
-                      )
-                    })}
+            ) : (
+              <>
+                {/* Stage header row — sticky labels aligned with the per-factory count cells below */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 6, borderBottom: `1px solid ${G.hair}` }}>
+                  <div style={{ width: 140, fontSize: 10, color: G.mu, fontWeight: 600, letterSpacing: ".3px", textTransform: "uppercase" }}>공장 · 工厂</div>
+                  <div style={{ flex: 1, display: "flex", gap: 4 }}>
+                    {STAGES.map(stage => (
+                      <div key={stage.kr} style={{
+                        flex: 1, minWidth: 40, padding: "4px 6px",
+                        textAlign: "center", fontSize: 10, color: G.mu, fontWeight: 600, lineHeight: 1.2,
+                      }}>
+                        <div style={{ color: stage.hue, fontWeight: 700 }}>{stage.kr}</div>
+                        <div style={{ fontSize: 9, color: G.fa, marginTop: 1 }}>{stage.cn}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              )
-            })}
+
+                {factories.map(fac => {
+                  const facMOs = monthMOs.filter(m => getMoFactory(m) === fac)
+                  const facCounts = {}
+                  facMOs.forEach(m => { const k = moStage(m); facCounts[k] = (facCounts[k] || 0) + 1 })
+                  return (
+                    <div key={fac} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 140, fontSize: 11, color: G.tx, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fac}</div>
+                      <div style={{ flex: 1, display: "flex", gap: 4 }}>
+                        {STAGES.map(stage => {
+                          const count = facCounts[stage.kr] || 0
+                          return (
+                            <div key={stage.kr} title={`${fac} · ${stage.kr}: ${count}`} style={{
+                              flex: 1, minWidth: 40, padding: "6px 8px", borderRadius: 6,
+                              background: count ? `${stage.hue}22` : G.cardAlt,
+                              border: `1px solid ${count ? stage.hue : G.hair}`,
+                              textAlign: "center", fontSize: 11, color: count ? G.tx : G.fa, fontWeight: count ? 600 : 400,
+                            }}>
+                              <span className="num">{count}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Card Grid ── (moved here — between Pipeline and Timeline) */}
+      <div className="card" style={{ padding: "20px 24px", marginBottom: 18 }}>
+        <Rail G={G} />
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Calendar size={14} style={{ color: G.accent }} />
+            <span className="syne" style={{ fontSize: 14, fontWeight: 700, color: G.tx, letterSpacing: "-.2px" }}>{monthLabel} 생산 스케줄 · 生产安排</span>
+          </div>
+          <span className="num" style={{ fontSize: 11, color: G.mu }}>
+            {loading ? "—" : `${filteredMOs.length} / ${monthMOs.length}`}
+          </span>
+        </div>
+
+        {loading ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+            {[...Array(8)].map((_, i) => <SkeletonCard key={i} G={G} />)}
+          </div>
+        ) : filteredMOs.length === 0 ? (
+          <div style={{ padding: 40, textAlign: "center", color: G.fa, fontSize: 12 }}>일치하는 MO 없음 · 无匹配MO</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+            {filteredMOs.map(mo => (
+              <MOCard key={mo.ID} G={G} mo={mo} onClick={() => setSelectedMo({ id: mo.ID, row: mo })} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Timeline ── (moved to end — fixed 5-6월 range regardless of month filter) */}
+      <div className="card" style={{ padding: "20px 24px", marginBottom: 18 }}>
+        <Rail G={G} />
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Calendar size={14} style={{ color: G.accent }} />
+            <span className="syne" style={{ fontSize: 14, fontWeight: 700, color: G.tx, letterSpacing: "-.2px" }}>{timelineRange.label} 생산 타임라인 · 生产排期</span>
+          </div>
+          <div style={{ display: "flex", gap: 14, fontSize: 11, color: G.mu, flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 600 }}>P=Plan</span>
+            <span style={{ fontWeight: 600 }}>A=Actual</span>
+            <LegendDot color={STAGE_HUES.Fab} label="Fab" />
+            <LegendDot color={STAGE_HUES.Cut} label="Cut" />
+            <LegendDot color={STAGE_HUES.Sew} label="Sew" />
+            <LegendDot color={STAGE_HUES.Pack} label="Pack" />
+            <LegendDot color={STAGE_HUES.Ship} label="Ship" />
+          </div>
+        </div>
+
+        <FilterRow G={G} search={search} setSearch={setSearch}
+          category={filtCategory} setCategory={setFiltCategory}
+          factory={filtFactory} setFactory={setFiltFactory}
+          prodStatus={filtProd} setProdStatus={setFiltProd}
+          orderStatus={filtOrder} setOrderStatus={setFiltOrder}
+          categories={categories} factories={factories}
+          prodStatuses={prodStatuses} orderStatuses={orderStatuses}
+        />
+
+        {loading ? (
+          <SkeletonCard G={G} />
+        ) : filteredMOs.length === 0 ? (
+          <div style={{ padding: 40, textAlign: "center", color: G.fa, fontSize: 12 }}>일치하는 MO 없음 · 无匹配MO</div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <TimelineGrid G={G} mos={filteredMOs} monthStart={timelineRange.start} monthEnd={timelineRange.end} onClickMo={(m) => setSelectedMo({ id: m.ID, row: m })} />
           </div>
         )}
       </div>
