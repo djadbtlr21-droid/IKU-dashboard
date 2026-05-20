@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import {
   Video, ChevronRight, Search, AlertTriangle, Calendar, Package, Scissors,
   Factory, Truck, CheckCircle2, Clock, Layers,
@@ -135,7 +135,8 @@ function LegendDot({ color, label }) {
 // Plan (dashed) + Actual (solid) stacked rows per MO.
 // ──────────────────────────────────────────────────────────
 
-const DAY_WIDTH = 24
+const DAY_WIDTH_MIN = 18
+const DAY_WIDTH_DEFAULT = 24
 const META_COL_WIDTH = 220
 
 // Per-process visual + field map. Field names probe Plan_X / Acture_X /
@@ -193,7 +194,7 @@ function firstDate(mo, keys) {
 }
 
 // Resolve a phase's bar geometry for one MO within the timeline range
-function phaseBars(mo, phaseDef, monthStart, monthEnd, today) {
+function phaseBars(mo, phaseDef, monthStart, monthEnd, today, dayWidth) {
   const planStart = firstDate(mo, phaseDef.planStart)
   const planEnd = firstDate(mo, phaseDef.planEnd) || planStart
   if (!planStart) return null
@@ -207,9 +208,9 @@ function phaseBars(mo, phaseDef, monthStart, monthEnd, today) {
     const s = Math.max(start.getTime(), monthStart.getTime())
     const e = Math.min(end.getTime(), monthEnd.getTime() + 86400000) // include end day
     if (e <= s) return null
-    const left = (s - monthStart.getTime()) / 86400000 * DAY_WIDTH
+    const left = (s - monthStart.getTime()) / 86400000 * dayWidth
     const days = Math.max(1, (e - s) / 86400000)
-    const width = Math.max(DAY_WIDTH * 0.6, days * DAY_WIDTH - 2)
+    const width = Math.max(dayWidth * 0.6, days * dayWidth - 2)
     return { left, width }
   }
 
@@ -219,7 +220,7 @@ function phaseBars(mo, phaseDef, monthStart, monthEnd, today) {
   }
 }
 
-function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, onClickMo }) {
+function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, dayWidth, onClickMo }) {
   const rowH = 50
 
   return (
@@ -253,7 +254,7 @@ function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, onClickMo
       {/* Gantt — Plan row (top half) + Actual row (bottom half) */}
       <div style={{ position: "relative", width: totalWidth, minWidth: totalWidth, height: rowH }}>
         {PHASE_DEFS.map(p => {
-          const b = phaseBars(mo, p, monthStart, monthEnd, today)
+          const b = phaseBars(mo, p, monthStart, monthEnd, today, dayWidth)
           if (!b) return null
           return (
             <span key={p.key}>
@@ -303,7 +304,47 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
   const today = new Date()
   // Inclusive day count (start + 1 day per step until > end)
   const totalDays = Math.round((monthEnd - monthStart) / 86400000) + 1
-  const totalWidth = totalDays * DAY_WIDTH
+
+  const containerRef = useRef(null)
+  const [dayWidth, setDayWidth] = useState(DAY_WIDTH_DEFAULT)
+
+  // ResizeObserver — recalculate cell width so the gantt fills its container
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const update = () => {
+      const available = el.clientWidth - META_COL_WIDTH
+      const next = Math.max(DAY_WIDTH_MIN, Math.floor(available / totalDays))
+      setDayWidth(next)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [totalDays])
+
+  // One-shot diagnostic: log the first MO's date-field shape so we can verify
+  // which fields Zoho actually returns. Helps explain missing bars.
+  useEffect(() => {
+    if (!mos.length || typeof window === 'undefined' || window.__ikuTimelineDiagLogged) return
+    window.__ikuTimelineDiagLogged = true
+    const m = mos[0]
+    // eslint-disable-next-line no-console
+    console.log('[TIMELINE_DATES]', m.MO_Number || m.ID, {
+      Fabric_In_Date: m.Fabric_In_Date,
+      Cutting_Start_Date: m.Cutting_Start_Date,
+      Cutting_End_Date: m.Cutting_End_Date,
+      Sewing_Start_Date: m.Sewing_Start_Date,
+      Sewing_End_Date: m.Sewing_End_Date,
+      Packing_Start_Date: m.Packing_Start_Date,
+      Packing_End_Date: m.Packing_End_Date,
+      Ship_Date: m.Ship_Date,
+      Expected_Delivery: m.Expected_Delivery,
+      Order_Date: m.Order_Date,
+    })
+  }, [mos])
+
+  const totalWidth = totalDays * dayWidth
 
   // Build per-day cells
   const days = []
@@ -327,7 +368,7 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
   if (span) monthSpans.push(span)
 
   const todayInRange = today >= monthStart && today <= monthEnd
-  const todayLeft = todayInRange ? (today - monthStart) / 86400000 * DAY_WIDTH : 0
+  const todayLeft = todayInRange ? (today - monthStart) / 86400000 * dayWidth : 0
   const todayLabel = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
   const isWeekend = (dt) => {
@@ -337,8 +378,8 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
   const isToday = (dt) => dt.toDateString() === today.toDateString()
 
   return (
-    <div style={{ overflowX: "auto", position: "relative" }}>
-      <div style={{ minWidth: META_COL_WIDTH + totalWidth }}>
+    <div ref={containerRef} style={{ overflowX: "auto", position: "relative", width: "100%" }}>
+      <div style={{ width: META_COL_WIDTH + totalWidth, minWidth: META_COL_WIDTH + totalWidth }}>
         {/* Header row 1 — month band */}
         <div style={{ display: "flex", borderBottom: `1px solid ${G.hair}` }}>
           <div style={{ position: "sticky", left: 0, zIndex: 3, width: META_COL_WIDTH, minWidth: META_COL_WIDTH, background: G.cardAlt, borderRight: `1px solid ${G.hair}`, padding: "8px 10px", fontSize: 10, fontWeight: 700, color: G.mu, letterSpacing: ".5px", textTransform: "uppercase" }}>
@@ -347,7 +388,7 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
           <div style={{ display: "flex", width: totalWidth }}>
             {monthSpans.map((m, i) => (
               <div key={i} style={{
-                width: m.count * DAY_WIDTH,
+                width: m.count * dayWidth,
                 background: i % 2 === 0 ? G.cardAlt : G.surf,
                 borderRight: i < monthSpans.length - 1 ? `1px solid ${G.border}` : "none",
                 padding: "6px 10px", fontSize: 11, fontWeight: 700, color: G.tx,
@@ -371,7 +412,7 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
               const td = isToday(dt)
               return (
                 <div key={i} style={{
-                  width: DAY_WIDTH, minWidth: DAY_WIDTH, height: 28,
+                  width: dayWidth, minWidth: dayWidth, height: 28,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 10, fontWeight: td ? 700 : 500,
                   color: td ? "#EF4444" : (we ? G.fa : G.tx),
@@ -391,7 +432,7 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
           <div style={{ position: "absolute", inset: 0, left: META_COL_WIDTH, display: "flex", pointerEvents: "none", zIndex: 0 }}>
             {days.map((dt, i) => (
               <div key={i} style={{
-                width: DAY_WIDTH, minWidth: DAY_WIDTH,
+                width: dayWidth, minWidth: dayWidth,
                 borderRight: `1px solid ${G.hair}`,
                 background: isWeekend(dt) ? (G.dk ? "rgba(255,255,255,0.02)" : "rgba(26,23,20,0.015)") : "transparent",
               }} />
@@ -399,7 +440,7 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
           </div>
 
           {mos.slice(0, 30).map((mo, i) => (
-            <TimelineRow key={mo.ID || i} G={G} mo={mo} monthStart={monthStart} monthEnd={monthEnd} totalWidth={totalWidth} today={today} onClickMo={onClickMo} />
+            <TimelineRow key={mo.ID || i} G={G} mo={mo} monthStart={monthStart} monthEnd={monthEnd} totalWidth={totalWidth} today={today} dayWidth={dayWidth} onClickMo={onClickMo} />
           ))}
 
           {/* Today red vertical line — spans all MO rows */}

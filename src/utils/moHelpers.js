@@ -1,8 +1,38 @@
-// Parse Zoho date strings: "20-May-2026", "20-Apr-2026 10:30:00"
+// Parse Zoho Creator date strings.
+// Supported formats (case-insensitive month names):
+//   "20-May-2026"        (Zoho's default)
+//   "20-May-26"          (2-digit year — auto-promoted to 2000+)
+//   "20-Apr-2026 10:30:00"
+//   "2026-05-20"         (ISO)
+//   "2026-05-20T10:30:00Z" (ISO with time)
+const _ZOHO_MONTHS = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+}
+
 export function parseZohoDate(str) {
-  if (!str) return null
-  const d = new Date(str.replace(/-/g, ' '))
-  return isNaN(d.getTime()) ? null : d
+  if (!str || typeof str !== 'string') return null
+  const s = str.trim()
+  if (!s || s === '-') return null
+
+  // "DD-Mon-YYYY[ HH:MM:SS]" — Zoho's canonical format
+  const m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/)
+  if (m) {
+    const day = +m[1]
+    const month = _ZOHO_MONTHS[m[2].toLowerCase()]
+    if (month === undefined) return null
+    let year = +m[3]
+    if (year < 100) year += 2000
+    const hh = m[4] ? +m[4] : 0
+    const mm = m[5] ? +m[5] : 0
+    const ss = m[6] ? +m[6] : 0
+    const d = new Date(year, month, day, hh, mm, ss)
+    return isNaN(d.getTime()) ? null : d
+  }
+
+  // ISO fallback ("2026-05-20" / "2026-05-20T...")
+  const iso = new Date(s)
+  return isNaN(iso.getTime()) ? null : iso
 }
 
 export function getMoNumber(mo) {
