@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const VIDEO_MAP = {
   idle:         '/robot/01_idle.mp4',
@@ -11,15 +11,35 @@ const VIDEO_MAP = {
 }
 
 export default function RobotVideo({ robotState, onStateChange }) {
-  const returnTimerRef = useRef(null)
-  const videoSrc = VIDEO_MAP[robotState] || VIDEO_MAP.idle
+  const [activeLayer, setActiveLayer] = useState(0)
+  const [layers, setLayers] = useState([VIDEO_MAP.idle, VIDEO_MAP.idle])
 
-  // Warm the idle clip in browser cache on first mount
+  // Refs to avoid stale closures in effects
+  const activeLayerRef = useRef(0)
+  const pendingLayer = useRef(null)
+  const isFirst = useRef(true)
+  const returnTimerRef = useRef(null)
+
+  // Crossfade: load new src on the hidden layer, activate when ready
   useEffect(() => {
-    const v = document.createElement('video')
-    v.src = VIDEO_MAP.idle
-    v.preload = 'auto'
-  }, [])
+    if (isFirst.current) {
+      isFirst.current = false
+      return
+    }
+    const newSrc = VIDEO_MAP[robotState] || VIDEO_MAP.idle
+    const nextLayer = activeLayerRef.current === 0 ? 1 : 0
+    pendingLayer.current = nextLayer
+    setLayers(prev => {
+      const next = [...prev]
+      next[nextLayer] = newSrc
+      return next
+    })
+  }, [robotState])
+
+  function activateLayer(idx) {
+    activeLayerRef.current = idx
+    setActiveLayer(idx)
+  }
 
   // Auto-transitions: done→idle (2s), error→idle (3s)
   useEffect(() => {
@@ -37,7 +57,7 @@ export default function RobotVideo({ robotState, onStateChange }) {
   useEffect(() => {
     if (robotState !== 'idle') return
 
-    const delay = 120000 + Math.random() * 180000  // 2~5분
+    const delay = 120000 + Math.random() * 180000
     const mainTimer = setTimeout(() => {
       onStateChange('idle_special')
       returnTimerRef.current = setTimeout(() => {
@@ -53,31 +73,46 @@ export default function RobotVideo({ robotState, onStateChange }) {
 
   return (
     <div style={{
+      position: 'relative',
       width: '100%',
       aspectRatio: '16/9',
       borderRadius: '8px 8px 0 0',
       overflow: 'hidden',
-      background: '#000',
+      background: '#1a1a1a',
       transform: 'translateZ(0)',
       willChange: 'transform',
       contain: 'layout style paint',
     }}>
-      <video
-        key={robotState}
-        src={videoSrc}
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        onLoadedData={e => {
-          e.target.play().catch(err => console.warn('[RobotVideo] autoplay blocked:', err))
-        }}
-        onError={e => {
-          console.error('[RobotVideo] load error:', e.target.error, '| src:', videoSrc)
-        }}
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-      />
+      {[0, 1].map(idx => (
+        <video
+          key={idx}
+          src={layers[idx]}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          onLoadedData={e => {
+            e.target.play().catch(err => console.warn('[RobotVideo] autoplay blocked:', err))
+            if (idx === pendingLayer.current) {
+              pendingLayer.current = null
+              activateLayer(idx)
+            }
+          }}
+          onError={e => {
+            console.error('[RobotVideo] load error:', e.target.error, '| src:', layers[idx])
+          }}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            opacity: activeLayer === idx ? 1 : 0,
+            transition: 'opacity 300ms ease-in-out',
+          }}
+        />
+      ))}
     </div>
   )
 }

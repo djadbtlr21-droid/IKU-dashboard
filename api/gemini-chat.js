@@ -10,7 +10,7 @@ export default async function handler(req, res) {
 
   const { messages = [], systemPrompt = '', dataContext = '' } = req.body || {}
 
-  const model = 'gemini-2.5-flash-preview-05-20'
+  const model = 'gemini-3-flash-preview'
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`
 
   const contents = messages.map(msg => ({
@@ -28,6 +28,7 @@ export default async function handler(req, res) {
     generationConfig: {
       thinkingConfig: { thinkingBudget: 0 },
       maxOutputTokens: 3000,
+      temperature: 0.7,
     },
   }
 
