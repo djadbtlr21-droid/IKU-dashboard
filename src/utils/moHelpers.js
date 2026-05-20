@@ -22,11 +22,21 @@ export function getMoSku(mo) {
   return typeof mo.Style_SKU === 'string' ? mo.Style_SKU : '—'
 }
 
+// Strip Zoho's "_NN_" sorting prefix (e.g. "_04_宁军（合祥）" → "宁军（合祥）")
+function stripFactoryPrefix(name) {
+  if (!name) return '—'
+  const cleaned = String(name).replace(/^_\d+_/, '').trim()
+  return cleaned || '—'
+}
+
 export function getMoFactory(mo) {
+  let raw
   if (mo.Factory && typeof mo.Factory === 'object') {
-    return mo.Factory.Factory_Name_Chinese || mo.Factory.zc_display_value || '—'
+    raw = mo.Factory.Factory_Name_Chinese || mo.Factory.zc_display_value || ''
+  } else if (typeof mo.Factory === 'string') {
+    raw = mo.Factory
   }
-  return typeof mo.Factory === 'string' ? mo.Factory : '—'
+  return stripFactoryPrefix(raw)
 }
 
 export function getMoStatus(mo) {

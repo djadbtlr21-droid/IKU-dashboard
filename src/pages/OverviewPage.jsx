@@ -51,9 +51,19 @@ const TOOLTIP_BORDER = '#E8E0D5'
 // ─────────────────────────────────────────────────────────────
 function Rail({ G }) { return G.dk ? <span className="rail" /> : null }
 
-function KPI({ G, label, value, sub, accent }) {
+function KPI({ G, label, value, sub, accent, onClick }) {
   return (
-    <div className="card" style={{ padding: '20px 24px' }}>
+    <div
+      className="card"
+      onClick={onClick}
+      style={{
+        padding: '20px 24px',
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'transform .15s, border-color .15s, box-shadow .15s',
+      }}
+      onMouseEnter={onClick ? e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = accent || G.primary; e.currentTarget.style.boxShadow = G.cardShadow } : undefined}
+      onMouseLeave={onClick ? e => { e.currentTarget.style.transform = ''; e.currentTarget.style.borderColor = G.border; e.currentTarget.style.boxShadow = '' } : undefined}
+    >
       <Rail G={G} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: accent || G.primary }} />
@@ -251,9 +261,27 @@ export default function OverviewPage({ G }) {
 
       {/* KPI row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 18 }}>
-        <KPI G={G} label="총 MO · 总订单" value={loading ? '—' : totalMo.toLocaleString()} sub={delayedCount ? `지연 ${delayedCount}건` : '지연 없음'} accent={G.primary} />
-        <KPI G={G} label="총 계획 수량 · 总计划数量" value={loading ? '—' : `${totalPlan.toLocaleString()} pcs`} sub={`평균 ${totalMo ? Math.round(totalPlan / totalMo).toLocaleString() : 0} pcs/MO`} accent={PASTEL_PLAN} />
-        <KPI G={G} label="총 실제 수량 · 总实际数量" value={loading ? '—' : `${totalActual.toLocaleString()} pcs`} sub={`출고율 ${completionRate.toFixed(1)}%`} accent={PASTEL_ACTUAL} />
+        <KPI
+          G={G} label="총 MO · 总订单" value={loading ? '—' : totalMo.toLocaleString()}
+          sub={delayedCount ? `지연 ${delayedCount}건` : '지연 없음'} accent={G.primary}
+          onClick={() => setDrilldown({ title: '총 MO · 总订单', subtitle: `${filteredMOs.length} MO`, accent: G.primary, mos: filteredMOs })}
+        />
+        <KPI
+          G={G} label="총 계획 수량 · 总计划数量" value={loading ? '—' : `${totalPlan.toLocaleString()} pcs`}
+          sub={`평균 ${totalMo ? Math.round(totalPlan / totalMo).toLocaleString() : 0} pcs/MO`} accent={PASTEL_PLAN}
+          onClick={() => {
+            const mos = [...filteredMOs].sort((a, b) => getPlanQty(b) - getPlanQty(a))
+            setDrilldown({ title: '총 계획 수량 · 总计划数量', subtitle: `${mos.length} MO · Plan 내림차순`, accent: PASTEL_PLAN, mos })
+          }}
+        />
+        <KPI
+          G={G} label="총 실제 수량 · 总实际数量" value={loading ? '—' : `${totalActual.toLocaleString()} pcs`}
+          sub={`출고율 ${completionRate.toFixed(1)}%`} accent={PASTEL_ACTUAL}
+          onClick={() => {
+            const mos = filteredMOs.filter(m => getActualQty(m) > 0).sort((a, b) => getActualQty(b) - getActualQty(a))
+            setDrilldown({ title: '총 실제 수량 · 总实际数量', subtitle: `${mos.length} MO · Actual > 0`, accent: PASTEL_ACTUAL, mos })
+          }}
+        />
       </div>
 
       {/* Section 1: Factory horizontal bar chart */}

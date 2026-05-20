@@ -6,6 +6,7 @@ import {
 import { fetchMoList } from '../api/client'
 import MoDetailModal from '../components/MoDetailModal'
 import PipelineStageModal from '../components/PipelineStageModal'
+import MoListModal from '../components/MoListModal'
 import ZohoImage from '../components/ZohoImage'
 import { SkeletonCard } from '../components/SkeletonLoader'
 import {
@@ -109,9 +110,19 @@ function CircularProgress({ G, value, size = 80, stroke = 9 }) {
   )
 }
 
-function MiniKPI({ G, label, value, dot }) {
+function MiniKPI({ G, label, value, dot, onClick }) {
   return (
-    <div style={{ padding: "10px 12px", borderRadius: 10, background: G.cardAlt, border: `1px solid ${G.hair}` }}>
+    <div
+      onClick={onClick}
+      style={{
+        padding: "10px 12px", borderRadius: 10, background: G.cardAlt,
+        border: `1px solid ${G.hair}`,
+        cursor: onClick ? "pointer" : "default",
+        transition: "border-color .15s, transform .15s",
+      }}
+      onMouseEnter={onClick ? e => { e.currentTarget.style.borderColor = G.primary; e.currentTarget.style.transform = "translateY(-1px)" } : undefined}
+      onMouseLeave={onClick ? e => { e.currentTarget.style.borderColor = G.hair; e.currentTarget.style.transform = "" } : undefined}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
         <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot }} />
         <span style={{ fontSize: 10, color: G.mu, fontWeight: 500, letterSpacing: ".3px" }}>{label}</span>
@@ -441,7 +452,7 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 10, fontWeight: td ? 700 : (we ? 600 : 500),
                   color: td ? "#EF4444" : (we ? "#DC6B6B" : G.tx),
-                  background: td ? "rgba(239,68,68,0.08)" : (we ? "#FFEEEE" : "transparent"),
+                  background: td ? "rgba(239,68,68,0.08)" : (we ? "#FFE5E5" : "transparent"),
                   borderRight: `1px solid ${G.hair}`,
                 }}>
                   {dt.getDate()}
@@ -456,13 +467,14 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
           {/* Day-column background grid (weekend tinting) — drawn behind bars */}
           <div style={{ position: "absolute", inset: 0, left: META_COL_WIDTH, display: "flex", pointerEvents: "none", zIndex: 0 }}>
             {days.map((dt, i) => {
-              const we = isWeekend(dt)
+              // Per spec: weekend tint applies ONLY on the date header row.
+              // The bar-row grid background stays neutral so MO bars sit on
+              // a clean canvas regardless of day-of-week.
               const isMay = dt.getMonth() === 4
               const isJun = dt.getMonth() === 5
-              // Subtle month tint behind bars + weekend pink wins over month tint
-              const bg = we
-                ? (G.dk ? "rgba(255,180,180,0.10)" : "rgba(255,238,238,0.7)")
-                : (isMay ? "rgba(209, 242, 212, 0.15)" : (isJun ? "rgba(209, 232, 245, 0.15)" : "transparent"))
+              const bg = isMay
+                ? "rgba(209, 242, 212, 0.15)"
+                : (isJun ? "rgba(209, 232, 245, 0.15)" : "transparent")
               return (
                 <div key={i} style={{
                   width: dayWidth, minWidth: dayWidth,
@@ -659,6 +671,7 @@ export default function MoView({ G }) {
   const [selectedMo, setSelectedMo] = useState(null)
   const [selectedStage, setSelectedStage] = useState(null)
   const [factoryView, setFactoryView] = useState(false)
+  const [moListFilter, setMoListFilter] = useState(null) // { title, accent, mos }
 
   // shared filters across timeline + grid
   const [search, setSearch] = useState("")
@@ -862,10 +875,31 @@ export default function MoView({ G }) {
             <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
               <CircularProgress G={G} value={stats.progressPct} size={84} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, flex: 1 }}>
-                <MiniKPI G={G} label="총 오더 / 总订单" value={stats.total} dot={SOFT_PALETTE[3]} />
-                <MiniKPI G={G} label="진행중 / 进行中" value={stats.inProgress} dot={SOFT_PALETTE[4]} />
-                <MiniKPI G={G} label="출고완료 / 已出货" value={stats.shipped} dot={SOFT_PALETTE[2]} />
-                <MiniKPI G={G} label="지연 / 延误" value={stats.delayed.length} dot={SOFT_PALETTE[1]} />
+                <MiniKPI
+                  G={G} label="총 오더 / 总订单" value={stats.total} dot={SOFT_PALETTE[3]}
+                  onClick={() => setMoListFilter({ title: "총 오더 · 总订单", accent: SOFT_PALETTE[3], mos: monthMOs })}
+                />
+                <MiniKPI
+                  G={G} label="진행중 / 进行中" value={stats.inProgress} dot={SOFT_PALETTE[4]}
+                  onClick={() => {
+                    const mos = monthMOs.filter(m => {
+                      const s = m.Production_Status || ''
+                      return s && !/complet|完成|finish|sampling|샘플|未开始|未开|not started|미시작|产前样/i.test(s) && !isDelayed(m)
+                    })
+                    setMoListFilter({ title: "진행중 · 进行中", accent: SOFT_PALETTE[4], mos })
+                  }}
+                />
+                <MiniKPI
+                  G={G} label="출고완료 / 已出货" value={stats.shipped} dot={SOFT_PALETTE[2]}
+                  onClick={() => {
+                    const mos = monthMOs.filter(m => /ship|出货|delivered/i.test(String(m.Delivery_Status || m.Production_Status || '')) || m.Ship_Date)
+                    setMoListFilter({ title: "출고완료 · 已出货", accent: SOFT_PALETTE[2], mos })
+                  }}
+                />
+                <MiniKPI
+                  G={G} label="지연 / 延误" value={stats.delayed.length} dot={SOFT_PALETTE[1]}
+                  onClick={() => setMoListFilter({ title: "지연 · 延误", accent: G.bad, mos: stats.delayed })}
+                />
               </div>
             </div>
           )}
@@ -876,11 +910,19 @@ export default function MoView({ G }) {
         </div>
 
         {/* Delay alert */}
-        <div className="card" style={{
-          padding: "20px 22px",
-          background: G.dk ? "rgba(161,78,58,0.12)" : "#FDF0EE",
-          borderColor: G.bad,
-        }}>
+        <div
+          className="card"
+          onClick={() => stats.delayed.length && setMoListFilter({ title: "지연 · 延误", accent: G.bad, mos: stats.delayed })}
+          style={{
+            padding: "20px 22px",
+            background: G.dk ? "rgba(161,78,58,0.12)" : "#FDF0EE",
+            borderColor: G.bad,
+            cursor: stats.delayed.length ? "pointer" : "default",
+            transition: "transform .15s",
+          }}
+          onMouseEnter={e => { if (stats.delayed.length) e.currentTarget.style.transform = "translateY(-1px)" }}
+          onMouseLeave={e => { e.currentTarget.style.transform = "" }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
             <AlertTriangle size={14} style={{ color: G.bad }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: G.bad, letterSpacing: ".3px" }}>생산 지연 · 生产延误</span>
@@ -1091,6 +1133,18 @@ export default function MoView({ G }) {
           <TimelineGrid G={G} mos={filteredMOs} monthStart={timelineRange.start} monthEnd={timelineRange.end} onClickMo={(m) => setSelectedMo({ id: m.ID, row: m })} />
         )}
       </div>
+
+      {moListFilter && (
+        <MoListModal
+          G={G}
+          title={moListFilter.title}
+          subtitle={`${moListFilter.mos.length} MO`}
+          accentColor={moListFilter.accent}
+          mos={moListFilter.mos}
+          onClose={() => setMoListFilter(null)}
+          onMoClick={(mo) => setSelectedMo({ id: mo.ID, row: mo })}
+        />
+      )}
 
       {selectedStage && (
         <PipelineStageModal

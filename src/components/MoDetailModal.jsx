@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { X, Shirt, Package, Truck, Scissors, ChevronRight, ChevronDown, ZoomIn, FileText, CheckCircle2, Layers } from 'lucide-react'
 import { QRCodeCanvas } from 'qrcode.react'
 import { fetchMoDetail } from '../api/client'
-import { parseSpecJSON, parseZohoDate, isOverdue, isDelayed } from '../utils/moHelpers'
+import { parseSpecJSON, parseZohoDate, isOverdue, isDelayed, getMoFactory } from '../utils/moHelpers'
 import { getColorHex, getTextColorOnBg } from '../utils/colorMap'
 import ZohoImage from './ZohoImage'
 
@@ -735,7 +735,7 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
 
   const moNumber = safe(src.MO_Number || src.ID)
   const sku = src.Style_SKU?.Style_SKU || (typeof src.Style_SKU === 'string' ? src.Style_SKU : '—')
-  const factoryName = src.Factory?.Factory_Name_Chinese || (typeof src.Factory === 'string' ? src.Factory : safe(src.Factory))
+  const factoryName = getMoFactory(src)
   const modifiedTime = src.Modified_Time || src.Modified_Date || ''
   const orderStatus = src.Order_Status
   const deliveryStatus = src.Delivery_Status
