@@ -14,6 +14,13 @@ export default function RobotVideo({ robotState, onStateChange }) {
   const returnTimerRef = useRef(null)
   const videoSrc = VIDEO_MAP[robotState] || VIDEO_MAP.idle
 
+  // Warm the idle clip in browser cache on first mount
+  useEffect(() => {
+    const v = document.createElement('video')
+    v.src = VIDEO_MAP.idle
+    v.preload = 'auto'
+  }, [])
+
   // Auto-transitions: done→idle (2s), error→idle (3s)
   useEffect(() => {
     if (robotState === 'done') {
@@ -26,11 +33,11 @@ export default function RobotVideo({ robotState, onStateChange }) {
     }
   }, [robotState, onStateChange])
 
-  // Idle special: every 30-60s show idle_special for 5s then back to idle
+  // Idle special: 2~5분 랜덤 간격으로 5초간 전환
   useEffect(() => {
     if (robotState !== 'idle') return
 
-    const delay = 30000 + Math.random() * 30000
+    const delay = 120000 + Math.random() * 180000  // 2~5분
     const mainTimer = setTimeout(() => {
       onStateChange('idle_special')
       returnTimerRef.current = setTimeout(() => {
@@ -45,15 +52,24 @@ export default function RobotVideo({ robotState, onStateChange }) {
   }, [robotState, onStateChange])
 
   return (
-    <div style={{ width: '100%', aspectRatio: '16/9', borderRadius: '8px 8px 0 0', overflow: 'hidden', background: '#000' }}>
+    <div style={{
+      width: '100%',
+      aspectRatio: '16/9',
+      borderRadius: '8px 8px 0 0',
+      overflow: 'hidden',
+      background: '#000',
+      transform: 'translateZ(0)',
+      willChange: 'transform',
+      contain: 'layout style paint',
+    }}>
       <video
-        key={videoSrc}
+        key={robotState}
         src={videoSrc}
         autoPlay
         muted
         loop
         playsInline
-        preload="auto"
+        preload="metadata"
         onLoadedData={e => {
           e.target.play().catch(err => console.warn('[RobotVideo] autoplay blocked:', err))
         }}
