@@ -11,16 +11,8 @@ const VIDEO_MAP = {
 }
 
 export default function RobotVideo({ robotState, onStateChange }) {
-  const videoRef = useRef(null)
   const returnTimerRef = useRef(null)
-
-  // Play the new clip whenever state changes
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
-    video.load()
-    video.play().catch(() => {})
-  }, [robotState])
+  const videoSrc = VIDEO_MAP[robotState] || VIDEO_MAP.idle
 
   // Auto-transitions: done→idle (2s), error→idle (3s)
   useEffect(() => {
@@ -42,7 +34,6 @@ export default function RobotVideo({ robotState, onStateChange }) {
     const mainTimer = setTimeout(() => {
       onStateChange('idle_special')
       returnTimerRef.current = setTimeout(() => {
-        // functional update: only go back to idle if still idle_special
         onStateChange(s => (s === 'idle_special' ? 'idle' : s))
       }, 5000)
     }, delay)
@@ -56,12 +47,19 @@ export default function RobotVideo({ robotState, onStateChange }) {
   return (
     <div style={{ width: '100%', aspectRatio: '16/9', borderRadius: '8px 8px 0 0', overflow: 'hidden', background: '#000' }}>
       <video
-        ref={videoRef}
-        src={VIDEO_MAP[robotState] || VIDEO_MAP.idle}
+        key={videoSrc}
+        src={videoSrc}
         autoPlay
         muted
         loop
         playsInline
+        preload="auto"
+        onLoadedData={e => {
+          e.target.play().catch(err => console.warn('[RobotVideo] autoplay blocked:', err))
+        }}
+        onError={e => {
+          console.error('[RobotVideo] load error:', e.target.error, '| src:', videoSrc)
+        }}
         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
       />
     </div>

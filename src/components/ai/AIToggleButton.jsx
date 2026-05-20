@@ -1,5 +1,3 @@
-import { Sparkles } from 'lucide-react'
-
 export default function AIToggleButton({ onClick, isOpen, G }) {
   return (
     <button
@@ -13,29 +11,29 @@ export default function AIToggleButton({ onClick, isOpen, G }) {
         borderRadius: 8,
         cursor: 'pointer',
         padding: '8px 10px',
-        color: isOpen ? '#fff' : G.mu,
+        color: isOpen ? '#fff' : G.primary,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        gap: 5,
         minWidth: 36, minHeight: 36,
         transition: 'all .15s',
-        fontSize: 10,
-        fontWeight: 600,
+        fontSize: 13,
+        fontWeight: 700,
         letterSpacing: '.5px',
+        fontFamily: 'inherit',
       }}
       onMouseEnter={e => {
         if (!isOpen) {
           e.currentTarget.style.borderColor = G.primary
-          e.currentTarget.style.color = G.accent
+          e.currentTarget.style.background = `rgba(201,168,110,0.08)`
         }
       }}
       onMouseLeave={e => {
         if (!isOpen) {
           e.currentTarget.style.borderColor = G.border
-          e.currentTarget.style.color = G.mu
+          e.currentTarget.style.background = 'transparent'
         }
       }}
     >
-      <Sparkles size={13} strokeWidth={1.8} />
+      AI
     </button>
   )
 }
