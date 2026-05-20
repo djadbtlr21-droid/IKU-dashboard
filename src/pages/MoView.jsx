@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import {
   Video, ChevronRight, Search, AlertTriangle, Calendar, Package, Scissors,
-  Factory, Truck, CheckCircle2, Clock, Layers,
+  Factory, Truck, CheckCircle2, Layers, Shirt, Spool,
 } from 'lucide-react'
 import { fetchMoList } from '../api/client'
 import MoDetailModal from '../components/MoDetailModal'
@@ -26,10 +26,10 @@ const STAGE_HUES = {
 }
 
 const STAGES = [
-  { kr: "샘플제작", cn: "产前样", hue: "#A8A29E", Icon: Clock, en: "Sampling" },
-  { kr: "원단",   cn: "面料",   hue: "#93C5FD", Icon: Package },
+  { kr: "샘플제작", cn: "产前样", hue: "#A8A29E", Icon: Shirt, en: "Sampling" },
+  { kr: "원단",   cn: "面料",   hue: "#93C5FD", Icon: Layers },
   { kr: "재단",   cn: "裁剪",   hue: "#C9A86E", Icon: Scissors },
-  { kr: "재봉",   cn: "缝制",   hue: "#F9A8D4", Icon: Layers },
+  { kr: "재봉",   cn: "缝制",   hue: "#F9A8D4", Icon: Spool },
   { kr: "포장",   cn: "包装",   hue: "#FDBA74", Icon: Package },
   { kr: "완료",   cn: "完成",   hue: "#FCD34D", Icon: CheckCircle2 },
   { kr: "출고",   cn: "出货",   hue: "#86EFAC", Icon: Truck },
