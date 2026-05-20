@@ -74,6 +74,27 @@ function displayStatus(raw) {
   return raw
 }
 
+// Classify an MO into one of 8 production-status groups based on Production_Status.
+// Used for the In-Progress / Shipped KPI cards + the in-progress modal tabs.
+function prodGroup(mo) {
+  const raw = String(mo?.Production_Status || '').trim()
+  if (!raw) return 'Sampling'
+  const s = raw.toLowerCase()
+  // Order matters — match the more-specific buckets first
+  if (/warehouse\s*hold|shipment\s*pending/i.test(raw)) return 'Hold'
+  if (/^shipped$|shipped|出货|出货完|delivered|出库/i.test(raw)) return 'Shipped'
+  if (/sampling|샘플|产前样|not\s*start|미시작|未开始|未开/i.test(raw)) return 'Sampling'
+  if (/fabric\s*received|fabric|면료|원단|面料/i.test(s)) return 'Fabric'
+  if (/cutting|cut|재단|裁剪|裁/i.test(s)) return 'Cutting'
+  if (/sewing|sew|봉제|재봉|缝制|缝/i.test(s)) return 'Sewing'
+  if (/packing|pack|포장|包装/i.test(s)) return 'Packing'
+  if (/completed|complete|finish|완료|完成/i.test(s)) return 'Completed'
+  return 'Unknown'
+}
+
+const IN_PROGRESS_GROUPS = ['Sampling', 'Fabric', 'Cutting', 'Sewing', 'Packing', 'Completed']
+const SHIPPED_GROUPS = ['Shipped', 'Hold']
+
 function statusOverlayColor(mo, G) {
   const stage = moStage(mo)
   const s = STAGES.find(x => x.kr === stage)
@@ -752,16 +773,18 @@ export default function MoView({ G }) {
   const stats = useMemo(() => {
     const list = monthMOs
     const total = list.length
-    const inProgress = list.filter(m => {
-      const s = m.Production_Status || ''
-      return s && !/complet|完成|finish/i.test(s) && !isDelayed(m)
-    }).length
-    const shipped = list.filter(m => /ship|出货|delivered/i.test(String(m.Delivery_Status || m.Production_Status || ''))).length
+    // In-Progress = Sampling / Fabric / Cutting / Sewing / Packing / Completed
+    // (delayed MOs are still counted here — they overlap with the Delayed card)
+    const inProgressList = list.filter(m => IN_PROGRESS_GROUPS.includes(prodGroup(m)))
+    const inProgress = inProgressList.length
+    // Shipped = Shipped + Shipment Pending (Warehouse Hold)
+    const shippedList = list.filter(m => SHIPPED_GROUPS.includes(prodGroup(m)))
+    const shipped = shippedList.length
     const delayed = list.filter(isDelayed)
     const planTotal = list.reduce((s, m) => s + getPlanQty(m), 0)
     const actualTotal = list.reduce((s, m) => s + getActualQty(m), 0)
     const progressPct = planTotal ? Math.min(100, (actualTotal / planTotal) * 100) : 0
-    return { total, inProgress, shipped, delayed, planTotal, actualTotal, progressPct }
+    return { total, inProgress, inProgressList, shipped, shippedList, delayed, planTotal, actualTotal, progressPct }
   }, [monthMOs])
 
   // Stage counts for pipeline (use monthMOs)
@@ -881,20 +904,24 @@ export default function MoView({ G }) {
                 />
                 <MiniKPI
                   G={G} label="진행중 / 进行中" value={stats.inProgress} dot={SOFT_PALETTE[4]}
-                  onClick={() => {
-                    const mos = monthMOs.filter(m => {
-                      const s = m.Production_Status || ''
-                      return s && !/complet|完成|finish|sampling|샘플|未开始|未开|not started|미시작|产前样/i.test(s) && !isDelayed(m)
-                    })
-                    setMoListFilter({ title: "진행중 · 进行中", accent: SOFT_PALETTE[4], mos })
-                  }}
+                  onClick={() => setMoListFilter({
+                    title: "진행중 · 进行中",
+                    accent: SOFT_PALETTE[4],
+                    mos: stats.inProgressList,
+                    tabs: [
+                      { key: 'all',       label: '전체 · 全部',        match: () => true },
+                      { key: 'Sampling',  label: '샘플제작 · 产前样',  match: m => prodGroup(m) === 'Sampling' },
+                      { key: 'Fabric',    label: '원단 · 面料',        match: m => prodGroup(m) === 'Fabric' },
+                      { key: 'Cutting',   label: '재단 · 裁剪',        match: m => prodGroup(m) === 'Cutting' },
+                      { key: 'Sewing',    label: '재봉 · 裁缝',        match: m => prodGroup(m) === 'Sewing' },
+                      { key: 'Packing',   label: '포장 · 包装',        match: m => prodGroup(m) === 'Packing' },
+                      { key: 'Completed', label: '생산완료 · 生产完成', match: m => prodGroup(m) === 'Completed' },
+                    ],
+                  })}
                 />
                 <MiniKPI
                   G={G} label="출고완료 / 已出货" value={stats.shipped} dot={SOFT_PALETTE[2]}
-                  onClick={() => {
-                    const mos = monthMOs.filter(m => /ship|出货|delivered/i.test(String(m.Delivery_Status || m.Production_Status || '')) || m.Ship_Date)
-                    setMoListFilter({ title: "출고완료 · 已出货", accent: SOFT_PALETTE[2], mos })
-                  }}
+                  onClick={() => setMoListFilter({ title: "출고완료 · 已出货", accent: SOFT_PALETTE[2], mos: stats.shippedList })}
                 />
                 <MiniKPI
                   G={G} label="지연 / 延误" value={stats.delayed.length} dot={SOFT_PALETTE[1]}
@@ -1141,6 +1168,7 @@ export default function MoView({ G }) {
           subtitle={`${moListFilter.mos.length} MO`}
           accentColor={moListFilter.accent}
           mos={moListFilter.mos}
+          tabs={moListFilter.tabs}
           onClose={() => setMoListFilter(null)}
           onMoClick={(mo) => setSelectedMo({ id: mo.ID, row: mo })}
         />

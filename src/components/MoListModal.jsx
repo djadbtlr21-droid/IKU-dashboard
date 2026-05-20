@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { X } from 'lucide-react'
 import ZohoImage from './ZohoImage'
 import {
@@ -51,7 +51,8 @@ function MoRow({ G, mo, onClick }) {
   )
 }
 
-export default function MoListModal({ G, title, subtitle, accentColor, mos, onClose, onMoClick }) {
+export default function MoListModal({ G, title, subtitle, accentColor, mos, tabs, onClose, onMoClick }) {
+  const [activeTab, setActiveTab] = useState(tabs?.[0]?.key || null)
   useEffect(() => {
     const h = e => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', h)
@@ -60,8 +61,24 @@ export default function MoListModal({ G, title, subtitle, accentColor, mos, onCl
     return () => { document.removeEventListener('keydown', h); document.body.style.overflow = prev }
   }, [onClose])
 
-  const T = G || { surf: '#FFFFFF', card: '#FFFFFF', cardAlt: '#FBF9F4', border: '#EDE8DE', hair: '#E4DED2', primary: '#C9A86E', accent: '#9A7228', tx: '#1A1714', mu: '#7A7268', fa: '#C8C0B2', bad: '#A14E3A', overlayBg: 'rgba(26,23,20,0.45)', cardShadow: '0 2px 8px rgba(26,23,20,0.06)', dk: false }
+  const T = G || { surf: '#FFFFFF', card: '#FFFFFF', cardAlt: '#FBF9F4', border: '#EDE8DE', hair: '#E4DED2', primary: '#C9A86E', accent: '#9A7228', tx: '#1A1714', mu: '#7A7268', fa: '#C8C0B2', bad: '#A14E3A', overlayBg: 'rgba(26,23,20,0.45)', cardShadow: '0 2px 8px rgba(26,23,20,0.06)', dk: false, nh: 'rgba(26,23,20,0.035)' }
   const accent = accentColor || T.primary
+
+  // Tab-aware filtered list. When tabs is undefined, falls through to `mos`.
+  const visibleMos = useMemo(() => {
+    if (!tabs?.length) return mos || []
+    const tab = tabs.find(t => t.key === activeTab) || tabs[0]
+    if (!tab?.match) return mos || []
+    return (mos || []).filter(tab.match)
+  }, [mos, tabs, activeTab])
+
+  // Per-tab counts for the badge labels
+  const tabCounts = useMemo(() => {
+    if (!tabs?.length) return {}
+    const out = {}
+    tabs.forEach(t => { out[t.key] = t.match ? (mos || []).filter(t.match).length : (mos || []).length })
+    return out
+  }, [mos, tabs])
 
   return (
     <div
@@ -110,14 +127,41 @@ export default function MoListModal({ G, title, subtitle, accentColor, mos, onCl
           </button>
         </div>
 
+        {tabs?.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, padding: '12px 20px', borderBottom: `1px solid ${T.hair}`, background: T.surf, overflowX: 'auto', flexShrink: 0 }}>
+            {tabs.map(t => {
+              const active = t.key === activeTab
+              const count = tabCounts[t.key] ?? 0
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setActiveTab(t.key)}
+                  style={{
+                    padding: '6px 12px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                    border: `1px solid ${active ? accent : T.border}`,
+                    background: active ? `${accent}1A` : 'transparent',
+                    color: active ? accent : T.mu,
+                    cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
+                    transition: 'all .15s',
+                  }}
+                  onMouseEnter={e => { if (!active) e.currentTarget.style.borderColor = accent }}
+                  onMouseLeave={e => { if (!active) e.currentTarget.style.borderColor = T.border }}
+                >
+                  {t.label} <span className="num" style={{ marginLeft: 4, fontWeight: 700, color: active ? accent : T.mu }}>({count})</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
-          {!mos?.length ? (
+          {!visibleMos.length ? (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: T.mu, fontSize: 13 }}>
               해당 MO가 없습니다 · 没有匹配MO
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
-              {mos.map(mo => <MoRow key={mo.ID} G={T} mo={mo} onClick={onMoClick} />)}
+              {visibleMos.map(mo => <MoRow key={mo.ID} G={T} mo={mo} onClick={onMoClick} />)}
             </div>
           )}
         </div>
