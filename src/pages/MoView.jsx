@@ -16,6 +16,7 @@ import {
 } from '../utils/moHelpers'
 import { useData } from '../contexts/DataContext'
 import { formatCategory } from '../utils/formatGarmentCode'
+import AnnotationBadge from '../components/annotations/AnnotationBadge'
 
 const SOFT_PALETTE = ["#C4B5FD", "#FCA5A5", "#6EE7B7", "#93C5FD", "#FCD34D", "#F9A8D4", "#A5F3FC", "#D9F99D"]
 
@@ -568,11 +569,12 @@ function MOCard({ G, mo, onClick }) {
     <div onClick={onClick} style={{
       background: G.card, border: `1px solid ${G.border}`, borderRadius: 12, overflow: "hidden",
       cursor: "pointer", transition: "transform .15s, box-shadow .15s, border-color .15s",
-      display: "flex", flexDirection: "column",
+      display: "flex", flexDirection: "column", position: "relative",
     }}
       onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = G.cardShadow; e.currentTarget.style.borderColor = G.primary }}
       onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; e.currentTarget.style.borderColor = G.border }}
     >
+      {mo.ID && <AnnotationBadge G={G} annotationKey={`mo:${mo.ID}:overall`} />}
       {/* Image — fixed height, top-anchored crop so model face/torso stays visible */}
       <div style={{ height: 276, background: G.cardAlt, position: "relative", overflow: "hidden" }}>
         <ZohoImage mo={mo} field="Style_Image" G={G} alt={getMoNumber(mo)} iconSize={28} />
