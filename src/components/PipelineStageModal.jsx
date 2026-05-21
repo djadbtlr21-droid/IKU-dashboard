@@ -5,6 +5,7 @@ import {
   getMoNumber, getMoSku, getMoFactory, getPlanQty, getActualQty, cleanProdStatus,
 } from '../utils/moHelpers'
 import StageAnnotation from './annotations/StageAnnotation'
+import FactoryDot from './annotations/FactoryDot'
 
 function StageMoRow({ G, mo, stage, onClick }) {
   return (
@@ -45,6 +46,7 @@ function StageMoRow({ G, mo, stage, onClick }) {
         </div>
         <div title={getMoFactory(mo)} style={{ fontSize: 10, color: G.mu, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {getMoFactory(mo)}
+          <FactoryDot G={G} factory={getMoFactory(mo)} />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 11, gap: 8 }}>
           <span className="num" style={{ color: G.mu, whiteSpace: 'nowrap' }}>

@@ -17,6 +17,7 @@ import {
 import { useData } from '../contexts/DataContext'
 import { formatCategory } from '../utils/formatGarmentCode'
 import AnnotationBadge from '../components/annotations/AnnotationBadge'
+import FactoryDot from '../components/annotations/FactoryDot'
 
 const SOFT_PALETTE = ["#C4B5FD", "#FCA5A5", "#6EE7B7", "#93C5FD", "#FCD34D", "#F9A8D4", "#A5F3FC", "#D9F99D"]
 
@@ -612,7 +613,10 @@ function MOCard({ G, mo, onClick }) {
             <span title={formatCategory(category)} style={{ color: G.tx, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", wordBreak: "break-all" }}>{formatCategory(category)}</span>
           </>}
           <span style={{ whiteSpace: "nowrap" }}>공장</span>
-          <span title={getMoFactory(mo)} style={{ color: G.tx, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{getMoFactory(mo)}</span>
+          <span title={getMoFactory(mo)} style={{ color: G.tx, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {getMoFactory(mo)}
+            <FactoryDot G={G} factory={getMoFactory(mo)} />
+          </span>
           {material && <>
             <span style={{ whiteSpace: "nowrap" }}>원단</span>
             <span title={material} style={{ color: G.tx, textAlign: "right", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{material}</span>
