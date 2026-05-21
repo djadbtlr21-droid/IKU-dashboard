@@ -1,5 +1,5 @@
-import { useState, createContext, useContext } from "react"
-import { Package, BarChart2, Truck, Building, Sun, Moon, RefreshCw } from "lucide-react"
+import { useState, createContext, useContext, useEffect } from "react"
+import { Package, BarChart2, Truck, Building, Sun, Moon, RefreshCw, Lock, LogOut } from "lucide-react"
 import CoverPage from "./components/CoverPage"
 import MoView from "./pages/MoView"
 import OverviewPage from "./pages/OverviewPage"
@@ -9,6 +9,7 @@ import { AnnotationProvider } from "./contexts/AnnotationContext"
 import AdminLoginGate from "./components/annotations/AdminLoginGate"
 import AIPanel from "./components/ai/AIPanel"
 import AIToggleButton from "./components/ai/AIToggleButton"
+import { useAnnotations } from "./hooks/useAnnotation"
 
 // ── THEME (Golden Hour) ──
 const LT = {
@@ -121,6 +122,59 @@ const TABS = [
 
 function Rail({ G }) { return G.dk ? <span className="rail" /> : null }
 
+// Detects /admin/login URL and opens the modal automatically, then cleans the URL.
+function AdminUrlHandler() {
+  const { openLogin } = useAnnotations()
+  useEffect(() => {
+    if (window.location.pathname === '/admin/login') {
+      window.history.replaceState({}, '', '/')
+      openLogin()
+    }
+  }, [openLogin])
+  return null
+}
+
+// Shows a lock/unlock icon in the sidebar footer to enter or exit admin mode.
+function AdminSidebarButton({ G }) {
+  const { isAdmin, openLogin, logout } = useAnnotations()
+  if (isAdmin) {
+    return (
+      <button
+        onClick={logout}
+        aria-label="admin logout"
+        title="Admin 로그아웃 · 退出管理"
+        style={{
+          background: "transparent", border: `1px solid ${G.border}`, borderRadius: 8,
+          cursor: "pointer", padding: "8px 10px", color: G.ok,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          minWidth: 36, minHeight: 36, transition: "border-color .15s, color .15s"
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = G.ok }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = G.border }}
+      >
+        <LogOut size={13} />
+      </button>
+    )
+  }
+  return (
+    <button
+      onClick={openLogin}
+      aria-label="admin login"
+      title="Admin 로그인 · 管理员登录"
+      style={{
+        background: "transparent", border: `1px solid ${G.border}`, borderRadius: 8,
+        cursor: "pointer", padding: "8px 10px", color: G.mu,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        minWidth: 36, minHeight: 36, transition: "border-color .15s, color .15s"
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = G.primary; e.currentTarget.style.color = G.accent }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = G.border; e.currentTarget.style.color = G.mu }}
+    >
+      <Lock size={13} />
+    </button>
+  )
+}
+
 function ComingSoon({ G, label }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400, gap: 14 }}>
@@ -161,6 +215,7 @@ export default function App() {
     <ThemeContext.Provider value={{ G, dark, setDark }}>
       <DataProvider>
       <AnnotationProvider>
+      <AdminUrlHandler />
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: G.bg, color: G.tx, overflow: "hidden" }}>
         <style>{mkCSS(G)}</style>
 
@@ -254,6 +309,7 @@ export default function App() {
                   {dark ? <Sun size={13} /> : <Moon size={13} />}
                 </button>
                 <AIToggleButton onClick={() => setAiOpen(o => !o)} isOpen={aiOpen} G={G} tab={tab} />
+                <AdminSidebarButton G={G} />
               </div>
             </div>
           </aside>

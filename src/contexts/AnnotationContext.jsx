@@ -111,6 +111,11 @@ export function AnnotationProvider({ children }) {
     return result
   }, [requestAuth])
 
+  const openLogin = useCallback(() => {
+    pendingRef.current = null
+    setLoginOpen(true)
+  }, [])
+
   const onLoginSuccess = useCallback(() => {
     setLoginOpen(false)
     const action = pendingRef.current
@@ -126,8 +131,8 @@ export function AnnotationProvider({ children }) {
   const value = useMemo(() => ({
     items, isAdmin, ready,
     save, remove, login, logout,
-    loginOpen, onLoginSuccess, closeLogin
-  }), [items, isAdmin, ready, save, remove, login, logout, loginOpen, onLoginSuccess, closeLogin])
+    loginOpen, openLogin, onLoginSuccess, closeLogin
+  }), [items, isAdmin, ready, save, remove, login, logout, loginOpen, openLogin, onLoginSuccess, closeLogin])
 
   return <AnnotationContext.Provider value={value}>{children}</AnnotationContext.Provider>
 }
