@@ -1,30 +1,25 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAnnotations } from '../../hooks/useAnnotation'
 
+// Note: this component is mounted conditionally (only when loginOpen===true),
+// so initial useState values act as fresh state on each open. No effect-driven
+// reset is needed, which keeps lint happy under react-hooks/set-state-in-effect.
 export default function AdminLoginModal({ G }) {
-  const { loginOpen, login, onLoginSuccess, closeLogin } = useAnnotations()
+  const { login, onLoginSuccess, closeLogin } = useAnnotations()
   const [pw, setPw] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const inputRef = useRef(null)
 
   useEffect(() => {
-    if (!loginOpen) return
-    setPw('')
-    setErr('')
-    setBusy(false)
     const t = setTimeout(() => inputRef.current?.focus(), 60)
-    return () => clearTimeout(t)
-  }, [loginOpen])
-
-  useEffect(() => {
-    if (!loginOpen) return
     const h = e => { if (e.key === 'Escape') closeLogin() }
     document.addEventListener('keydown', h)
-    return () => document.removeEventListener('keydown', h)
-  }, [loginOpen, closeLogin])
-
-  if (!loginOpen) return null
+    return () => {
+      clearTimeout(t)
+      document.removeEventListener('keydown', h)
+    }
+  }, [closeLogin])
 
   const handleSubmit = async (e) => {
     e?.preventDefault()

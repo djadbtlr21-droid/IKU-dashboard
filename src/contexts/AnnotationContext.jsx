@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { createContext, useEffect, useState, useCallback, useMemo, useRef } from 'react'
 
-const AnnotationContext = createContext(null)
+// eslint-disable-next-line react-refresh/only-export-components
+export const AnnotationContext = createContext(null)
 
 async function safeFetchJson(url, init) {
   try {
@@ -67,7 +68,7 @@ export function AnnotationProvider({ children }) {
       }
       if (r.status === 401) {
         setIsAdmin(false)
-        return null // signal "auth needed"
+        return null
       }
       return false
     }
@@ -129,10 +130,4 @@ export function AnnotationProvider({ children }) {
   }), [items, isAdmin, ready, save, remove, login, logout, loginOpen, onLoginSuccess, closeLogin])
 
   return <AnnotationContext.Provider value={value}>{children}</AnnotationContext.Provider>
-}
-
-export function useAnnotations() {
-  const ctx = useContext(AnnotationContext)
-  if (!ctx) throw new Error('useAnnotations must be used within AnnotationProvider')
-  return ctx
 }

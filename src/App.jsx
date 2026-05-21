@@ -6,7 +6,7 @@ import OverviewPage from "./pages/OverviewPage"
 import ErrorBoundary from "./components/ErrorBoundary"
 import { DataProvider } from "./contexts/DataContext"
 import { AnnotationProvider } from "./contexts/AnnotationContext"
-import AdminLoginModal from "./components/annotations/AdminLoginModal"
+import AdminLoginGate from "./components/annotations/AdminLoginGate"
 import AIPanel from "./components/ai/AIPanel"
 import AIToggleButton from "./components/ai/AIToggleButton"
 
@@ -290,7 +290,7 @@ export default function App() {
         </nav>
       </div>
       <AIPanel open={aiOpen} onClose={() => setAiOpen(false)} G={G} />
-      <AdminLoginModal G={G} />
+      <AdminLoginGate G={G} />
       </AnnotationProvider>
       </DataProvider>
     </ThemeContext.Provider>
