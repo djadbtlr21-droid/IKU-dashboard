@@ -5,6 +5,8 @@ import MoView from "./pages/MoView"
 import OverviewPage from "./pages/OverviewPage"
 import ErrorBoundary from "./components/ErrorBoundary"
 import { DataProvider } from "./contexts/DataContext"
+import { AnnotationProvider } from "./contexts/AnnotationContext"
+import AdminLoginModal from "./components/annotations/AdminLoginModal"
 import AIPanel from "./components/ai/AIPanel"
 import AIToggleButton from "./components/ai/AIToggleButton"
 
@@ -158,6 +160,7 @@ export default function App() {
   return (
     <ThemeContext.Provider value={{ G, dark, setDark }}>
       <DataProvider>
+      <AnnotationProvider>
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: G.bg, color: G.tx, overflow: "hidden" }}>
         <style>{mkCSS(G)}</style>
 
@@ -287,6 +290,8 @@ export default function App() {
         </nav>
       </div>
       <AIPanel open={aiOpen} onClose={() => setAiOpen(false)} G={G} />
+      <AdminLoginModal G={G} />
+      </AnnotationProvider>
       </DataProvider>
     </ThemeContext.Provider>
   )
