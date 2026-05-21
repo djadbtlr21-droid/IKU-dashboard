@@ -9,62 +9,92 @@ const CREAM = '#FAFAF7'
 const BORDER = '#E4DED2'
 const GOLD = '#C9A86E'
 const TEXT = '#1A1714'
-const MUTED = '#5A5248'
+
+function useIsMobile() {
+  const [mob, setMob] = useState(() => window.innerWidth <= 860)
+  useEffect(() => {
+    const h = () => setMob(window.innerWidth <= 860)
+    window.addEventListener('resize', h, { passive: true })
+    return () => window.removeEventListener('resize', h)
+  }, [])
+  return mob
+}
 
 export default function AIPanel({ open, onClose, G }) {
   const [robotState, setRobotState] = useState('idle')
   const messagesEndRef = useRef(null)
+  const isMobile = useIsMobile()
 
-  // Stable setter that accepts value or functional updater (for idle_special timer)
   const handleStateChange = (stateOrFn) => {
-    if (typeof stateOrFn === 'function') {
-      setRobotState(stateOrFn)
-    } else {
-      setRobotState(stateOrFn)
-    }
+    if (typeof stateOrFn === 'function') setRobotState(stateOrFn)
+    else setRobotState(stateOrFn)
   }
 
   const { messages, sendMessage, isStreaming } = useGeminiChat({ setRobotState })
 
   useEffect(() => {
-    if (messages.length > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
+    if (messages.length > 0) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const panelStyle = isMobile
+    ? {
+        position: 'fixed',
+        bottom: 0, left: 0, right: 0, top: 'auto',
+        height: '72vh',
+        width: '100%',
+        borderRadius: '20px 20px 0 0',
+        borderLeft: 'none',
+        borderTop: `1px solid ${BORDER}`,
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        transform: open ? 'translateY(0)' : 'translateY(100%)',
+        transition: 'transform 320ms cubic-bezier(.32,.72,0,1)',
+        boxShadow: open ? '0 -8px 40px rgba(26,23,20,0.18)' : 'none',
+      }
+    : {
+        position: 'fixed', right: 0, top: 0,
+        height: '100vh',
+        width: 'clamp(396px, 24vw, 506px)',
+        borderLeft: `1px solid ${BORDER}`,
+        transform: open ? 'translateX(0)' : 'translateX(100%)',
+        transition: 'transform 300ms ease-in-out',
+        boxShadow: open ? '-8px 0 32px rgba(26,23,20,0.12)' : 'none',
+      }
+
+  const statusLabel =
+    robotState === 'idle' || robotState === 'idle_special' ? 'Ready' :
+    robotState === 'reading' ? 'Reading…' :
+    robotState === 'analyzing' ? 'Analyzing…' :
+    robotState === 'sending' ? 'Sending…' :
+    robotState === 'done' ? 'Done' : 'Error'
+
+  const statusColor =
+    robotState === 'idle' || robotState === 'idle_special' ? '#86EFAC' :
+    robotState === 'error' ? '#FCA5A5' : GOLD
 
   return (
     <>
       {/* Backdrop */}
       {open && (
         <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 49,
-            background: 'rgba(0,0,0,0.25)',
-          }}
+          style={{ position: 'fixed', inset: 0, zIndex: 49, background: 'rgba(0,0,0,0.25)' }}
           onClick={onClose}
         />
       )}
 
-      {/* Slide-in panel */}
-      <div style={{
-        position: 'fixed', right: 0, top: 0,
-        height: '100vh',
-        width: 'clamp(396px, 24vw, 506px)',
-        background: CREAM,
-        borderLeft: `1px solid ${BORDER}`,
-        zIndex: 50,
-        display: 'flex',
-        flexDirection: 'column',
-        transform: open ? 'translateX(0)' : 'translateX(100%)',
-        transition: 'transform 300ms ease-in-out',
-        boxShadow: open ? '-8px 0 32px rgba(26,23,20,0.12)' : 'none',
-      }}>
+      {/* Panel */}
+      <div style={{ background: CREAM, zIndex: 50, display: 'flex', flexDirection: 'column', ...panelStyle }}>
 
-        {/* Top: robot video */}
-        <div style={{ position: 'relative', flexShrink: 0 }}>
+        {/* Mobile drag handle */}
+        {isMobile && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px', flexShrink: 0 }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: BORDER }} />
+          </div>
+        )}
+
+        {/* Robot video */}
+        <div style={{ position: 'relative', flexShrink: 0, ...(isMobile ? { maxHeight: '27%', overflow: 'hidden' } : {}) }}>
           <RobotVideo robotState={robotState} onStateChange={handleStateChange} />
 
-          {/* Close button */}
           <button
             onClick={onClose}
             style={{
@@ -72,8 +102,7 @@ export default function AIPanel({ open, onClose, G }) {
               background: 'rgba(0,0,0,0.55)', border: 'none',
               borderRadius: '50%', width: 30, height: 30,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', color: '#fff', zIndex: 2,
-              transition: 'background .15s',
+              cursor: 'pointer', color: '#fff', zIndex: 2, transition: 'background .15s',
             }}
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.75)' }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.55)' }}
@@ -81,7 +110,6 @@ export default function AIPanel({ open, onClose, G }) {
             <X size={14} strokeWidth={2.5} />
           </button>
 
-          {/* State badge */}
           <div style={{
             position: 'absolute', bottom: 8, left: 8,
             background: 'rgba(0,0,0,0.55)', borderRadius: 999,
@@ -89,40 +117,24 @@ export default function AIPanel({ open, onClose, G }) {
             fontWeight: 600, letterSpacing: '.5px',
             display: 'flex', alignItems: 'center', gap: 5,
           }}>
-            <span style={{
-              width: 6, height: 6, borderRadius: '50%',
-              background: robotState === 'idle' || robotState === 'idle_special'
-                ? '#86EFAC'
-                : robotState === 'error' ? '#FCA5A5'
-                : GOLD,
-              flexShrink: 0,
-            }} />
-            {robotState === 'idle' || robotState === 'idle_special' ? 'Ready' :
-             robotState === 'reading' ? 'Reading…' :
-             robotState === 'analyzing' ? 'Analyzing…' :
-             robotState === 'sending' ? 'Sending…' :
-             robotState === 'done' ? 'Done' : 'Error'}
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+            {statusLabel}
           </div>
         </div>
 
         {/* Panel header */}
-        <div style={{
-          padding: '10px 16px 10px',
-          borderBottom: `1px solid ${BORDER}`,
-          background: CREAM,
-          flexShrink: 0,
-        }}>
+        <div style={{ padding: '10px 16px', borderBottom: `1px solid ${BORDER}`, background: CREAM, flexShrink: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, whiteSpace: 'nowrap' }}>
             IKU AI 분석가 · Senior ERP Analyst
           </div>
         </div>
 
         {/* Messages */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 14px 4px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 14px 4px', WebkitOverflowScrolling: 'touch' }}>
           {messages.length === 0 && (
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center',
-              justifyContent: 'center', height: '100%', gap: 12, padding: '32px 0',
+              justifyContent: 'center', height: '100%', gap: 12, padding: '24px 0',
             }}>
               <div style={{
                 width: 48, height: 48, borderRadius: '50%',
@@ -174,11 +186,7 @@ export default function AIPanel({ open, onClose, G }) {
         </div>
 
         {/* Input */}
-        <ChatInput
-          onSend={sendMessage}
-          disabled={isStreaming}
-          setRobotState={setRobotState}
-        />
+        <ChatInput onSend={sendMessage} disabled={isStreaming} setRobotState={setRobotState} />
       </div>
     </>
   )

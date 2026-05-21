@@ -74,18 +74,37 @@ button{font-family:inherit;touch-action:manipulation}
 .mb.on{color:${G.accent}}
 .mb.on::before{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);width:24px;height:2px;background:${G.primary};border-radius:0 0 2px 2px}
 
+/* Mobile fixed header */
+.mhd{display:none;position:fixed;top:0;left:0;right:0;z-index:90;height:56px;background:${G.surf};border-bottom:1px solid ${G.border};padding:0 16px;padding-top:env(safe-area-inset-top);align-items:center;gap:10px}
+
+/* AI FAB — above bottom tab bar */
+.ai-fab{display:none;position:fixed;bottom:80px;right:16px;z-index:95;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,${G.primary} 0%,#A8854A 100%);color:#fff;border:none;cursor:pointer;box-shadow:0 4px 16px rgba(201,168,110,0.4);font-size:12px;font-weight:700;letter-spacing:.5px;align-items:center;justify-content:center;transition:transform .15s,box-shadow .15s;touch-action:manipulation}
+.ai-fab:active{transform:scale(.94);box-shadow:0 2px 8px rgba(201,168,110,0.3)}
+.ai-fab.fab-on{background:linear-gradient(135deg,#A8854A 0%,${G.primary} 100%)}
+
 .page-wrap{padding:32px 48px 48px;width:100%}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
 
 @media(max-width:860px){
   aside,.sb,.sidebar{display:none!important;width:0!important}
   main{width:100%!important;flex:1 1 100%!important;min-width:0!important}
   .mobn{display:flex!important}
-  .page-wrap{padding:16px!important;padding-bottom:80px!important}
+  .mhd{display:flex!important}
+  .ai-fab{display:flex!important}
+  .page-wrap{padding:16px!important;padding-top:72px!important;padding-bottom:88px!important}
+  /* KPI 2-col grid */
+  .mob-kpi{grid-template-columns:repeat(2,1fr)!important;gap:10px!important}
+  /* MO cards: vertical 1-col instead of horizontal scroll */
+  .schedule-scroll{flex-wrap:wrap!important;overflow-x:visible!important}
+  .schedule-scroll>div{width:100%!important;flex-shrink:1!important;min-width:0!important}
+  /* Pipeline: horizontal scroll kept */
+  .pipeline-scroll{overflow-x:auto!important}
 }
 @media(max-width:480px){
   body{font-size:15.4px}
   .card{border-radius:10px}
+  .mob-kpi{gap:8px!important}
 }
 `
 
@@ -139,6 +158,44 @@ export default function App() {
       <DataProvider>
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: G.bg, color: G.tx, overflow: "hidden" }}>
         <style>{mkCSS(G)}</style>
+
+        {/* ── Mobile fixed header (hidden on desktop via CSS) ── */}
+        <div className="mhd">
+          <div style={{ display: "flex", alignItems: "baseline", gap: 5, flex: 1, minWidth: 0 }}>
+            <span className="brand-syne" style={{ fontSize: 20, fontWeight: 700, color: G.primary, letterSpacing: "-.5px", lineHeight: 1 }}>IKU</span>
+            <span style={{ fontSize: 8, color: G.mu, letterSpacing: "2px", textTransform: "uppercase", fontWeight: 600 }}>ERP</span>
+          </div>
+          <span className="syne" style={{ fontSize: 13, fontWeight: 700, color: G.tx, whiteSpace: "nowrap" }}>
+            {activeTab?.label || "Dashboard"}
+          </span>
+          <div style={{ display: "flex", gap: 6, flex: 1, justifyContent: "flex-end" }}>
+            <button
+              onClick={handleRefresh} disabled={refreshing}
+              style={{ background: "transparent", border: `1px solid ${G.border}`, borderRadius: 8, cursor: refreshing ? "wait" : "pointer", padding: "8px 10px", color: G.mu, display: "flex", alignItems: "center", justifyContent: "center", minWidth: 36, minHeight: 44, transition: "border-color .15s" }}
+              onTouchStart={e => { e.currentTarget.style.borderColor = G.primary }}
+              onTouchEnd={e => { e.currentTarget.style.borderColor = G.border }}
+            >
+              <RefreshCw size={13} style={{ animation: refreshing ? "spin 1s linear infinite" : "none" }} />
+            </button>
+            <button
+              onClick={() => setDark(!dark)}
+              style={{ background: "transparent", border: `1px solid ${G.border}`, borderRadius: 8, cursor: "pointer", padding: "8px 10px", color: G.mu, display: "flex", alignItems: "center", justifyContent: "center", minWidth: 36, minHeight: 44, transition: "border-color .15s" }}
+              onTouchStart={e => { e.currentTarget.style.borderColor = G.primary }}
+              onTouchEnd={e => { e.currentTarget.style.borderColor = G.border }}
+            >
+              {dark ? <Sun size={13} /> : <Moon size={13} />}
+            </button>
+          </div>
+        </div>
+
+        {/* ── AI FAB for mobile (hidden on desktop via CSS) ── */}
+        <button
+          className={`ai-fab${aiOpen ? " fab-on" : ""}`}
+          onClick={() => setAiOpen(o => !o)}
+          title="AI 분석가 · AI 分析师"
+        >
+          AI
+        </button>
 
         <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
           <aside className="sb" style={{ width: 224, minWidth: 224, background: G.surf, borderRight: `1px solid ${G.border}`, display: "flex", flexDirection: "column", padding: "28px 0", transition: "background .2s" }}>

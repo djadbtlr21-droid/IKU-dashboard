@@ -278,7 +278,7 @@ export default function OverviewPage({ G }) {
       )}
 
       {/* KPI row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 18 }}>
+      <div className="mob-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 18 }}>
         <KPI
           G={G} label="총 MO · 总订单" value={loading ? '—' : totalMo.toLocaleString()}
           sub={delayedCount ? `지연 ${delayedCount}건` : '지연 없음'} accent={G.primary}
