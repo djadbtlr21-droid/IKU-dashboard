@@ -287,9 +287,12 @@ function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, dayWidth,
           <ZohoImage mo={mo} field="Style_Image" report="All_MO" G={G} iconSize={16} placeholderText="" />
         </div>
         <div style={{ overflow: "hidden", flex: 1 }}>
-          <div className="num" style={{ fontSize: 11, fontWeight: 700, color: G.accent, lineHeight: 1.2 }}>{getMoNumber(mo)}</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 4, lineHeight: 1.2 }}>
+            <span className="num" style={{ fontSize: 11, fontWeight: 700, color: G.accent, flexShrink: 0 }}>{getMoNumber(mo)}</span>
+            <span style={{ fontSize: 9, color: G.fa, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{getMoFactory(mo)}</span>
+          </div>
           <div style={{ fontSize: 10, color: G.mu, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{getMoSku(mo)}</div>
-          <div style={{ fontSize: 9, color: G.fa, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{getMoFactory(mo)}</div>
+          <div style={{ fontSize: 9, color: G.fa, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{typeof mo.Chi_Style_Name === 'string' ? mo.Chi_Style_Name : (mo.Chi_Style_Name?.zc_display_value || '')}</div>
         </div>
         <div className="num" style={{ fontSize: 10, color: G.mu, textAlign: "right" }}>{getPlanQty(mo).toLocaleString()}</div>
       </div>
@@ -570,7 +573,7 @@ function MOCard({ G, mo, onClick }) {
       {/* Image — fixed height, top-anchored crop so model face/torso stays visible */}
       <div style={{ height: 276, background: G.cardAlt, position: "relative", overflow: "hidden" }}>
         <ZohoImage mo={mo} field="Style_Image" G={G} alt={getMoNumber(mo)} iconSize={28} />
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "5px 10px", background: overlay.bg, color: '#000', fontSize: 11, textAlign: "center", fontWeight: 600, letterSpacing: ".3px", textShadow: '-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff, 0 -1px 0 #fff, 0 1px 0 #fff, -1px 0 0 #fff, 1px 0 0 #fff' }}>
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "5px 10px", background: overlay.bg, color: '#fff', fontSize: 11, textAlign: "center", fontWeight: 600, letterSpacing: ".3px", textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 -1px 0 #000, 0 1px 0 #000, -1px 0 0 #000, 1px 0 0 #000' }}>
           {overlay.stage}
         </div>
       </div>
