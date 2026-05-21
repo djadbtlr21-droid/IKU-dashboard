@@ -260,7 +260,7 @@ function phaseBars(mo, phaseDef, monthStart, monthEnd, today, dayWidth) {
   }
 }
 
-function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, dayWidth, onClickMo }) {
+function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, dayWidth, onClickMo, metaWidth = META_COL_WIDTH }) {
   const rowH = 60          // was 50, ×1.2
   const barH = 19          // was 16, ×1.2 rounded
   const planTop = Math.round(rowH * 0.2)    // was 6
@@ -274,7 +274,7 @@ function TimelineRow({ G, mo, monthStart, monthEnd, totalWidth, today, dayWidth,
         title={`${getMoNumber(mo)} — 클릭하여 상세 보기 / 点击查看详情`}
         style={{
           position: "sticky", left: 0, zIndex: 2,
-          width: META_COL_WIDTH, minWidth: META_COL_WIDTH, display: "flex", alignItems: "center", gap: 8,
+          width: metaWidth, minWidth: metaWidth, display: "flex", alignItems: "center", gap: 8,
           padding: "8px 10px 8px 6px", cursor: "pointer",
           background: G.card,
           borderRight: `1px solid ${G.hair}`,
@@ -357,13 +357,16 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
 
   const containerRef = useRef(null)
   const [dayWidth, setDayWidth] = useState(DAY_WIDTH_DEFAULT)
+  const [metaWidth, setMetaWidth] = useState(META_COL_WIDTH)
 
-  // ResizeObserver — recalculate cell width so the gantt fills its container
+  // ResizeObserver — recalculate cell width + meta col width so the gantt fills its container
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
     const update = () => {
-      const available = el.clientWidth - META_COL_WIDTH
+      const mw = el.clientWidth <= 480 ? 130 : META_COL_WIDTH
+      setMetaWidth(mw)
+      const available = el.clientWidth - mw
       const next = Math.max(DAY_WIDTH_MIN, Math.floor(available / totalDays))
       setDayWidth(next)
     }
@@ -437,10 +440,10 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
 
   return (
     <div ref={containerRef} style={{ overflowX: "auto", position: "relative", width: "100%" }}>
-      <div style={{ width: META_COL_WIDTH + totalWidth, minWidth: META_COL_WIDTH + totalWidth }}>
+      <div style={{ width: metaWidth + totalWidth, minWidth: metaWidth + totalWidth }}>
         {/* Header row 1 — month band */}
         <div style={{ display: "flex", borderBottom: `1px solid ${G.hair}` }}>
-          <div style={{ position: "sticky", left: 0, zIndex: 3, width: META_COL_WIDTH, minWidth: META_COL_WIDTH, background: G.cardAlt, borderRight: `1px solid ${G.hair}`, padding: "8px 10px", fontSize: 10, fontWeight: 700, color: G.mu, letterSpacing: ".5px", textTransform: "uppercase" }}>
+          <div style={{ position: "sticky", left: 0, zIndex: 3, width: metaWidth, minWidth: metaWidth, background: G.cardAlt, borderRight: `1px solid ${G.hair}`, padding: "8px 10px", fontSize: 10, fontWeight: 700, color: G.mu, letterSpacing: ".5px", textTransform: "uppercase" }}>
             MO · Style
           </div>
           <div style={{ display: "flex", width: totalWidth }}>
@@ -470,7 +473,7 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
 
         {/* Header row 2 — daily numbers */}
         <div style={{ display: "flex", borderBottom: `2px solid ${G.hair}` }}>
-          <div style={{ position: "sticky", left: 0, zIndex: 3, width: META_COL_WIDTH, minWidth: META_COL_WIDTH, background: G.surf, borderRight: `1px solid ${G.hair}` }} />
+          <div style={{ position: "sticky", left: 0, zIndex: 3, width: metaWidth, minWidth: metaWidth, background: G.surf, borderRight: `1px solid ${G.hair}` }} />
           <div style={{ display: "flex", width: totalWidth }}>
             {days.map((dt, i) => {
               const we = isWeekend(dt)
@@ -494,7 +497,7 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
         {/* MO rows */}
         <div style={{ position: "relative" }}>
           {/* Day-column background grid (weekend tinting) — drawn behind bars */}
-          <div style={{ position: "absolute", inset: 0, left: META_COL_WIDTH, display: "flex", pointerEvents: "none", zIndex: 0 }}>
+          <div style={{ position: "absolute", inset: 0, left: metaWidth, display: "flex", pointerEvents: "none", zIndex: 0 }}>
             {days.map((dt, i) => {
               // Per spec: weekend tint applies ONLY on the date header row.
               // The bar-row grid background stays neutral so MO bars sit on
@@ -515,13 +518,13 @@ function TimelineGrid({ G, mos, monthStart, monthEnd, onClickMo }) {
           </div>
 
           {mos.slice(0, 30).map((mo, i) => (
-            <TimelineRow key={mo.ID || i} G={G} mo={mo} monthStart={monthStart} monthEnd={monthEnd} totalWidth={totalWidth} today={today} dayWidth={dayWidth} onClickMo={onClickMo} />
+            <TimelineRow key={mo.ID || i} G={G} mo={mo} monthStart={monthStart} monthEnd={monthEnd} totalWidth={totalWidth} today={today} dayWidth={dayWidth} onClickMo={onClickMo} metaWidth={metaWidth} />
           ))}
 
           {/* Today red vertical line — spans all MO rows */}
           {todayInRange && (
             <div style={{
-              position: "absolute", top: 0, bottom: 0, left: META_COL_WIDTH + todayLeft,
+              position: "absolute", top: 0, bottom: 0, left: metaWidth + todayLeft,
               width: 2, background: "#EF4444", pointerEvents: "none", zIndex: 1,
               boxShadow: "0 0 0 1px rgba(239,68,68,0.2)",
             }} />

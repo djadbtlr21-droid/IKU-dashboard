@@ -93,8 +93,10 @@ button{font-family:inherit;touch-action:manipulation}
   .mhd{display:flex!important}
   .ai-fab{display:flex!important}
   .page-wrap{padding:16px!important;padding-top:72px!important;padding-bottom:88px!important}
-  /* KPI 2-col grid */
+  /* Overview KPI 2-col grid */
   .mob-kpi{grid-template-columns:repeat(2,1fr)!important;gap:10px!important}
+  /* MO View KPI row: single-column stack (3-col → 1-col) */
+  .kgr{grid-template-columns:1fr!important;gap:12px!important}
   /* MO cards: vertical 1-col instead of horizontal scroll */
   .schedule-scroll{flex-wrap:wrap!important;overflow-x:visible!important}
   .schedule-scroll>div{width:100%!important;flex-shrink:1!important;min-width:0!important}
