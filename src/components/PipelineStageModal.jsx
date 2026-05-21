@@ -4,6 +4,7 @@ import ZohoImage from './ZohoImage'
 import {
   getMoNumber, getMoSku, getMoFactory, getPlanQty, getActualQty, cleanProdStatus,
 } from '../utils/moHelpers'
+import StageAnnotation from './annotations/StageAnnotation'
 
 function StageMoRow({ G, mo, stage, onClick }) {
   return (
@@ -53,6 +54,7 @@ function StageMoRow({ G, mo, stage, onClick }) {
             {cleanProdStatus(mo.Production_Status) || '—'}
           </span>
         </div>
+        <StageAnnotation G={G} moId={mo.ID} stageKr={stage.kr} />
       </div>
     </div>
   )
