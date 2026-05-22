@@ -1,70 +1,58 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { fetchMoList } from '../api/client'
-import { getMoFactory, getMonthKey, parseZohoDate } from '../utils/moHelpers'
+import { fetchShipments } from '../api/client'
+import { parseZohoDate } from '../utils/moHelpers'
 
-// Local prod-group classification (mirrors MoView.jsx prodGroup — kept in sync)
-export function prodGroupShipment(mo) {
-  const raw = String(mo?.Production_Status || '').trim()
-  if (!raw) return 'Sampling'
-  const s = raw.toLowerCase()
-  if (/warehouse\s*hold|shipment\s*pending/i.test(raw)) return 'Hold'
-  if (/^shipped$|shipped|出货|出货完|delivered|出库/i.test(raw)) return 'Shipped'
-  if (/sampling|샘플|产前样|not\s*start|미시작|未开始|未开/i.test(raw)) return 'Sampling'
-  if (/fabric\s*received|fabric|면료|원단|面料/i.test(s)) return 'Fabric'
-  if (/cutting|cut|재단|裁剪|裁/i.test(s)) return 'Cutting'
-  if (/sewing|sew|봉제|재봉|裁缝|缝/i.test(s)) return 'Sewing'
-  if (/packing|pack|포장|包装/i.test(s)) return 'Packing'
-  if (/completed|complete|finish|완료|完成/i.test(s)) return 'Completed'
-  return 'Unknown'
-}
+// ─── Classify a single container into one of 5 states ─────
+// 'warehouse' → CCD recorded
+// 'port'      → ATA recorded, no CCD
+// 'sea'       → ATD recorded, no ATA
+// 'imminent'  → ETD ≤7 days from today, no ATD
+// 'pending'   → everything else (not shown in pipeline)
+export function classifyContainer(c, today) {
+  const etd = c.ETD  ? parseZohoDate(c.ETD)  : null
+  const atd = c.ATD  ? parseZohoDate(c.ATD)  : null
+  const ata = c.ATA  ? parseZohoDate(c.ATA)  : null
+  const ccd = c.CCD  ? parseZohoDate(c.CCD)  : null
 
-// Classify a MO into one of 5 shipment-view categories
-export function shipCat(mo) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  if (ccd) return 'warehouse'
+  if (ata) return 'port'
+  if (atd && !ata) return 'sea'
+  if (atd) return 'sea'  // dead-code fallback per spec (atd+ata already caught above)
 
-  const shipDate = parseZohoDate(mo.Ship_Date)
-  const planShip = parseZohoDate(mo.Expected_Delivery)
-  const pg = prodGroupShipment(mo)
-
-  if (shipDate || pg === 'Shipped' || pg === 'Hold') return 'shipped'
-
-  if (planShip) {
-    if (planShip < today) return 'delayed'
-    const daysUntil = Math.round((planShip - today) / 86400000)
-    if (daysUntil <= 7) return 'imminent'
+  if (etd) {
+    const diff = (etd - today) / (1000 * 60 * 60 * 24)
+    if (diff >= 0 && diff <= 7) return 'imminent'
   }
 
-  if (pg === 'Completed') return 'ready'
-  return 'inprod'
+  return 'pending'
 }
 
-// Month key based on Expected_Delivery (plan ship date); falls back to production month
-export function getShipMonthKey(mo) {
-  const d = parseZohoDate(mo.Expected_Delivery)
-  if (d) {
-    const yy = String(d.getFullYear()).slice(-2)
-    const mm = String(d.getMonth() + 1).padStart(2, '0')
-    return `${yy}.${mm}`
+// Parse Container_Lines subform — REST API often returns "" or wrapped object
+export function parseContainerLines(raw) {
+  if (!raw || raw === '') return []
+  if (Array.isArray(raw)) return raw
+  if (typeof raw === 'object' && Array.isArray(raw.data)) return raw.data
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw) } catch { return [] }
   }
-  return getMonthKey(mo)
+  return []
 }
 
 export default function useShipmentData() {
-  const [moList, setMoList] = useState([])
+  const [containers, setContainers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   const loadData = useCallback(() => {
     setLoading(true)
     setError(null)
-    fetchMoList({ perPage: 200 })
+    fetchShipments({ perPage: 200 })
       .then(data => {
         const rows = data?.data || data?.records || data?.result || []
-        setMoList(rows)
+        setContainers(rows)
       })
       .catch(err => {
-        console.error('[ShipmentData]', err)
+        console.error('[useShipmentData]', err)
         setError(err.message)
       })
       .finally(() => setLoading(false))
@@ -76,14 +64,33 @@ export default function useShipmentData() {
     return () => window.removeEventListener('iku:refresh', loadData)
   }, [loadData])
 
-  const currentMonthKey = useMemo(() => {
-    const now = new Date()
-    return `${String(now.getFullYear()).slice(-2)}.${String(now.getMonth() + 1).padStart(2, '0')}`
+  const today = useMemo(() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return d
   }, [])
 
-  const monthKeys = useMemo(() =>
-    [...new Set(moList.map(getShipMonthKey).filter(Boolean))].sort().reverse()
-  , [moList])
+  const categorized = useMemo(() => {
+    const groups = { imminent: [], sea: [], port: [], warehouse: [], pending: [] }
+    containers.forEach(c => {
+      const key = classifyContainer(c, today)
+      if (groups[key]) groups[key].push(c)
+      else groups.pending.push(c)
+    })
+    return groups
+  }, [containers, today])
 
-  return { moList, loading, error, monthKeys, currentMonthKey }
+  const stats = useMemo(() => {
+    const imminent = categorized.imminent.length
+    const sea = categorized.sea.length
+    // 통관 지연: ETA passed + ATA not recorded
+    const customsDelayed = containers.filter(c => {
+      const eta = c.ETA ? parseZohoDate(c.ETA) : null
+      const ata = c.ATA ? parseZohoDate(c.ATA) : null
+      return eta && eta < today && !ata
+    }).length
+    return { imminent, sea, customsDelayed, total: containers.length }
+  }, [containers, categorized, today])
+
+  return { containers, loading, error, categorized, stats, today, loadData }
 }

@@ -24,6 +24,12 @@ export async function fetchStyleDetail(sku) {
   return apiFetch(`/api/style-detail?sku=${encodeURIComponent(sku)}`)
 }
 
+export async function fetchShipments(params = {}) {
+  const qs = new URLSearchParams()
+  if (params.perPage) qs.set('max_records', params.perPage)
+  return apiFetch(`/api/get-shipments?${qs}`)
+}
+
 export function zohoImageUrl(report, recordId, field) {
   return `/api/zoho-image?report=${encodeURIComponent(report)}&recordId=${encodeURIComponent(recordId)}&field=${encodeURIComponent(field)}`
 }

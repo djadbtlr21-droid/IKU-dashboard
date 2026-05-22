@@ -1,518 +1,378 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import {
-  Truck, Package, CheckCircle2, AlertTriangle,
-  Layers, Search, Calendar, ArrowRight,
+  AlertTriangle, Ship, Anchor, Warehouse,
+  Layers, Search, ArrowRight, RefreshCw,
 } from 'lucide-react'
-import MoDetailModal from '../components/MoDetailModal'
-import ZohoImage from '../components/ZohoImage'
+import ContainerDetailModal from '../components/ContainerDetailModal'
 import { SkeletonCard } from '../components/SkeletonLoader'
-import {
-  getMoNumber, getMoSku, getMoFactory,
-  getPlanQty, getActualQty, parseZohoDate,
-} from '../utils/moHelpers'
-import useShipmentData, { shipCat, getShipMonthKey } from '../hooks/useShipmentData'
+import useShipmentData, { classifyContainer } from '../hooks/useShipmentData'
 
 // ─── Constants ────────────────────────────────────────────
 
-const SHIP_CATS = {
-  shipped:  { kr: '출고완료', cn: '已出货',  color: '#10B981', bg: 'rgba(16,185,129,0.82)' },
-  imminent: { kr: '출고임박', cn: '即将出货', color: '#C9A86E', bg: 'rgba(201,168,110,0.88)' },
-  delayed:  { kr: '출고지연', cn: '出货延误', color: '#EF4444', bg: 'rgba(239,68,68,0.82)' },
-  ready:    { kr: '출고대기', cn: '待出货',   color: '#8B5CF6', bg: 'rgba(139,92,246,0.82)' },
-  inprod:   { kr: '생산중',   cn: '生产中',   color: '#94A3B8', bg: 'rgba(100,116,139,0.72)' },
-}
-
-const SHIP_STAGES = [
-  { key: 'inprod',   kr: '생산중',   cn: '生产中',  hue: '#94A3B8', Icon: Package },
-  { key: 'ready',    kr: '출고대기', cn: '待出货',  hue: '#8B5CF6', Icon: CheckCircle2 },
-  { key: 'imminent', kr: '출고임박', cn: '即将出货', hue: '#C9A86E', Icon: AlertTriangle },
-  { key: 'delayed',  kr: '출고지연', cn: '出货延误', hue: '#EF4444', Icon: AlertTriangle },
-  { key: 'shipped',  kr: '출고완료', cn: '已出货',  hue: '#10B981', Icon: Truck },
+const PIPELINE_STAGES = [
+  { key: 'imminent',  kr: '출고임박',  cn: '即将出货',  hue: '#F59E0B', Icon: AlertTriangle },
+  { key: 'sea',       kr: '해상이동중', cn: '海运中',    hue: '#8B5CF6', Icon: Ship },
+  { key: 'port',      kr: '항구도착',  cn: '已到港',    hue: '#0EA5E9', Icon: Anchor },
+  { key: 'warehouse', kr: '창고도착',  cn: '仓库到达',  hue: '#10B981', Icon: Warehouse },
 ]
 
-// ─── CircularProgress ─────────────────────────────────────
-
-function CircularProgress({ G, value, size = 80, stroke = 9 }) {
-  const r = (size - stroke) / 2
-  const c = 2 * Math.PI * r
-  const pct = Math.max(0, Math.min(100, value || 0))
-  const dash = (pct / 100) * c
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={G.hair} strokeWidth={stroke} />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={G.primary} strokeWidth={stroke}
-        strokeLinecap="round" strokeDasharray={`${dash} ${c}`}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        style={{ transition: "stroke-dasharray .6s ease" }} />
-      <text x="50%" y="50%" textAnchor="middle" dy="0.35em" fill={G.tx}
-        fontSize={size / 4} fontWeight={700} fontFamily="'Plus Jakarta Sans',sans-serif">
-        {Math.round(pct)}%
-      </text>
-    </svg>
-  )
+const STATUS_DISPLAY = {
+  imminent:  { kr: '출고임박',  cn: '即将出货',  hue: '#F59E0B', bg: 'rgba(245,158,11,0.82)' },
+  sea:       { kr: '해상이동중', cn: '海运中',    hue: '#8B5CF6', bg: 'rgba(139,92,246,0.82)' },
+  port:      { kr: '항구도착',  cn: '已到港',    hue: '#0EA5E9', bg: 'rgba(14,165,233,0.82)' },
+  warehouse: { kr: '창고도착',  cn: '仓库到达',  hue: '#10B981', bg: 'rgba(16,185,129,0.82)' },
+  pending:   { kr: '출고대기',  cn: '待出货',    hue: '#94A3B8', bg: 'rgba(100,116,139,0.72)' },
 }
 
-// ─── MiniKPI ──────────────────────────────────────────────
+// ─── KPI card ─────────────────────────────────────────────
 
-function MiniKPI({ G, label, value, dot, onClick }) {
+function KPICard({ G, label, sublabel, count, hue, Icon, onClick, loading }) {
   return (
     <div
+      className="card"
       onClick={onClick}
       style={{
-        padding: "10px 12px", borderRadius: 10, background: G.cardAlt,
-        border: `1px solid ${G.hair}`, cursor: onClick ? "pointer" : "default",
-        transition: "border-color .15s, transform .15s",
+        padding: '20px 22px', cursor: onClick ? 'pointer' : 'default',
+        transition: 'transform .15s',
+        borderColor: G.dk ? `${hue}44` : G.border,
       }}
-      onMouseEnter={onClick ? e => { e.currentTarget.style.borderColor = G.primary; e.currentTarget.style.transform = "translateY(-1px)" } : undefined}
-      onMouseLeave={onClick ? e => { e.currentTarget.style.borderColor = G.hair; e.currentTarget.style.transform = "" } : undefined}
+      onMouseEnter={e => { if (onClick) e.currentTarget.style.transform = 'translateY(-2px)' }}
+      onMouseLeave={e => { e.currentTarget.style.transform = '' }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-        <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot }} />
-        <span style={{ fontSize: 10, color: G.mu, fontWeight: 500, letterSpacing: ".3px" }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: 10,
+          background: `${hue}18`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icon size={18} style={{ color: hue }} />
+        </div>
+        <div className="num syne" style={{
+          fontSize: 38, fontWeight: 700, color: hue, lineHeight: 1,
+        }}>
+          {loading ? '—' : count}
+        </div>
       </div>
-      <div className="num" style={{ fontSize: 20, fontWeight: 700, color: G.tx, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: G.tx, marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 10, color: G.mu }}>{sublabel}</div>
     </div>
   )
 }
 
-// ─── ShipCard ─────────────────────────────────────────────
+// ─── Container card ───────────────────────────────────────
 
-function ShipCard({ G, mo, onClick }) {
-  const cat = shipCat(mo)
-  const catInfo = SHIP_CATS[cat]
-  const planQ = getPlanQty(mo)
-  const actQ = getActualQty(mo)
-  const chiName = typeof mo.Chi_Style_Name === 'string'
-    ? mo.Chi_Style_Name : (mo.Chi_Style_Name?.zc_display_value || '')
-  const buyer = typeof mo.Buyer === 'string'
-    ? mo.Buyer : (mo.Buyer?.zc_display_value || mo.Buyer?.Buyer_Name || '')
+function ContainerCard({ G, container, today, onClick }) {
+  const status = classifyContainer(container, today)
+  const sd = STATUS_DISPLAY[status] || STATUS_DISPLAY.pending
+  const blNumber = container.B_L_Number || container.BL_Number || ''
 
   return (
     <div
       onClick={onClick}
+      className="card"
       style={{
-        background: G.card, border: `1px solid ${G.border}`, borderRadius: 12,
-        overflow: "hidden", cursor: "pointer",
-        transition: "transform .15s, box-shadow .15s, border-color .15s",
-        display: "flex", flexDirection: "column",
+        cursor: 'pointer', overflow: 'hidden',
+        transition: 'transform .15s, box-shadow .15s, border-color .15s',
+        display: 'flex', flexDirection: 'column',
       }}
-      onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = G.cardShadow; e.currentTarget.style.borderColor = catInfo.color }}
-      onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; e.currentTarget.style.borderColor = G.border }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = G.cardShadow; e.currentTarget.style.borderColor = sd.hue }}
+      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; e.currentTarget.style.borderColor = G.border }}
     >
-      {/* Image */}
-      <div style={{ height: 260, background: G.cardAlt, position: "relative", overflow: "hidden" }}>
-        <ZohoImage mo={mo} field="Style_Image" G={G} alt={getMoNumber(mo)} iconSize={28} />
-        <div style={{
-          position: "absolute", bottom: 0, left: 0, right: 0,
-          padding: "6px 10px", background: catInfo.bg,
-          fontSize: 11, textAlign: "center", fontWeight: 700,
-          color: "#FFF", letterSpacing: ".3px",
-          textShadow: "0 1px 3px rgba(0,0,0,0.6)",
-        }}>
-          {catInfo.kr} · {catInfo.cn}
-        </div>
+      {/* Status badge strip */}
+      <div style={{
+        padding: '7px 14px',
+        background: sd.bg,
+        fontSize: 11, fontWeight: 700, color: '#FFF',
+        letterSpacing: '.3px', textAlign: 'center',
+        textShadow: '0 1px 3px rgba(0,0,0,0.5)',
+      }}>
+        {sd.kr} · {sd.cn}
       </div>
 
       {/* Body */}
-      <div style={{ padding: "10px 12px", fontSize: 11, flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 8, color: G.mu, letterSpacing: ".5px", fontWeight: 600 }}>MO#</div>
-        <div className="num" title={getMoNumber(mo)} style={{
-          fontSize: 14, fontWeight: 700, color: G.accent, marginBottom: 6,
-          letterSpacing: "-.2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      <div style={{ padding: '14px 16px', flex: 1, minWidth: 0 }}>
+        {/* Container ID */}
+        <div style={{ fontSize: 8, color: G.mu, letterSpacing: '.5px', fontWeight: 600 }}>컨테이너 / 柜号</div>
+        <div className="num syne" title={container.Container_ID} style={{
+          fontSize: 16, fontWeight: 700, color: G.accent,
+          marginBottom: 4, letterSpacing: '-.2px',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>
-          {getMoNumber(mo)}
+          {container.Container_ID || '(미등록)'}
         </div>
 
-        <div style={{ fontSize: 8, color: G.mu, letterSpacing: ".5px" }}>SKU</div>
-        <div title={getMoSku(mo)} style={{
-          fontSize: 10, color: G.tx, marginBottom: 4, lineHeight: 1.3,
-          fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-        }}>
-          {getMoSku(mo)}
-        </div>
-
-        {chiName && (
+        {/* Route */}
+        {(container.Origin_Port || container.Destination_Port) && (
           <>
-            <div style={{ fontSize: 8, color: G.mu, letterSpacing: ".5px" }}>CN</div>
-            <div title={chiName} style={{
-              fontSize: 10, color: G.tx, marginBottom: 4, lineHeight: 1.3,
-              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            <div style={{ fontSize: 8, color: G.mu, letterSpacing: '.5px', fontWeight: 600 }}>루트 / 航线</div>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              fontSize: 11, color: G.tx, marginBottom: 8, fontWeight: 500,
+              whiteSpace: 'nowrap', overflow: 'hidden',
             }}>
-              {chiName}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{container.Origin_Port || '—'}</span>
+              <ArrowRight size={11} style={{ color: G.fa, flexShrink: 0 }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{container.Destination_Port || '—'}</span>
             </div>
           </>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px", fontSize: 9, color: G.mu, marginTop: 4 }}>
-          <span>공장</span>
-          <span title={getMoFactory(mo)} style={{
-            color: G.tx, textAlign: "right",
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        {/* Key dates */}
+        <div style={{ fontSize: 9, color: G.mu, lineHeight: 1.8, marginBottom: 10 }}>
+          {container.Stuffing_Date && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Stuffing</span>
+              <span className="num" style={{ color: G.tx }}>{container.Stuffing_Date}</span>
+            </div>
+          )}
+          {container.ETD && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>ETD</span>
+              <span className="num" style={{ color: G.tx }}>{container.ETD}</span>
+            </div>
+          )}
+          {container.ATD && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>ATD</span>
+              <span className="num" style={{ color: G.ok, fontWeight: 600 }}>{container.ATD}</span>
+            </div>
+          )}
+          {container.ETA && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>ETA</span>
+              <span className="num" style={{ color: G.tx }}>{container.ETA}</span>
+            </div>
+          )}
+          {container.ATA && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>ATA</span>
+              <span className="num" style={{ color: G.ok, fontWeight: 600 }}>{container.ATA}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Mini stats row */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+          {[
+            { label: 'Cartons', value: container.Total_Cartons },
+            { label: 'Qty',     value: container.Total_Quantity },
+            { label: 'CBM',     value: container.Total_CBM },
+          ].map(({ label, value }) => (
+            <div key={label} style={{
+              flex: 1, textAlign: 'center', padding: '5px 4px',
+              background: G.cardAlt, borderRadius: 6, border: `1px solid ${G.hair}`,
+            }}>
+              <div className="num" style={{ fontSize: 12, fontWeight: 700, color: G.tx, lineHeight: 1 }}>
+                {value != null && value !== '' ? Number(value).toLocaleString() : '—'}
+              </div>
+              <div style={{ fontSize: 8, color: G.mu, marginTop: 2, letterSpacing: '.3px' }}>{label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Freight cost */}
+        {(container.Freight_Cost || container.Freight_Cost === 0) && (
+          <div style={{
+            padding: '6px 10px',
+            background: G.dk ? 'rgba(147,197,253,0.1)' : '#EEF2FF',
+            borderRadius: 6, display: 'flex', justifyContent: 'space-between',
+            fontSize: 10,
           }}>
-            {getMoFactory(mo)}
-          </span>
-          {buyer && (
-            <>
-              <span>바이어</span>
-              <span title={buyer} style={{
-                color: G.tx, textAlign: "right",
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              }}>
-                {buyer}
-              </span>
-            </>
-          )}
-        </div>
+            <span style={{ color: G.mu, fontWeight: 600 }}>Freight</span>
+            <span className="num" style={{ color: G.tx, fontWeight: 700 }}>
+              {Number(container.Freight_Cost).toLocaleString(undefined, { minimumFractionDigits: 2 })} {container.Currency || 'USD'}
+            </span>
+          </div>
+        )}
 
-        {/* Qty rows */}
-        <div style={{
-          marginTop: 8, padding: "5px 8px",
-          background: G.dk ? "rgba(147,197,253,0.12)" : "#EEF2FF",
-          borderRadius: 4, display: "flex", justifyContent: "space-between", whiteSpace: "nowrap",
-        }}>
-          <span style={{ fontSize: 9, fontWeight: 700, color: G.dk ? "#93C5FD" : "#4338CA", letterSpacing: ".5px" }}>PLAN</span>
-          <span className="num" style={{ fontSize: 11, fontWeight: 700, color: G.tx }}>{planQ.toLocaleString()} pcs</span>
-        </div>
-        <div style={{
-          marginTop: 3, padding: "5px 8px",
-          background: G.dk ? "rgba(110,231,183,0.12)" : "#F0FDF4",
-          borderRadius: 4, display: "flex", justifyContent: "space-between", whiteSpace: "nowrap",
-        }}>
-          <span style={{ fontSize: 9, fontWeight: 700, color: G.dk ? "#6EE7B7" : "#16A34A", letterSpacing: ".5px" }}>ACT</span>
-          <span className="num" style={{ fontSize: 11, fontWeight: 700, color: G.tx }}>{actQ.toLocaleString()} pcs</span>
-        </div>
-
-        {/* Dates */}
-        <div style={{ marginTop: 8, fontSize: 9, color: G.mu, lineHeight: 1.7 }}>
-          {mo.Expected_Delivery && (
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ whiteSpace: "nowrap" }}>계획출고</span>
-              <span className="num" style={{
-                color: cat === 'delayed' ? G.bad : G.tx,
-                fontWeight: cat === 'delayed' ? 700 : 400,
-                whiteSpace: "nowrap",
-              }}>
-                {mo.Expected_Delivery}
-              </span>
-            </div>
-          )}
-          {mo.Ship_Date && (
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ whiteSpace: "nowrap" }}>실제출고</span>
-              <span className="num" style={{ color: G.ok, fontWeight: 600, whiteSpace: "nowrap" }}>
-                {mo.Ship_Date}
-              </span>
-            </div>
-          )}
-          {!mo.Ship_Date && !mo.Expected_Delivery && (
-            <div style={{ color: G.fa, fontSize: 9 }}>출고일 미정 · 未定</div>
-          )}
-        </div>
-
-        {/* Status badge */}
-        <div style={{
-          marginTop: 6, padding: "4px 8px", borderRadius: 4,
-          background: SHIP_CATS[cat].bg.replace(/[\d.]+\)$/, "0.15)"),
-          fontSize: 10, textAlign: "center",
-          color: catInfo.color, fontWeight: 700,
-          border: `1px solid ${catInfo.color}40`,
-        }}>
-          {catInfo.kr}
-        </div>
+        {/* B/L number if available */}
+        {blNumber && (
+          <div style={{ marginTop: 6, fontSize: 9, color: G.fa, display: 'flex', justifyContent: 'space-between' }}>
+            <span>B/L</span>
+            <span className="num" style={{ color: G.mu }}>{blNumber}</span>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────
+// ─── Main page ────────────────────────────────────────────
 
 export default function ShipmentPage({ G }) {
-  const { moList, loading, error, monthKeys, currentMonthKey } = useShipmentData()
+  const { containers, loading, error, categorized, stats, today, loadData } = useShipmentData()
 
-  const [selectedMonth, setSelectedMonth] = useState(null)
-  const [filterCat, setFilterCat] = useState('all')
-  const [filterFactory, setFilterFactory] = useState('')
+  const [filterStage, setFilterStage] = useState('all')
+  const [filterOrigin, setFilterOrigin] = useState('')
+  const [filterDest, setFilterDest] = useState('')
   const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState('date_asc')
-  const [selectedMo, setSelectedMo] = useState(null)
+  const [selectedContainer, setSelectedContainer] = useState(null)
 
-  // Default to current month (or latest available)
-  useEffect(() => {
-    if (selectedMonth === null && monthKeys.length) {
-      setSelectedMonth(monthKeys.includes(currentMonthKey) ? currentMonthKey : monthKeys[0])
-    }
-  }, [monthKeys, currentMonthKey, selectedMonth])
+  // Unique origin / dest ports
+  const origins = useMemo(() =>
+    [...new Set(containers.map(c => c.Origin_Port).filter(Boolean))].sort()
+  , [containers])
 
-  const monthMOs = useMemo(() => {
-    if (!selectedMonth) return moList
-    return moList.filter(m => getShipMonthKey(m) === selectedMonth)
-  }, [moList, selectedMonth])
+  const dests = useMemo(() =>
+    [...new Set(containers.map(c => c.Destination_Port).filter(Boolean))].sort()
+  , [containers])
 
-  const factories = useMemo(() =>
-    [...new Set(monthMOs.map(getMoFactory).filter(f => f && f !== '—'))]
-  , [monthMOs])
-
-  const categorized = useMemo(() => {
-    const groups = { shipped: [], imminent: [], delayed: [], ready: [], inprod: [] }
-    monthMOs.forEach(mo => {
-      const c = shipCat(mo)
-      if (groups[c]) groups[c].push(mo)
-    })
-    return groups
-  }, [monthMOs])
-
-  const stats = useMemo(() => {
-    const total = monthMOs.length
-    const shipped = categorized.shipped.length
-    const delayed = categorized.delayed.length
-    const imminent = categorized.imminent.length
-    const ready = categorized.ready.length
-    const planTotal = monthMOs.reduce((s, m) => s + getPlanQty(m), 0)
-    const actTotal = monthMOs.reduce((s, m) => s + getActualQty(m), 0)
-    const shipPct = total ? Math.min(100, (shipped / total) * 100) : 0
-    return { total, shipped, delayed, imminent, ready, planTotal, actTotal, shipPct }
-  }, [monthMOs, categorized])
-
-  const stageCounts = useMemo(() => {
-    const c = {}
-    SHIP_STAGES.forEach(s => { c[s.key] = categorized[s.key]?.length || 0 })
-    return c
-  }, [categorized])
-
-  const displayedMOs = useMemo(() => {
-    let list = filterCat === 'all' ? monthMOs : (categorized[filterCat] || [])
-    if (filterFactory) list = list.filter(m => getMoFactory(m) === filterFactory)
+  // Apply filters
+  const displayed = useMemo(() => {
+    let list = filterStage === 'all'
+      ? containers
+      : (categorized[filterStage] || [])
+    if (filterOrigin) list = list.filter(c => c.Origin_Port === filterOrigin)
+    if (filterDest)   list = list.filter(c => c.Destination_Port === filterDest)
     if (search) {
       const q = search.toLowerCase()
-      list = list.filter(m => {
-        const blob = `${getMoNumber(m)} ${getMoSku(m)} ${getMoFactory(m)} ${m.Eng_Style_Name || ''} ${m.Chi_Style_Name || ''}`.toLowerCase()
+      const blKey1 = 'B_L_Number', blKey2 = 'BL_Number'
+      list = list.filter(c => {
+        const blob = [
+          c.Container_ID, c[blKey1], c[blKey2], c.Origin_Port, c.Destination_Port,
+          c.Shipping_Line, c.Vessel_Name,
+        ].filter(Boolean).join(' ').toLowerCase()
         return blob.includes(q)
       })
     }
-    return [...list].sort((a, b) => {
-      const da = parseZohoDate(a.Expected_Delivery)
-      const db = parseZohoDate(b.Expected_Delivery)
-      if (!da && !db) return 0
-      if (!da) return 1
-      if (!db) return -1
-      return sortBy === 'date_asc' ? da - db : db - da
-    })
-  }, [monthMOs, categorized, filterCat, filterFactory, search, sortBy])
+    return list
+  }, [containers, categorized, filterStage, filterOrigin, filterDest, search])
 
-  const monthLabel = selectedMonth || 'All'
   const selStyle = {
-    padding: "8px 12px", borderRadius: 8, fontSize: 12,
+    padding: '8px 12px', borderRadius: 8, fontSize: 12,
     border: `1px solid ${G.border}`, background: G.card,
-    color: G.tx, outline: "none", fontFamily: "inherit",
+    color: G.tx, outline: 'none', fontFamily: 'inherit',
   }
 
   return (
     <div style={{ animation: 'fadeIn 0.4s ease' }}>
 
       {/* ── Header ── */}
-      <div className="card" style={{ padding: "18px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+      <div className="card" style={{ padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
         {G.dk && <span className="rail" />}
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <span className="syne" style={{
-            background: '#8B5CF6', color: "#FFF",
-            padding: "5px 12px", borderRadius: 4,
-            fontWeight: 700, fontSize: 13, letterSpacing: "1px",
+            background: '#8B5CF6', color: '#FFF',
+            padding: '5px 12px', borderRadius: 4,
+            fontWeight: 700, fontSize: 13, letterSpacing: '1px',
           }}>
             SHIP
           </span>
           <div>
-            <div className="syne" style={{ fontSize: 18, fontWeight: 700, color: G.tx, letterSpacing: "-.3px" }}>Shipment</div>
-            <div style={{ fontSize: 11, color: G.mu, marginTop: 1 }}>출고현황표 · 出货状况表</div>
+            <div className="syne" style={{ fontSize: 18, fontWeight: 700, color: G.tx, letterSpacing: '-.3px' }}>
+              Shipment / 出货管理
+            </div>
+            <div style={{ fontSize: 11, color: G.mu, marginTop: 1 }}>출고 관리표 · 出货管理表</div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: G.mu }}>
-          <Truck size={14} style={{ color: '#8B5CF6' }} />
-          <span className="num">{loading ? "—" : `${stats.total} MO`}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span className="num" style={{ fontSize: 11, color: G.mu }}>
+            {loading ? '—' : `${stats.total} containers`}
+          </span>
+          <button
+            onClick={loadData}
+            disabled={loading}
+            style={{
+              background: 'transparent', border: `1px solid ${G.border}`,
+              borderRadius: 8, cursor: loading ? 'wait' : 'pointer',
+              padding: '8px 10px', color: G.mu,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              minWidth: 36, minHeight: 36, transition: 'border-color .15s, color .15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = G.primary; e.currentTarget.style.color = G.accent }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = G.border; e.currentTarget.style.color = G.mu }}
+          >
+            <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+          </button>
         </div>
       </div>
-
-      {/* ── Month tabs ── */}
-      {monthKeys.length > 0 && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}>
-          {monthKeys.slice(0, 6).map(k => {
-            const active = k === selectedMonth
-            return (
-              <button
-                key={k}
-                onClick={() => setSelectedMonth(k)}
-                className="chip"
-                style={{
-                  border: `1px solid ${active ? G.primary : G.border}`,
-                  background: active ? (G.dk ? "rgba(232,200,152,0.12)" : "rgba(201,168,110,0.12)") : "transparent",
-                  color: active ? G.accent : G.mu, fontWeight: 600,
-                }}
-              >
-                {k}
-              </button>
-            )
-          })}
-        </div>
-      )}
 
       {error && (
-        <div style={{ marginBottom: 16, padding: 14, borderRadius: 10, fontSize: 13, color: G.bad, background: `${G.bad}1A`, border: `1px solid ${G.bad}40` }}>
-          <strong>오류 · 错误:</strong> {error}
+        <div style={{ marginBottom: 16, padding: 14, borderRadius: 10, fontSize: 13, color: G.bad, background: `${G.bad}1A`, border: `1px solid ${G.bad}40`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span><strong>오류 · 错误:</strong> {error}</span>
+          <button onClick={loadData} style={{ padding: '6px 12px', borderRadius: 8, fontSize: 12, border: `1px solid ${G.bad}`, background: 'transparent', color: G.bad, cursor: 'pointer', fontFamily: 'inherit' }}>
+            재시도 · 重试
+          </button>
         </div>
       )}
 
-      {/* ── KPI Row ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 1fr", gap: 16, marginBottom: 18 }} className="kgr">
-
-        {/* Summary */}
-        <div className="card" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          {G.dk && <span className="rail" />}
-          <div style={{ fontSize: 11, color: G.mu, letterSpacing: "1px", fontWeight: 600, marginBottom: 8 }}>SUMMARY</div>
-          <div className="syne" style={{ fontSize: 22, fontWeight: 700, color: G.tx, letterSpacing: "-.3px", lineHeight: 1.1 }}>{monthLabel}</div>
-          <div style={{ fontSize: 11, color: G.mu, marginTop: 3 }}>월별 출고 · 月度出货</div>
-          <div style={{ marginTop: 14, fontSize: 11, color: G.mu, lineHeight: 1.7 }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>총 MO</span>
-              <span className="num" style={{ color: G.tx, fontWeight: 600 }}>{loading ? "—" : stats.total.toLocaleString()}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>출고완료</span>
-              <span className="num" style={{ color: G.ok, fontWeight: 600 }}>{loading ? "—" : stats.shipped.toLocaleString()}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>출고임박</span>
-              <span className="num" style={{ color: '#C9A86E', fontWeight: 600 }}>{loading ? "—" : stats.imminent.toLocaleString()}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>지연</span>
-              <span className="num" style={{ color: G.bad, fontWeight: 600 }}>{loading ? "—" : stats.delayed.toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Center KPI */}
-        <div className="card" style={{ padding: "20px 24px" }}>
-          {G.dk && <span className="rail" />}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-            <Calendar size={14} style={{ color: G.accent }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: G.tx }}>{monthLabel} 출고 KPI · 出货 KPI</span>
-          </div>
-          {loading ? (
-            <SkeletonCard G={G} />
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-              <CircularProgress G={G} value={stats.shipPct} size={84} />
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, flex: 1 }}>
-                <MiniKPI G={G} label="총 MO / 总订单" value={stats.total} dot="#93C5FD"
-                  onClick={() => setFilterCat('all')} />
-                <MiniKPI G={G} label="출고완료 / 已出货" value={stats.shipped} dot="#10B981"
-                  onClick={() => setFilterCat('shipped')} />
-                <MiniKPI G={G} label="출고임박 / 即将出货" value={stats.imminent} dot="#C9A86E"
-                  onClick={() => setFilterCat('imminent')} />
-                <MiniKPI G={G} label="출고지연 / 出货延误" value={stats.delayed} dot="#EF4444"
-                  onClick={() => setFilterCat('delayed')} />
-              </div>
-            </div>
-          )}
-          <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${G.hair}`, display: "flex", gap: 18, fontSize: 11, color: G.mu, flexWrap: "wrap" }}>
-            <span><b style={{ color: "#93C5FD" }}>PLAN</b> <span className="num" style={{ color: G.tx, fontWeight: 600 }}>{stats.planTotal.toLocaleString()}</span> pcs</span>
-            <span><b style={{ color: "#10B981" }}>ACT</b> <span className="num" style={{ color: G.tx, fontWeight: 600 }}>{stats.actTotal.toLocaleString()}</span> pcs</span>
-          </div>
-        </div>
-
-        {/* Delay alert */}
-        <div
-          className="card"
-          onClick={() => stats.delayed && setFilterCat('delayed')}
-          style={{
-            padding: "20px 22px",
-            background: G.dk ? "rgba(161,78,58,0.12)" : "#FDF0EE",
-            borderColor: G.bad,
-            cursor: stats.delayed ? "pointer" : "default",
-            transition: "transform .15s",
-          }}
-          onMouseEnter={e => { if (stats.delayed) e.currentTarget.style.transform = "translateY(-1px)" }}
-          onMouseLeave={e => { e.currentTarget.style.transform = "" }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <AlertTriangle size={14} style={{ color: G.bad }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: G.bad, letterSpacing: ".3px" }}>출고 지연 · 出货延误</span>
-          </div>
-          <div className="num syne" style={{ fontSize: 36, fontWeight: 700, color: G.bad, textAlign: "center", lineHeight: 1 }}>
-            {loading ? "—" : stats.delayed}
-          </div>
-          <div style={{ textAlign: "center", fontSize: 10, color: G.mu, marginBottom: 10, letterSpacing: ".5px" }}>건 지연 / 件延误</div>
-          <div style={{ maxHeight: 100, overflowY: "auto", display: "flex", flexDirection: "column", gap: 5 }}>
-            {categorized.delayed.slice(0, 4).map(mo => (
-              <div
-                key={mo.ID || getMoNumber(mo)}
-                onClick={e => { e.stopPropagation(); setSelectedMo({ id: mo.ID, row: mo }) }}
-                style={{
-                  padding: "5px 9px", background: G.surf, borderRadius: 5, fontSize: 11,
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  cursor: "pointer", border: `1px solid ${G.hair}`,
-                }}
-              >
-                <span className="num" style={{ fontWeight: 600, color: G.accent }}>{getMoNumber(mo)}</span>
-                <span style={{ background: G.bad, color: "#FFF", padding: "1px 6px", borderRadius: 3, fontSize: 9, fontWeight: 600 }}>지연</span>
-              </div>
-            ))}
-            {!loading && stats.delayed === 0 && (
-              <div style={{ padding: 8, fontSize: 11, color: G.mu, textAlign: "center" }}>지연 없음 ✓</div>
-            )}
-          </div>
-        </div>
+      {/* ── KPI 3-col ── */}
+      <div className="ship-kpi">
+        <KPICard G={G} loading={loading}
+          label="선적 임박 · 临近装运"
+          sublabel="ETD 7일 이내 · 7天内出货"
+          count={stats.imminent} hue="#F59E0B" Icon={AlertTriangle}
+          onClick={() => setFilterStage(filterStage === 'imminent' ? 'all' : 'imminent')}
+        />
+        <KPICard G={G} loading={loading}
+          label="운송 중 · 运输中"
+          sublabel="ATD 등록, ATA 미등록"
+          count={stats.sea} hue="#8B5CF6" Icon={Ship}
+          onClick={() => setFilterStage(filterStage === 'sea' ? 'all' : 'sea')}
+        />
+        <KPICard G={G} loading={loading}
+          label="통관 지연 · 清关延误"
+          sublabel="ETA 경과 + ATA 없음"
+          count={stats.customsDelayed} hue={G.bad} Icon={AlertTriangle}
+          onClick={stats.customsDelayed ? () => {
+            // filter to delayed items
+            setFilterStage('all')
+            setSearch('')
+          } : undefined}
+        />
       </div>
 
-      {/* ── Shipment Pipeline ── */}
-      <div className="card" style={{ padding: "20px 24px", marginBottom: 18 }}>
+      {/* ── Pipeline 4 stages ── */}
+      <div className="card" style={{ padding: '20px 24px', marginBottom: 18 }}>
         {G.dk && <span className="rail" />}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
           <Layers size={14} style={{ color: G.accent }} />
-          <span className="syne" style={{ fontSize: 14, fontWeight: 700, color: G.tx, letterSpacing: "-.2px" }}>
+          <span className="syne" style={{ fontSize: 14, fontWeight: 700, color: G.tx, letterSpacing: '-.2px' }}>
             출고 파이프라인 · 出货流水
           </span>
-          <span className="num" style={{ fontSize: 11, color: G.mu, marginLeft: 4 }}>총 {monthMOs.length}건</span>
+          <span className="num" style={{ fontSize: 11, color: G.mu, marginLeft: 4 }}>
+            총 {containers.length}건
+          </span>
         </div>
-        <div className="pipeline-scroll" style={{ display: "flex", alignItems: "stretch", gap: 0, overflowX: "auto", padding: "4px 0" }}>
-          {SHIP_STAGES.map((stage, i) => {
-            const count = stageCounts[stage.key] || 0
-            const isActive = filterCat === stage.key
+        <div className="pipeline-scroll" style={{ display: 'flex', alignItems: 'stretch', gap: 0, overflowX: 'auto', padding: '4px 0' }}>
+          {PIPELINE_STAGES.map((stage, i) => {
+            const count = categorized[stage.key]?.length || 0
+            const isActive = filterStage === stage.key
             return (
-              <div key={stage.key} style={{ display: "flex", alignItems: "center", flex: 1 }}>
+              <div key={stage.key} style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
                 <div
-                  onClick={() => setFilterCat(isActive ? 'all' : stage.key)}
+                  onClick={() => setFilterStage(isActive ? 'all' : stage.key)}
                   style={{
-                    flex: 1, minWidth: 108, padding: "16px 10px", minHeight: 130,
-                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8,
-                    borderRadius: 12, cursor: "pointer",
+                    flex: 1, minWidth: 108, padding: '16px 10px', minHeight: 130,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    borderRadius: 12, cursor: 'pointer',
                     background: isActive
                       ? `${stage.hue}22`
-                      : (G.dk ? "rgba(245,240,232,0.025)" : "rgba(201,168,110,0.04)"),
-                    transition: "background .15s, transform .15s",
-                    border: isActive ? `1px solid ${stage.hue}` : "1px solid transparent",
+                      : (G.dk ? 'rgba(245,240,232,0.025)' : 'rgba(201,168,110,0.04)'),
+                    transition: 'background .15s, transform .15s',
+                    border: isActive ? `1px solid ${stage.hue}` : '1px solid transparent',
                   }}
                   onMouseEnter={e => {
                     e.currentTarget.style.background = `${stage.hue}1A`
                     if (!isActive) e.currentTarget.style.borderColor = stage.hue
-                    e.currentTarget.style.transform = "translateY(-2px)"
+                    e.currentTarget.style.transform = 'translateY(-2px)'
                   }}
                   onMouseLeave={e => {
                     e.currentTarget.style.background = isActive
                       ? `${stage.hue}22`
-                      : (G.dk ? "rgba(245,240,232,0.025)" : "rgba(201,168,110,0.04)")
-                    if (!isActive) e.currentTarget.style.borderColor = "transparent"
-                    e.currentTarget.style.transform = ""
+                      : (G.dk ? 'rgba(245,240,232,0.025)' : 'rgba(201,168,110,0.04)')
+                    if (!isActive) e.currentTarget.style.borderColor = 'transparent'
+                    e.currentTarget.style.transform = ''
                   }}
                 >
                   <stage.Icon size={34} strokeWidth={1.5} style={{ color: stage.hue }} />
                   <div className="num" style={{ fontSize: 26, fontWeight: 700, color: stage.hue, lineHeight: 1 }}>{count}</div>
-                  <div style={{ textAlign: "center" }}>
+                  <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: G.tx }}>{stage.kr}</div>
-                    <div style={{ fontSize: 9, color: G.mu, letterSpacing: ".3px" }}>{stage.cn}</div>
+                    <div style={{ fontSize: 9, color: G.mu, letterSpacing: '.3px' }}>{stage.cn}</div>
                   </div>
                 </div>
-                {i < SHIP_STAGES.length - 1 && (
-                  <ArrowRight size={13} style={{ color: G.fa, flexShrink: 0, margin: "0 2px" }} />
+                {i < PIPELINE_STAGES.length - 1 && (
+                  <ArrowRight size={13} style={{ color: G.fa, flexShrink: 0, margin: '0 2px' }} />
                 )}
               </div>
             )
@@ -521,92 +381,103 @@ export default function ShipmentPage({ G }) {
       </div>
 
       {/* ── Filters ── */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         {/* Search */}
-        <div style={{ position: "relative", flex: "1 1 200px", minWidth: 160 }}>
-          <Search size={13} style={{ position: "absolute", top: 11, left: 10, color: G.mu, pointerEvents: "none" }} />
+        <div style={{ position: 'relative', flex: '1 1 200px', minWidth: 160 }}>
+          <Search size={13} style={{ position: 'absolute', top: 11, left: 10, color: G.mu, pointerEvents: 'none' }} />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="MO# · SKU · 공장 / 搜索"
-            style={{ ...selStyle, width: "100%", paddingLeft: 30 }}
+            placeholder="Container ID · B/L No · 항구 / 搜索"
+            style={{ ...selStyle, width: '100%', paddingLeft: 30 }}
           />
         </div>
-
-        {/* Status filter chips */}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {/* Stage chips */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {[
-            { k: 'all',      label: '전체 · 全部',  color: null,      count: null },
-            { k: 'shipped',  label: '출고완료',      color: '#10B981', count: stats.shipped },
-            { k: 'imminent', label: '출고임박',      color: '#C9A86E', count: stats.imminent },
-            { k: 'delayed',  label: '출고지연',      color: '#EF4444', count: stats.delayed },
-            { k: 'ready',    label: '출고대기',      color: '#8B5CF6', count: stats.ready },
-          ].map(({ k, label, color, count }) => {
-            const active = filterCat === k
-            const c = color || G.primary
+            { k: 'all',       label: '전체 · 全部',  hue: null },
+            ...PIPELINE_STAGES.map(s => ({ k: s.key, label: s.kr, hue: s.hue })),
+          ].map(({ k, label, hue }) => {
+            const active = filterStage === k
+            const c = hue || G.primary
             return (
-              <button
-                key={k}
-                onClick={() => setFilterCat(k)}
-                className="chip"
+              <button key={k} onClick={() => setFilterStage(k)} className="chip"
                 style={{
                   border: `1px solid ${active ? c : G.border}`,
-                  background: active ? `${c}22` : "transparent",
+                  background: active ? `${c}22` : 'transparent',
                   color: active ? c : G.mu,
                   fontWeight: 600, fontSize: 10,
-                }}
-              >
+                }}>
                 {label}
-                {count != null && (
-                  <span className="num" style={{ marginLeft: 5, opacity: .75 }}>{count}</span>
-                )}
               </button>
             )
           })}
         </div>
-
-        {/* Factory filter */}
-        {factories.length > 0 && (
-          <select value={filterFactory} onChange={e => setFilterFactory(e.target.value)} style={selStyle}>
-            <option value="">공장 · 工厂 전체</option>
-            {factories.map(f => <option key={f} value={f}>{f}</option>)}
+        {/* Origin */}
+        {origins.length > 0 && (
+          <select value={filterOrigin} onChange={e => setFilterOrigin(e.target.value)} style={selStyle}>
+            <option value="">출발항 · 出发港</option>
+            {origins.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
         )}
-
-        {/* Sort */}
-        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={selStyle}>
-          <option value="date_asc">출고일 빠른순</option>
-          <option value="date_desc">출고일 늦은순</option>
-        </select>
+        {/* Destination */}
+        {dests.length > 0 && (
+          <select value={filterDest} onChange={e => setFilterDest(e.target.value)} style={selStyle}>
+            <option value="">도착항 · 目的港</option>
+            {dests.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        )}
       </div>
 
-      {/* ── Card grid ── */}
+      {/* ── Container card grid ── */}
       {loading ? (
-        <div className="schedule-scroll" style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
-          {[...Array(4)].map((_, i) => (
-            <div key={i} style={{ minWidth: 220, flexShrink: 0 }}>
-              <SkeletonCard G={G} />
-            </div>
-          ))}
+        <div className="ctr-grid">
+          {[...Array(6)].map((_, i) => <SkeletonCard key={i} G={G} />)}
         </div>
-      ) : displayedMOs.length === 0 ? (
-        <div className="card" style={{ padding: "48px 24px", textAlign: "center" }}>
-          <Truck size={32} strokeWidth={1.2} style={{ color: G.fa, marginBottom: 12 }} />
-          <div style={{ fontSize: 14, color: G.mu, fontWeight: 600 }}>출고 데이터 없음 · 暂无出货数据</div>
-          <div style={{ fontSize: 11, color: G.fa, marginTop: 6 }}>선택한 기간에 해당 MO가 없습니다</div>
+      ) : displayed.length === 0 ? (
+        <div className="card" style={{ padding: '48px 24px', textAlign: 'center' }}>
+          <Ship size={32} strokeWidth={1.2} style={{ color: G.fa, marginBottom: 12 }} />
+          <div style={{ fontSize: 14, color: G.mu, fontWeight: 600 }}>
+            아직 선적 데이터가 없습니다 · 暂无装运数据
+          </div>
+          <div style={{ fontSize: 11, color: G.fa, marginTop: 6 }}>
+            {containers.length === 0
+              ? 'Zoho Add_Shipment 폼에 컨테이너를 추가해 주세요'
+              : '현재 필터에 해당하는 컨테이너가 없습니다'}
+          </div>
+          {containers.length === 0 && (
+            <button
+              onClick={loadData}
+              style={{
+                marginTop: 16, padding: '10px 20px', borderRadius: 8, fontSize: 12,
+                border: `1px solid ${G.border}`, background: 'transparent',
+                color: G.tx, cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              새로고침 · 刷新
+            </button>
+          )}
         </div>
       ) : (
-        <div className="schedule-scroll" style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
-          {displayedMOs.map(mo => (
-            <div key={mo.ID || getMoNumber(mo)} style={{ minWidth: 220, flexShrink: 0 }}>
-              <ShipCard G={G} mo={mo} onClick={() => setSelectedMo({ id: mo.ID, row: mo })} />
-            </div>
+        <div className="ctr-grid">
+          {displayed.map((c, i) => (
+            <ContainerCard
+              key={c.ID || c.Container_ID || i}
+              G={G}
+              container={c}
+              today={today}
+              onClick={() => setSelectedContainer(c)}
+            />
           ))}
         </div>
       )}
 
-      {selectedMo && (
-        <MoDetailModal G={G} mo={selectedMo.row} moId={selectedMo.id} onClose={() => setSelectedMo(null)} />
+      {selectedContainer && (
+        <ContainerDetailModal
+          G={G}
+          container={selectedContainer}
+          onClose={() => setSelectedContainer(null)}
+        />
       )}
     </div>
   )
