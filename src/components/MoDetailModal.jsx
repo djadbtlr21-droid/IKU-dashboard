@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { X, Shirt, Package, Truck, Scissors, ChevronRight, ChevronDown, ZoomIn, FileText, CheckCircle2, Layers } from 'lucide-react'
+import { X, Shirt, Package, Truck, Scissors, ChevronRight, ChevronDown, ZoomIn, FileText, CheckCircle2, Layers, Lock, LockOpen } from 'lucide-react'
 import { QRCodeCanvas } from 'qrcode.react'
 import { fetchMoDetail } from '../api/client'
 import { parseSpecJSON, parseZohoDate, isOverdue, isDelayed, getMoFactory } from '../utils/moHelpers'
 import { getColorHex, getTextColorOnBg } from '../utils/colorMap'
 import { formatCategory, formatTopType, formatSleeve, formatFit, formatDetails, formatBottomType, formatBottomLength } from '../utils/formatGarmentCode'
 import ZohoImage from './ZohoImage'
+import PriceUnlockModal from './PriceUnlockModal'
+import { isPriceUnlocked, lockPrice, maskAmount, maskUnit } from '../utils/priceLock'
 
 // ──────────────────────────────────────────────────────────
 // Helpers
@@ -203,7 +205,7 @@ function SpecTable({ G, json, title }) {
 // ──────────────────────────────────────────────────────────
 // Plan/Actual matrix table
 // ──────────────────────────────────────────────────────────
-function MatrixTable({ G, lines, fields, currency = '¥' }) {
+function MatrixTable({ G, lines, fields, currency = '¥', unlocked = false }) {
   // fields: { color, size, qty, price }
   const records = (lines || []).filter(Boolean)
   if (!records.length) {
@@ -274,8 +276,12 @@ function MatrixTable({ G, lines, fields, currency = '¥' }) {
                 )
               })}
               <td style={{ padding: '8px 12px', textAlign: 'right', color: G.tx, fontWeight: 700 }}>{fmtNum(colorRowTotals[ci])}</td>
-              <td style={{ padding: '8px 12px', textAlign: 'right', color: G.mu }}>{colorUnitPrice[ci] ? fmtMoney(colorUnitPrice[ci], currency) : '—'}</td>
-              <td style={{ padding: '8px 12px', textAlign: 'right', color: G.tx, fontWeight: 600 }}>{colorRowAmounts[ci] ? fmtMoney(colorRowAmounts[ci], currency) : '—'}</td>
+              <td style={{ padding: '8px 12px', textAlign: 'right', color: G.mu, fontFamily: unlocked ? undefined : 'monospace' }}>
+                {unlocked ? (colorUnitPrice[ci] ? fmtMoney(colorUnitPrice[ci], currency) : '—') : maskUnit(colorUnitPrice[ci], currency)}
+              </td>
+              <td style={{ padding: '8px 12px', textAlign: 'right', color: G.tx, fontWeight: 600, fontFamily: unlocked ? undefined : 'monospace' }}>
+                {unlocked ? (colorRowAmounts[ci] ? fmtMoney(colorRowAmounts[ci], currency) : '—') : maskAmount(colorRowAmounts[ci], currency)}
+              </td>
             </tr>
           ))}
           <tr style={{ background: G.cardAlt, borderTop: `2px solid ${G.primary}33` }}>
@@ -285,7 +291,9 @@ function MatrixTable({ G, lines, fields, currency = '¥' }) {
             ))}
             <td style={{ padding: '10px 12px', textAlign: 'right', color: G.accent, fontWeight: 700 }}>{fmtNum(grandQty)}</td>
             <td style={{ padding: '10px 12px' }} />
-            <td style={{ padding: '10px 12px', textAlign: 'right', color: G.accent, fontWeight: 700 }}>{grandAmt ? fmtMoney(grandAmt, currency) : '—'}</td>
+            <td style={{ padding: '10px 12px', textAlign: 'right', color: G.accent, fontWeight: 700, fontFamily: unlocked ? undefined : 'monospace' }}>
+              {unlocked ? (grandAmt ? fmtMoney(grandAmt, currency) : '—') : `${currency}••••••••`}
+            </td>
           </tr>
         </tbody>
       </table>
@@ -668,6 +676,17 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('plan')
   const [zoomSrc, setZoomSrc] = useState(null)
+  const [unlocked, setUnlocked] = useState(() => isPriceUnlocked())
+  const [showUnlockModal, setShowUnlockModal] = useState(false)
+
+  const handleLockClick = () => {
+    if (unlocked) {
+      lockPrice()
+      setUnlocked(false)
+    } else {
+      setShowUnlockModal(true)
+    }
+  }
 
   // Resolve seed record from props
   const seed = mo || moRow || {}
@@ -966,7 +985,29 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
                 H. Plan / Actual Matrix (tabs)
             ────────────────────────────────────────────── */}
             <div style={{ marginBottom: 22 }}>
-              <SectionTitle G={T} icon={<FileText size={14} style={{ color: T.accent }} />} label="수량 매트릭스 · 数量矩阵 · Plan/Actual" />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottom: `1px solid ${T.hair}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <FileText size={14} style={{ color: T.accent }} />
+                  <h3 className="syne" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: T.accent }}>수량 매트릭스 · 数量矩阵 · Plan/Actual</h3>
+                </div>
+                <button
+                  onClick={handleLockClick}
+                  title="가격 정보 잠금/해제"
+                  style={{
+                    width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: unlocked ? '#C9A86E' : 'rgba(0,0,0,0.05)',
+                    boxShadow: unlocked ? '0 2px 8px rgba(201,168,110,0.4)' : 'none',
+                    transition: 'all .2s',
+                    flexShrink: 0,
+                  }}
+                >
+                  {unlocked
+                    ? <LockOpen size={18} style={{ color: '#fff' }} />
+                    : <Lock size={18} style={{ color: '#94A3B8' }} />
+                  }
+                </button>
+              </div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 {[
                   { id: 'plan', label: '📋 PLAN · 주문 · 订单' },
@@ -984,9 +1025,9 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
               </div>
 
               {tab === 'plan' ? (
-                <MatrixTable G={T} lines={planLines} fields={{ color: 'Plan_Color', size: 'Plan_Sizes', qty: 'Plan_Quantity', price: 'Plan_Unit_Price' }} />
+                <MatrixTable G={T} lines={planLines} fields={{ color: 'Plan_Color', size: 'Plan_Sizes', qty: 'Plan_Quantity', price: 'Plan_Unit_Price' }} unlocked={unlocked} />
               ) : (
-                <MatrixTable G={T} lines={actualLines} fields={{ color: 'Acture_Color', size: 'Acture_Sizes', qty: 'Acture_Quantity', price: 'Acture_Unit_Price' }} />
+                <MatrixTable G={T} lines={actualLines} fields={{ color: 'Acture_Color', size: 'Acture_Sizes', qty: 'Acture_Quantity', price: 'Acture_Unit_Price' }} unlocked={unlocked} />
               )}
 
               {/* Summary cards */}
@@ -1177,6 +1218,13 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
       </div>
 
       {zoomSrc && <Lightbox src={zoomSrc} onClose={() => setZoomSrc(null)} />}
+      {showUnlockModal && (
+        <PriceUnlockModal
+          G={T}
+          onUnlocked={() => setUnlocked(true)}
+          onClose={() => setShowUnlockModal(false)}
+        />
+      )}
     </>
   )
 }
