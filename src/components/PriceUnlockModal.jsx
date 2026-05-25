@@ -5,6 +5,7 @@ import { verifyPassword, unlockPrice } from '../utils/priceLock'
 export default function PriceUnlockModal({ G, onUnlocked, onClose }) {
   const [input, setInput] = useState('')
   const [error, setError] = useState(false)
+  const [shaking, setShaking] = useState(false)
   const inputRef = useRef(null)
 
   useEffect(() => {
@@ -21,6 +22,8 @@ export default function PriceUnlockModal({ G, onUnlocked, onClose }) {
       onClose()
     } else {
       setError(true)
+      setShaking(true)
+      setTimeout(() => setShaking(false), 400)
       setInput('')
       inputRef.current?.focus()
     }
@@ -99,6 +102,7 @@ export default function PriceUnlockModal({ G, onUnlocked, onClose }) {
               color: G.tx, outline: 'none',
               fontFamily: 'inherit',
               transition: 'border-color .15s',
+              animation: shaking ? 'shake 0.4s ease' : undefined,
             }}
           />
           {error && (
