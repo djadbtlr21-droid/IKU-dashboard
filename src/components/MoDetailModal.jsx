@@ -541,13 +541,17 @@ function PackagingSection({ G, src }) {
       return
     }
     setLoading(true)
-    Promise.all([
-      fetch(`/api/get-inner-packs?mo=${encodeURIComponent(moNumber)}`).then(r => r.json()).catch(() => ({ data: [] })),
-      fetch(`/api/get-master-bags?mo=${encodeURIComponent(moNumber)}`).then(r => r.json()).catch(() => ({ data: [] })),
-    ]).then(([inner, master]) => {
-      setInnerPacks(inner?.data || [])
-      setMasterBags(master?.data || [])
-    }).finally(() => setLoading(false))
+    const moEnc = encodeURIComponent(moNumber)
+    // Fire independently so one failure never silences the other
+    fetch(`/api/packs-list?mo=${moEnc}&type=inner`)
+      .then(r => r.json())
+      .then(data => setInnerPacks(data?.data || []))
+      .catch(err => console.error('[PackagingSection] inner fetch failed:', err))
+    fetch(`/api/packs-list?mo=${moEnc}&type=master`)
+      .then(r => r.json())
+      .then(data => setMasterBags(data?.data || []))
+      .catch(err => console.error('[PackagingSection] master fetch failed:', err))
+      .finally(() => setLoading(false))
   }, [moNumber, subformInner.length, subformMaster.length])
 
   // ── Pick the "standard" inner pack record (Is_Remainder=false, or the first one) ──
