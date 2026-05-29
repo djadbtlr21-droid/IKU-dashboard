@@ -554,55 +554,64 @@ function PackagingSection({ G, src }) {
       .finally(() => setLoading(false))
   }, [moNumber, subformInner.length, subformMaster.length])
 
-  // ── Pick the "standard" inner pack record (Is_Remainder=false, or the first one) ──
-  const standardInner = useMemo(() => {
-    if (!innerPacks.length) return null
-    const standard = innerPacks.find(p => {
-      const ir = pick(p, ['Is_Remainder', 'is_remainder', 'IsRemainder'])
-      if (ir === false || ir === 'false' || ir === 0) return true
-      if (ir === undefined || ir === null) return true
-      return false
-    })
-    return standard || innerPacks[0]
-  }, [innerPacks])
+  // ── Box-based progress: each record in All_Inner_Pack = 1 physical box ──
+  const actualBoxes = innerPacks.length
 
+  // Denominator: prefer MO-level field, fall back to first inner pack record's Total_Expected
+  const standardInner = innerPacks[0] || null
   const standardTotalExpected = Number(
     pick(standardInner, ['Total_Expected', 'Total_Expected_Quantity', 'Expected_Total', 'Plan_Total', 'Total_Pack_Quantity']) || 0
   )
+  const totalExpected = Number(
+    pick(src, ['Inner_Pack_Total_Qty', 'Inner_Pack_Count', 'Inner_Boxes_Expected']) || 0
+  ) || standardTotalExpected || (planQty ? Math.ceil(planQty / 12) : 0)
 
-  // ── Inner Pack Bagged = Σ Inner_Pack_Count across Master Bags ──
+  const innerProgressPct = totalExpected > 0
+    ? Math.min(Math.round((actualBoxes / totalExpected) * 100), 100)
+    : 0
+  const innerDiff = totalExpected > 0 ? actualBoxes - totalExpected : 0
+
+  // ── Master Bag box-based progress ──
+  const actualMasterBags = masterBags.length
+  const totalMasterExpected = Number(
+    pick(src, ['Master_Bag_Count', 'Master_Bags_Expected', 'Master_Bag_Total']) || 0
+  ) || (totalExpected ? Math.ceil(totalExpected / 10) : (planQty ? Math.ceil(planQty / 120) : 0))
+
+  const masterProgressPct = totalMasterExpected > 0
+    ? Math.min(Math.round((actualMasterBags / totalMasterExpected) * 100), 100)
+    : 0
+  const masterDiff = totalMasterExpected > 0 ? actualMasterBags - totalMasterExpected : 0
+
+  // ── Inner Pack status distribution (weighted by Inner_Pack_Count on the master bag) ──
   const innerBagged = useMemo(() => masterBags.reduce(
     (s, b) => s + Number(pick(b, ['Inner_Pack_Count', 'InnerPackCount']) || 0), 0
   ), [masterBags])
 
-  // ── Totals (denominator) ──
-  // Prefer Total_Expected from the standard record; fall back to plan/12 if absent.
-  const innerTotal = standardTotalExpected || (planQty ? Math.ceil(planQty / 12) : 0)
-  const masterTotal = planQty ? Math.ceil(planQty / 120) : 0
-
-  // ── Created / Bagged for the progress bar ──
-  // "Created" = printed (Total_Expected) under the new model.
-  // "Bagged" = currently allocated to bags (Σ Inner_Pack_Count).
-  const innerCreated = standardTotalExpected || innerPacks.length  // legacy fallback
-  const innerBaggedDisplay = innerBagged
-  const masterCreated = masterBags.length
-
-  // ── Inner Pack status distribution (weighted by Inner_Pack_Count on the master bag) ──
   const innerStatusCounts = useMemo(() => {
-    const counts = { Created: standardTotalExpected || 0, Bagged: innerBagged }
+    const counts = { Created: actualBoxes, Bagged: innerBagged }
     masterBags.forEach(b => {
       const st = pick(b, ['Bag_Status', 'Status', 'State'])
       const ipc = Number(pick(b, ['Inner_Pack_Count', 'InnerPackCount']) || 0)
-      if (!st || st === 'Created' || st === 'Bagged') return // Created/Bagged already covered above
+      if (!st || st === 'Created' || st === 'Bagged') return
       counts[st] = (counts[st] || 0) + ipc
     })
     return counts
-  }, [masterBags, standardTotalExpected, innerBagged])
+  }, [masterBags, actualBoxes, innerBagged])
 
   return (
     <div style={{ background: G.cardAlt, border: `1px solid ${G.border}`, borderRadius: 12, padding: 16 }}>
-      <ProgressBar G={G} label={`Inner Pack 진행률 · 中间包装进度 (Bagged / Total Expected)`} current={innerBaggedDisplay} total={innerTotal} color={G.primary} />
-      <ProgressBar G={G} label="Master Bag 진행률 · 麻袋进度" current={masterCreated} total={masterTotal} color={G.primary} />
+      <ProgressBar G={G} label="Inner Pack 진행률 · 中间包装进度 · 박스 단위" current={actualBoxes} total={totalExpected} color={G.primary} />
+      {innerDiff !== 0 && (
+        <div style={{ fontSize: 11, textAlign: 'right', marginTop: 2, color: innerDiff > 0 ? G.ok : G.warn }}>
+          {innerDiff > 0 ? `여유분 +${innerDiff}박스 · 余量 +${innerDiff}盒` : `${Math.abs(innerDiff)}박스 미달 · 短缺 ${Math.abs(innerDiff)}盒`}
+        </div>
+      )}
+      <ProgressBar G={G} label="Master Bag 진행률 · 麻袋进度 · 마대 단위" current={actualMasterBags} total={totalMasterExpected} color={G.primary} />
+      {masterDiff !== 0 && (
+        <div style={{ fontSize: 11, textAlign: 'right', marginTop: 2, color: masterDiff > 0 ? G.ok : G.warn }}>
+          {masterDiff > 0 ? `여유분 +${masterDiff}마대 · 余量 +${masterDiff}袋` : `${Math.abs(masterDiff)}마대 미달 · 短缺 ${Math.abs(masterDiff)}袋`}
+        </div>
+      )}
 
       <div style={{ marginTop: 18 }}>
         <div className="syne" style={{ fontSize: 11, fontWeight: 700, color: G.mu, letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 8 }}>
