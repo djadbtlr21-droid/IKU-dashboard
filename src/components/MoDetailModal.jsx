@@ -542,8 +542,8 @@ function PackagingSection({ G, src }) {
     }
     setLoading(true)
     Promise.all([
-      fetch(`/api/packs-list?mo=${encodeURIComponent(moNumber)}&type=inner`).then(r => r.json()).catch(() => ({ data: [] })),
-      fetch(`/api/packs-list?mo=${encodeURIComponent(moNumber)}&type=master`).then(r => r.json()).catch(() => ({ data: [] })),
+      fetch(`/api/get-inner-packs?mo=${encodeURIComponent(moNumber)}`).then(r => r.json()).catch(() => ({ data: [] })),
+      fetch(`/api/get-master-bags?mo=${encodeURIComponent(moNumber)}`).then(r => r.json()).catch(() => ({ data: [] })),
     ]).then(([inner, master]) => {
       setInnerPacks(inner?.data || [])
       setMasterBags(master?.data || [])
