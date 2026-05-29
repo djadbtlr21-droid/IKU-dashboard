@@ -46,7 +46,10 @@ export default async function handler(req, res) {
 
         if (status === 200) {
           const arr = body?.data || [];
-          console.log(`[packs-list] ${reportName} via ${field} → ${arr.length} records`);
+          console.log(`[packs-list] SUCCESS type=${type} report=${reportName} field=${field} count=${arr.length}`);
+          if (arr.length > 0) {
+            console.log(`[packs-list] first record keys:`, Object.keys(arr[0]));
+          }
           return res.status(200).json({
             data: arr,
             _meta: { report: reportName, criteriaField: field, count: arr.length },
