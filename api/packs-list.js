@@ -10,14 +10,24 @@ const REPORT_CANDIDATES = {
 const CRITERIA_FIELDS = ['MO_Number'];
 
 async function zohoFetch(token, reportName, criteriaField, moNumber) {
-  const criteria = encodeURIComponent(`${criteriaField}=="${moNumber}"`);
-  const url = `${zohoBase()}/report/${reportName}?criteria=${criteria}&max_records=500`;
+  const criteriaRaw = `(${criteriaField}=="${moNumber}")`;
+  const criteriaEncoded = encodeURIComponent(criteriaRaw);
+  const url = `${zohoBase()}/report/${reportName}?criteria=${criteriaEncoded}&max_records=200`;
+  console.log(`[packs-list] criteria raw: ${criteriaRaw}`);
+  console.log(`[packs-list] criteria encoded: ${criteriaEncoded}`);
+  console.log(`[packs-list] FULL URL: ${url}`);
   const zres = await fetch(url, {
     headers: { Authorization: `Zoho-oauthtoken ${token}`, Accept: 'application/json' },
   });
+  console.log(`[packs-list] response status: ${zres.status}`);
   const raw = await zres.text();
   let body = null;
   try { body = raw ? JSON.parse(raw) : null; } catch { body = { raw }; }
+  console.log(`[packs-list] response body keys:`, body ? Object.keys(body) : '(null)');
+  console.log(`[packs-list] response data length:`, body?.data?.length ?? '(no data key)');
+  if (body?.data?.length > 0) {
+    console.log(`[packs-list] SUCCESS — first record:`, JSON.stringify(body.data[0]).slice(0, 500));
+  }
   return { status: zres.status, body };
 }
 
