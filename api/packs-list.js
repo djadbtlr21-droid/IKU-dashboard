@@ -94,7 +94,11 @@ export default async function handler(req, res) {
       _meta: { count: 0, note: 'unexpected_error', status, zohoCode: body?.code, message: body?.message },
     });
   } catch (err) {
-    console.error('[packs-list] error', err);
-    return res.status(500).json({ error: err.message || String(err) });
+    console.error('[packs-list] FATAL:', err);
+    return res.status(500).json({
+      error: err.message || String(err),
+      stack: err.stack?.split('\n').slice(0, 5).join('\n'),
+      ok: false,
+    });
   }
 }

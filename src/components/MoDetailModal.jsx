@@ -554,7 +554,20 @@ function PackagingSection({ G, src }) {
       .finally(() => setLoading(false))
   }, [moNumber, subformInner.length, subformMaster.length])
 
-  // ── Inner Pack 진행률 (all vars hoisted above try for JSX scope) ──────
+  // ── 표준 박스 크기: Standard_Assortment_JSON의 품목 수 ──────────────
+  let standardBoxSize = 12
+  try {
+    const assortment = src?.Standard_Assortment_JSON
+    let parsed = null
+    if (typeof assortment === 'string' && assortment.trim()) {
+      parsed = JSON.parse(assortment)
+    } else if (Array.isArray(assortment)) {
+      parsed = assortment
+    }
+    if (Array.isArray(parsed) && parsed.length > 0) standardBoxSize = parsed.length
+  } catch (e) { console.warn('[PackagingSection] Standard_Assortment_JSON parse failed, using 12') }
+
+  // ── Inner Pack 진행률 ────────────────────────────────────────────────
   let actualInnerBoxes = 0
   let totalInnerExpected = 0
   let innerProgressPercent = 0
@@ -563,12 +576,15 @@ function PackagingSection({ G, src }) {
 
   try {
     actualInnerBoxes = Array.isArray(innerPacks) ? innerPacks.length : 0
-    totalInnerExpected =
-      Number(src?.Inner_Pack_Total_Qty) ||
-      Number(src?.Total_Expected) ||
-      Number(src?.Inner_Pack_Count) ||
-      Number(innerPacks?.[0]?.Total_Expected) ||
-      (planQty ? Math.ceil(planQty / 12) : 0)
+    // 1순위: Plan_Total_Quantity / standardBoxSize (가장 신뢰)
+    // 2순위: Master_Bag_Count * 10 (역계산)
+    const pq = Number(src?.Plan_Total_Quantity)
+    if (Number.isFinite(pq) && pq > 0 && standardBoxSize > 0) {
+      totalInnerExpected = Math.ceil(pq / standardBoxSize)
+    } else {
+      const mc = Number(src?.Master_Bag_Count)
+      if (Number.isFinite(mc) && mc > 0) totalInnerExpected = mc * 10
+    }
     if (totalInnerExpected > 0) {
       innerProgressPercent = Math.min(Math.round((actualInnerBoxes / totalInnerExpected) * 100), 100)
       innerDiff = actualInnerBoxes - totalInnerExpected
@@ -589,9 +605,13 @@ function PackagingSection({ G, src }) {
 
   try {
     actualMasterBags = Array.isArray(masterBags) ? masterBags.length : 0
-    totalMasterExpected =
-      Number(src?.Master_Bag_Count) ||
-      (totalInnerExpected > 0 ? Math.ceil(totalInnerExpected / 10) : (planQty ? Math.ceil(planQty / 120) : 0))
+    // 1순위: totalInnerExpected / 10  2순위: Master_Bag_Count 필드
+    if (totalInnerExpected > 0) {
+      totalMasterExpected = Math.ceil(totalInnerExpected / 10)
+    } else {
+      const mc = Number(src?.Master_Bag_Count)
+      if (Number.isFinite(mc) && mc > 0) totalMasterExpected = mc
+    }
     if (totalMasterExpected > 0) {
       masterProgressPercent = Math.min(Math.round((actualMasterBags / totalMasterExpected) * 100), 100)
       masterDiff = actualMasterBags - totalMasterExpected
