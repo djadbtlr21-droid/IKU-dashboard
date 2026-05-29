@@ -2,6 +2,7 @@ import { getAccessToken, zohoBase } from './_zoho.js';
 
 // Probe multiple Zoho report name candidates (first 200-OK wins).
 const REPORT_CANDIDATES = [
+  'Production_Log_Report', // confirmed Zoho link name
   'All_Production_Log',
   'All_Production_Logs',
   'Production_Log',
