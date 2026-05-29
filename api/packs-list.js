@@ -1,12 +1,12 @@
 import { getAccessToken, invalidateToken, zohoBase } from './_zoho.js';
 
-// Confirmed Zoho report link names (ZOHO-verified, no fallback needed).
+// Confirmed Zoho report link names — single exact names, no fallback.
 const REPORT_CANDIDATES = {
-  inner: ['All_Inner_Pack'],
-  master: ['All_Master_Bags'],
+  inner: ['All_Inner_Pack'],    // ZOHO-confirmed singular
+  master: ['All_Master_Bags'],  // ZOHO-confirmed plural
 };
 
-// Confirmed MO criteria field (ZOHO-verified).
+// Confirmed MO criteria field.
 const CRITERIA_FIELDS = ['MO_Number'];
 
 async function zohoFetch(token, reportName, criteriaField, moNumber) {
