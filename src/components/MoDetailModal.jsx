@@ -575,7 +575,9 @@ function PackagingSection({ G, src }) {
   let innerDiffText = null
 
   try {
-    actualInnerBoxes = Array.isArray(innerPacks) ? innerPacks.length : 0
+    actualInnerBoxes = Array.isArray(innerPacks)
+      ? innerPacks.reduce((sum, p) => sum + (Number(p?.Total_Expected) || 0), 0)
+      : 0
     // 1순위: Plan_Total_Quantity / standardBoxSize (가장 신뢰)
     // 2순위: Master_Bag_Count * 10 (역계산)
     const pq = Number(src?.Plan_Total_Quantity)
@@ -629,15 +631,21 @@ function PackagingSection({ G, src }) {
   ), [masterBags])
 
   const innerStatusCounts = useMemo(() => {
-    const counts = { Created: actualInnerBoxes, Bagged: innerBagged }
-    masterBags.forEach(b => {
-      const st = pick(b, ['Bag_Status', 'Status', 'State'])
-      const ipc = Number(pick(b, ['Inner_Pack_Count', 'InnerPackCount']) || 0)
-      if (!st || st === 'Created' || st === 'Bagged') return
-      counts[st] = (counts[st] || 0) + ipc
-    })
-    return counts
-  }, [masterBags, actualInnerBoxes, innerBagged])
+    const sumByStatus = (packs, status) => {
+      if (!Array.isArray(packs)) return 0
+      return packs
+        .filter(p => p?.Pack_Status === status)
+        .reduce((sum, p) => sum + (Number(p?.Total_Expected) || 0), 0)
+    }
+    return {
+      Created: sumByStatus(innerPacks, 'Created'),
+      Bagged: sumByStatus(innerPacks, 'Bagged'),
+      Shipped: sumByStatus(innerPacks, 'Shipped'),
+      Received: sumByStatus(innerPacks, 'Received'),
+      'Out For Delivery': sumByStatus(innerPacks, 'Out For Delivery'),
+      Delivered: sumByStatus(innerPacks, 'Delivered'),
+    }
+  }, [innerPacks])
 
   return (
     <div style={{ background: G.cardAlt, border: `1px solid ${G.border}`, borderRadius: 12, padding: 16 }}>
