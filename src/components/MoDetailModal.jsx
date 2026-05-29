@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { X, Shirt, Package, Truck, Scissors, ChevronRight, ChevronDown, ZoomIn, FileText, CheckCircle2, Layers, Lock, LockOpen } from 'lucide-react'
 import { QRCodeCanvas } from 'qrcode.react'
-import { fetchMoDetail } from '../api/client'
+import { fetchMoDetail, fetchProductionLogs } from '../api/client'
 import { parseSpecJSON, parseZohoDate, isOverdue, isDelayed, getMoFactory } from '../utils/moHelpers'
 import { getColorHex, getTextColorOnBg } from '../utils/colorMap'
 import { formatCategory, formatTopType, formatSleeve, formatFit, formatDetails, formatBottomType, formatBottomLength } from '../utils/formatGarmentCode'
@@ -490,9 +490,9 @@ function ProductionLogTable({ G, logs }) {
           {logs.map((log, i) => {
             const process = pick(log, ['Process', 'Stage', 'Operation', 'Type', 'Step']) || '—'
             const done = pick(log, ['Completed_Qty', 'Done_Qty', 'Quantity_Done', 'Qty_Completed', 'Quantity'])
-            const pending = pick(log, ['Pending_Qty', 'Remaining_Qty', 'Qty_Pending'])
+            const pending = pick(log, ['Incomplete_Qty', 'Pending_Qty', 'Remaining_Qty', 'Qty_Pending'])
             const worker = pick(log, ['Worker', 'Operator', 'Recorder', 'Added_User']) || '—'
-            const time = pick(log, ['Recorded_Time', 'Log_Date', 'Added_Time', 'Modified_Time']) || '—'
+            const time = pick(log, ['Log_Time', 'Recorded_Time', 'Log_Date', 'Added_Time', 'Modified_Time']) || '—'
             const notes = pick(log, ['Notes', 'Remark', 'Comments', 'Note']) || '—'
             return (
               <tr key={log.ID || i} style={{ borderBottom: `1px solid ${G.hair}`, background: i % 2 === 0 ? 'transparent' : G.rh }}>
@@ -672,6 +672,8 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(true)
   const [logOpen, setLogOpen] = useState(false)
+  const [prodLogs, setProdLogs] = useState(null)
+  const [prodLogsLoading, setProdLogsLoading] = useState(false)
   const [packOpen, setPackOpen] = useState(false)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('plan')
@@ -754,6 +756,17 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
   }
 
   const moNumber = safe(src.MO_Number || src.ID)
+
+  // Lazy-fetch production logs when section is first opened
+  useEffect(() => {
+    if (!logOpen || !moNumber || moNumber === '—' || prodLogs !== null) return
+    setProdLogsLoading(true)
+    fetchProductionLogs(moNumber)
+      .then(data => setProdLogs(data?.data || []))
+      .catch(() => setProdLogs([]))
+      .finally(() => setProdLogsLoading(false))
+  }, [logOpen, moNumber, prodLogs])
+
   const sku = src.Style_SKU?.Style_SKU || (typeof src.Style_SKU === 'string' ? src.Style_SKU : '—')
   const factoryName = getMoFactory(src)
   const modifiedTime = src.Modified_Time || src.Modified_Date || ''
@@ -1179,15 +1192,21 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
                 <span style={{ fontSize: 12, color: T.mu, fontWeight: 600 }}>{logOpen ? '▲' : '▼'}</span>
               </div>
               {logOpen && (() => {
-                const productionLogs = pickArray(src, ['Production_Logs', 'Process_Logs', 'Operations', 'Logs', 'Cutting_Logs', 'Fabric_Logs', 'Production_Records'])
-                if (!productionLogs.length) {
-                  return (
-                    <div style={{ background: T.cardAlt, border: `1px dashed ${T.border}`, borderRadius: 10, padding: '28px 20px', textAlign: 'center', color: T.mu, fontSize: 12 }}>
-                      아직 등록된 생산 로그가 없습니다 · 暂无生产记录
-                    </div>
-                  )
-                }
-                return <ProductionLogTable G={T} logs={productionLogs} />
+                if (prodLogsLoading) return (
+                  <div style={{ background: T.cardAlt, border: `1px dashed ${T.border}`, borderRadius: 10, padding: '28px 20px', textAlign: 'center', color: T.mu, fontSize: 12 }}>
+                    로딩 중 · 加载中…
+                  </div>
+                )
+                // API data takes precedence; fall back to any subform data in the MO record
+                const logs = prodLogs !== null
+                  ? prodLogs
+                  : pickArray(src, ['Production_Logs', 'Process_Logs', 'Operations', 'Logs', 'Cutting_Logs', 'Fabric_Logs', 'Production_Records'])
+                if (!logs.length) return (
+                  <div style={{ background: T.cardAlt, border: `1px dashed ${T.border}`, borderRadius: 10, padding: '28px 20px', textAlign: 'center', color: T.mu, fontSize: 12 }}>
+                    아직 등록된 생산 로그가 없습니다 · 暂无生产记录
+                  </div>
+                )
+                return <ProductionLogTable G={T} logs={logs} />
               })()}
             </div>
 

@@ -30,6 +30,10 @@ export async function fetchShipments(params = {}) {
   return apiFetch(`/api/get-shipments?${qs}`)
 }
 
+export async function fetchProductionLogs(moNumber) {
+  return apiFetch(`/api/get-production-logs?mo=${encodeURIComponent(moNumber)}`)
+}
+
 export function zohoImageUrl(report, recordId, field) {
   return `/api/zoho-image?report=${encodeURIComponent(report)}&recordId=${encodeURIComponent(recordId)}&field=${encodeURIComponent(field)}`
 }
