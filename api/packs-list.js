@@ -2,13 +2,15 @@ import { getAccessToken, zohoBase } from './_zoho.js';
 
 // Map type → Zoho report names to try (in order). First successful one wins.
 const REPORT_CANDIDATES = {
-  inner: ['All_Inner_Packs', 'All_InnerPacks', 'Inner_Packs', 'All_Packs'],
-  master: ['All_Master_Bags', 'All_MasterBags', 'Master_Bags', 'All_Bags'],
+  inner: ['All_Inner_Pack', 'All_Inner_Packs', 'Inner_Pack_Report', 'All_InnerPacks', 'Inner_Packs', 'All_Packs'],
+  master: ['All_Master_Bags', 'All_Master_Bag', 'Master_Bags_Report', 'All_MasterBags', 'Master_Bags', 'All_Bags'],
 };
 
-// Map MO criteria field — Zoho schema may use different lookup field names.
-// Try a few common ones; first non-empty response wins.
-const CRITERIA_FIELDS = ['MO_Number', 'MO', 'MO_ID', 'Manufacturing_Order'];
+// MO criteria field candidates — Zoho schema may use different lookup field names.
+const CRITERIA_FIELDS = [
+  'MO_Number', 'MO', 'Manufacturing_Order', 'Manufacturing_Order_ID',
+  'MO_ID', 'Order_Number', 'Master_MO', 'Mo_Number',
+];
 
 async function tryFetch(token, reportName, criteriaField, moNumber) {
   const criteria = encodeURIComponent(`${criteriaField}=="${moNumber}"`);
@@ -51,8 +53,8 @@ export default async function handler(req, res) {
           });
         }
 
-        // 400 with code 3001/3100 usually means "no records" — treat as empty
-        if (status === 400 && body?.code && [3001, 3100, 3000].includes(body.code)) {
+        // 400 with these codes means "no records" or "criteria field unknown" — treat as empty
+        if (status === 400 && body?.code && [3000, 3001, 3100, 9280].includes(body.code)) {
           console.log(`[packs-list] ${reportName} via ${field} → 0 records (code ${body.code})`);
           return res.status(200).json({
             data: [],
