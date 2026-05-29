@@ -32,6 +32,12 @@ function accountsDomain() {
   return 'accounts.zoho.' + tld;
 }
 
+export function invalidateToken() {
+  cachedToken = null;
+  cachedExp = 0;
+  console.log('[_zoho] token cache invalidated (force refresh on next call)');
+}
+
 export async function getAccessToken() {
   const now = Date.now();
 
