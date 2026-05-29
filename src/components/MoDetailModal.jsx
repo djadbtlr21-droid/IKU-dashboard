@@ -574,11 +574,6 @@ function PackagingSection({ G, src }) {
     }
   } catch (e) { console.error('[PackagingSection] inner progress calc:', e) }
 
-  // Keep aliases the JSX below still references
-  const standardInner = innerPacks[0] || null
-  const standardTotalExpected = totalInnerExpected
-  const innerTotal = totalInnerExpected
-
   let actualMasterBags = 0
   let totalMasterExpected = 0
   let masterProgressPercent = 0
@@ -649,21 +644,21 @@ function PackagingSection({ G, src }) {
           background: 'transparent', border: 'none', color: G.tx, cursor: 'pointer',
           padding: '6px 0', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
         }}>
-          <span>표준 중간포장 · 标准中包袋 ({standardTotalExpected || 0}개 인쇄)</span>
+          <span>표준 중간포장 · 标准中包袋 ({totalInnerExpected || 0}개 인쇄)</span>
           <span style={{ color: G.mu, fontSize: 11 }}>{showInnerList ? '▲' : '▼'}</span>
         </button>
         {showInnerList && (
           <div style={{ marginTop: 8 }}>
-            {standardInner ? (
+            {innerPacks[0] ? (
               <div style={{ border: `1px solid ${G.hair}`, borderRadius: 8, padding: '12px 14px', background: G.surf, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                 <div>
                   <div style={{ fontSize: 11, color: G.mu, letterSpacing: '.5px' }}>표준 중간포장 · 标准中包袋</div>
                   <div style={{ fontSize: 13, color: G.tx, fontWeight: 600, marginTop: 2 }}>
-                    {standardTotalExpected ? `${standardTotalExpected.toLocaleString()}개 인쇄 · 已印刷 ${standardTotalExpected.toLocaleString()}` : '인쇄 수량 미정 · 未确定'}
+                    {totalInnerExpected ? `${totalInnerExpected.toLocaleString()}개 인쇄 · 已印刷 ${totalInnerExpected.toLocaleString()}` : '인쇄 수량 미정 · 未确定'}
                   </div>
                 </div>
                 <div className="num syne" style={{ fontSize: 22, fontWeight: 700, color: G.accent }}>
-                  {innerBagged.toLocaleString()} / {(standardTotalExpected || innerTotal).toLocaleString()}
+                  {innerBagged.toLocaleString()} / {totalInnerExpected.toLocaleString()}
                 </div>
               </div>
             ) : (
@@ -679,7 +674,7 @@ function PackagingSection({ G, src }) {
           background: 'transparent', border: 'none', color: G.tx, cursor: 'pointer',
           padding: '6px 0', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
         }}>
-          <span>개별 Master Bag 리스트 · 麻袋明细 ({masterCreated})</span>
+          <span>개별 Master Bag 리스트 · 麻袋明细 ({actualMasterBags})</span>
           <span style={{ color: G.mu, fontSize: 11 }}>{showMasterList ? '▲' : '▼'}</span>
         </button>
         {showMasterList && <div style={{ marginTop: 8 }}><PackTable G={G} packs={masterBags} kind="master" /></div>}
