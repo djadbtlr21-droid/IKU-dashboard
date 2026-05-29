@@ -554,42 +554,52 @@ function PackagingSection({ G, src }) {
       .finally(() => setLoading(false))
   }, [moNumber, subformInner.length, subformMaster.length])
 
-  // ── Box-based progress (defensive) ──────────────────────────────────
+  // ── Inner Pack 진행률 (all vars hoisted above try for JSX scope) ──────
   let actualInnerBoxes = 0
   let totalInnerExpected = 0
   let innerProgressPercent = 0
+  let innerDiff = 0
   let innerDiffText = null
 
   try {
     actualInnerBoxes = Array.isArray(innerPacks) ? innerPacks.length : 0
-    totalInnerExpected = Number(
-      pick(src, ['Inner_Pack_Total_Qty', 'Total_Expected', 'Inner_Pack_Count', 'Inner_Boxes_Expected']) || 0
-    ) || Number(pick(innerPacks[0], ['Total_Expected', 'Total_Expected_Quantity', 'Plan_Total', 'Total_Pack_Quantity']) || 0)
-      || (planQty ? Math.ceil(planQty / 12) : 0)
+    totalInnerExpected =
+      Number(src?.Inner_Pack_Total_Qty) ||
+      Number(src?.Total_Expected) ||
+      Number(src?.Inner_Pack_Count) ||
+      Number(innerPacks?.[0]?.Total_Expected) ||
+      (planQty ? Math.ceil(planQty / 12) : 0)
     if (totalInnerExpected > 0) {
       innerProgressPercent = Math.min(Math.round((actualInnerBoxes / totalInnerExpected) * 100), 100)
-      const d = actualInnerBoxes - totalInnerExpected
-      if (d > 0) innerDiffText = `여유분 +${d}박스 · 余量 +${d}盒`
-      else if (d < 0 && actualInnerBoxes > 0) innerDiffText = `${Math.abs(d)}박스 미달 · 短缺 ${Math.abs(d)}盒`
+      innerDiff = actualInnerBoxes - totalInnerExpected
+      if (innerDiff > 0) {
+        innerDiffText = `여유분 +${innerDiff}박스 · 余量 +${innerDiff}盒`
+      } else if (innerDiff < 0 && actualInnerBoxes > 0) {
+        innerDiffText = `${Math.abs(innerDiff)}박스 미달 · 短缺 ${Math.abs(innerDiff)}盒`
+      }
     }
   } catch (e) { console.error('[PackagingSection] inner progress calc:', e) }
 
+  // ── Master Bag 진행률 ────────────────────────────────────────────────
   let actualMasterBags = 0
   let totalMasterExpected = 0
   let masterProgressPercent = 0
+  let masterDiff = 0
   let masterDiffText = null
-  const masterCreated = Array.isArray(masterBags) ? masterBags.length : 0
 
   try {
-    actualMasterBags = masterCreated
-    totalMasterExpected = Number(
-      pick(src, ['Master_Bag_Count', 'Master_Bags_Expected', 'Master_Bag_Total']) || 0
-    ) || (totalInnerExpected ? Math.ceil(totalInnerExpected / 10) : (planQty ? Math.ceil(planQty / 120) : 0))
+    actualMasterBags = Array.isArray(masterBags) ? masterBags.length : 0
+    totalMasterExpected =
+      Number(src?.Master_Bag_Count) ||
+      (totalInnerExpected > 0 ? Math.ceil(totalInnerExpected / 10) : (planQty ? Math.ceil(planQty / 120) : 0))
     if (totalMasterExpected > 0) {
       masterProgressPercent = Math.min(Math.round((actualMasterBags / totalMasterExpected) * 100), 100)
-      const d = actualMasterBags - totalMasterExpected
-      if (d > 0) masterDiffText = `여유분 +${d}마대 · 余量 +${d}袋`
-      else if (d < 0 && actualMasterBags > 0) masterDiffText = `${Math.abs(d)}마대 미달 · 短缺 ${Math.abs(d)}袋`
+      masterDiff = actualMasterBags - totalMasterExpected
+      if (masterDiff > 0) {
+        masterDiffText = `여유분 +${masterDiff}마대 · 余量 +${masterDiff}袋`
+      } else if (masterDiff < 0 && actualMasterBags > 0) {
+        masterDiffText = `${Math.abs(masterDiff)}마대 미달 · 短缺 ${Math.abs(masterDiff)}袋`
+      }
     }
   } catch (e) { console.error('[PackagingSection] master progress calc:', e) }
 
