@@ -554,40 +554,49 @@ function PackagingSection({ G, src }) {
       .finally(() => setLoading(false))
   }, [moNumber, subformInner.length, subformMaster.length])
 
-  // ── Box-based progress: each record in All_Inner_Pack = 1 physical box ──
-  const actualInnerBoxes = innerPacks.length
+  // ── Box-based progress (defensive) ──────────────────────────────────
+  let actualInnerBoxes = 0
+  let totalInnerExpected = 0
+  let innerProgressPercent = 0
+  let innerDiffText = null
 
-  // Denominator: MO-level field → first inner pack record → plan / 12
-  const totalInnerExpected = Number(
-    pick(src, ['Inner_Pack_Total_Qty', 'Total_Expected', 'Inner_Pack_Count', 'Inner_Boxes_Expected']) || 0
-  ) || Number(pick(innerPacks[0], ['Total_Expected', 'Total_Expected_Quantity', 'Plan_Total', 'Total_Pack_Quantity']) || 0)
-    || (planQty ? Math.ceil(planQty / 12) : 0)
+  try {
+    actualInnerBoxes = Array.isArray(innerPacks) ? innerPacks.length : 0
+    totalInnerExpected = Number(
+      pick(src, ['Inner_Pack_Total_Qty', 'Total_Expected', 'Inner_Pack_Count', 'Inner_Boxes_Expected']) || 0
+    ) || Number(pick(innerPacks[0], ['Total_Expected', 'Total_Expected_Quantity', 'Plan_Total', 'Total_Pack_Quantity']) || 0)
+      || (planQty ? Math.ceil(planQty / 12) : 0)
+    if (totalInnerExpected > 0) {
+      innerProgressPercent = Math.min(Math.round((actualInnerBoxes / totalInnerExpected) * 100), 100)
+      const d = actualInnerBoxes - totalInnerExpected
+      if (d > 0) innerDiffText = `여유분 +${d}박스 · 余量 +${d}盒`
+      else if (d < 0 && actualInnerBoxes > 0) innerDiffText = `${Math.abs(d)}박스 미달 · 短缺 ${Math.abs(d)}盒`
+    }
+  } catch (e) { console.error('[PackagingSection] inner progress calc:', e) }
 
-  const innerProgressPercent = totalInnerExpected > 0
-    ? Math.min(Math.round((actualInnerBoxes / totalInnerExpected) * 100), 100)
-    : 0
-  const innerDiff = totalInnerExpected > 0 ? actualInnerBoxes - totalInnerExpected : 0
-  const innerDiffText = innerDiff > 0
-    ? `여유분 +${innerDiff}박스 · 余量 +${innerDiff}盒`
-    : innerDiff < 0 && actualInnerBoxes > 0
-      ? `${Math.abs(innerDiff)}박스 미달 · 短缺 ${Math.abs(innerDiff)}盒`
-      : null
+  // Keep aliases the JSX below still references
+  const standardInner = innerPacks[0] || null
+  const standardTotalExpected = totalInnerExpected
+  const innerTotal = totalInnerExpected
 
-  // ── Master Bag box-based progress ──
-  const actualMasterBags = masterBags.length
-  const totalMasterExpected = Number(
-    pick(src, ['Master_Bag_Count', 'Master_Bags_Expected', 'Master_Bag_Total']) || 0
-  ) || (totalInnerExpected ? Math.ceil(totalInnerExpected / 10) : (planQty ? Math.ceil(planQty / 120) : 0))
+  let actualMasterBags = 0
+  let totalMasterExpected = 0
+  let masterProgressPercent = 0
+  let masterDiffText = null
+  const masterCreated = Array.isArray(masterBags) ? masterBags.length : 0
 
-  const masterProgressPercent = totalMasterExpected > 0
-    ? Math.min(Math.round((actualMasterBags / totalMasterExpected) * 100), 100)
-    : 0
-  const masterDiff = totalMasterExpected > 0 ? actualMasterBags - totalMasterExpected : 0
-  const masterDiffText = masterDiff > 0
-    ? `여유분 +${masterDiff}마대 · 余量 +${masterDiff}袋`
-    : masterDiff < 0 && actualMasterBags > 0
-      ? `${Math.abs(masterDiff)}마대 미달 · 短缺 ${Math.abs(masterDiff)}袋`
-      : null
+  try {
+    actualMasterBags = masterCreated
+    totalMasterExpected = Number(
+      pick(src, ['Master_Bag_Count', 'Master_Bags_Expected', 'Master_Bag_Total']) || 0
+    ) || (totalInnerExpected ? Math.ceil(totalInnerExpected / 10) : (planQty ? Math.ceil(planQty / 120) : 0))
+    if (totalMasterExpected > 0) {
+      masterProgressPercent = Math.min(Math.round((actualMasterBags / totalMasterExpected) * 100), 100)
+      const d = actualMasterBags - totalMasterExpected
+      if (d > 0) masterDiffText = `여유분 +${d}마대 · 余量 +${d}袋`
+      else if (d < 0 && actualMasterBags > 0) masterDiffText = `${Math.abs(d)}마대 미달 · 短缺 ${Math.abs(d)}袋`
+    }
+  } catch (e) { console.error('[PackagingSection] master progress calc:', e) }
 
   // ── Inner Pack status distribution (weighted by Inner_Pack_Count on the master bag) ──
   const innerBagged = useMemo(() => masterBags.reduce(
