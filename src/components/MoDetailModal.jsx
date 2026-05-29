@@ -555,32 +555,39 @@ function PackagingSection({ G, src }) {
   }, [moNumber, subformInner.length, subformMaster.length])
 
   // ── Box-based progress: each record in All_Inner_Pack = 1 physical box ──
-  const actualBoxes = innerPacks.length
+  const actualInnerBoxes = innerPacks.length
 
-  // Denominator: prefer MO-level field, fall back to first inner pack record's Total_Expected
-  const standardInner = innerPacks[0] || null
-  const standardTotalExpected = Number(
-    pick(standardInner, ['Total_Expected', 'Total_Expected_Quantity', 'Expected_Total', 'Plan_Total', 'Total_Pack_Quantity']) || 0
-  )
-  const totalExpected = Number(
-    pick(src, ['Inner_Pack_Total_Qty', 'Inner_Pack_Count', 'Inner_Boxes_Expected']) || 0
-  ) || standardTotalExpected || (planQty ? Math.ceil(planQty / 12) : 0)
+  // Denominator: MO-level field → first inner pack record → plan / 12
+  const totalInnerExpected = Number(
+    pick(src, ['Inner_Pack_Total_Qty', 'Total_Expected', 'Inner_Pack_Count', 'Inner_Boxes_Expected']) || 0
+  ) || Number(pick(innerPacks[0], ['Total_Expected', 'Total_Expected_Quantity', 'Plan_Total', 'Total_Pack_Quantity']) || 0)
+    || (planQty ? Math.ceil(planQty / 12) : 0)
 
-  const innerProgressPct = totalExpected > 0
-    ? Math.min(Math.round((actualBoxes / totalExpected) * 100), 100)
+  const innerProgressPercent = totalInnerExpected > 0
+    ? Math.min(Math.round((actualInnerBoxes / totalInnerExpected) * 100), 100)
     : 0
-  const innerDiff = totalExpected > 0 ? actualBoxes - totalExpected : 0
+  const innerDiff = totalInnerExpected > 0 ? actualInnerBoxes - totalInnerExpected : 0
+  const innerDiffText = innerDiff > 0
+    ? `여유분 +${innerDiff}박스 · 余量 +${innerDiff}盒`
+    : innerDiff < 0 && actualInnerBoxes > 0
+      ? `${Math.abs(innerDiff)}박스 미달 · 短缺 ${Math.abs(innerDiff)}盒`
+      : null
 
   // ── Master Bag box-based progress ──
   const actualMasterBags = masterBags.length
   const totalMasterExpected = Number(
     pick(src, ['Master_Bag_Count', 'Master_Bags_Expected', 'Master_Bag_Total']) || 0
-  ) || (totalExpected ? Math.ceil(totalExpected / 10) : (planQty ? Math.ceil(planQty / 120) : 0))
+  ) || (totalInnerExpected ? Math.ceil(totalInnerExpected / 10) : (planQty ? Math.ceil(planQty / 120) : 0))
 
-  const masterProgressPct = totalMasterExpected > 0
+  const masterProgressPercent = totalMasterExpected > 0
     ? Math.min(Math.round((actualMasterBags / totalMasterExpected) * 100), 100)
     : 0
   const masterDiff = totalMasterExpected > 0 ? actualMasterBags - totalMasterExpected : 0
+  const masterDiffText = masterDiff > 0
+    ? `여유분 +${masterDiff}마대 · 余量 +${masterDiff}袋`
+    : masterDiff < 0 && actualMasterBags > 0
+      ? `${Math.abs(masterDiff)}마대 미달 · 短缺 ${Math.abs(masterDiff)}袋`
+      : null
 
   // ── Inner Pack status distribution (weighted by Inner_Pack_Count on the master bag) ──
   const innerBagged = useMemo(() => masterBags.reduce(
@@ -588,7 +595,7 @@ function PackagingSection({ G, src }) {
   ), [masterBags])
 
   const innerStatusCounts = useMemo(() => {
-    const counts = { Created: actualBoxes, Bagged: innerBagged }
+    const counts = { Created: actualInnerBoxes, Bagged: innerBagged }
     masterBags.forEach(b => {
       const st = pick(b, ['Bag_Status', 'Status', 'State'])
       const ipc = Number(pick(b, ['Inner_Pack_Count', 'InnerPackCount']) || 0)
@@ -596,20 +603,20 @@ function PackagingSection({ G, src }) {
       counts[st] = (counts[st] || 0) + ipc
     })
     return counts
-  }, [masterBags, actualBoxes, innerBagged])
+  }, [masterBags, actualInnerBoxes, innerBagged])
 
   return (
     <div style={{ background: G.cardAlt, border: `1px solid ${G.border}`, borderRadius: 12, padding: 16 }}>
-      <ProgressBar G={G} label="Inner Pack 진행률 · 中间包装进度 · 박스 단위" current={actualBoxes} total={totalExpected} color={G.primary} />
-      {innerDiff !== 0 && (
+      <ProgressBar G={G} label="Inner Pack 진행률 · 中间包装进度" current={actualInnerBoxes} total={totalInnerExpected} color={G.primary} />
+      {innerDiffText && (
         <div style={{ fontSize: 11, textAlign: 'right', marginTop: 2, color: innerDiff > 0 ? G.ok : G.warn }}>
-          {innerDiff > 0 ? `여유분 +${innerDiff}박스 · 余量 +${innerDiff}盒` : `${Math.abs(innerDiff)}박스 미달 · 短缺 ${Math.abs(innerDiff)}盒`}
+          {innerDiffText}
         </div>
       )}
-      <ProgressBar G={G} label="Master Bag 진행률 · 麻袋进度 · 마대 단위" current={actualMasterBags} total={totalMasterExpected} color={G.primary} />
-      {masterDiff !== 0 && (
+      <ProgressBar G={G} label="Master Bag 진행률 · 麻袋进度" current={actualMasterBags} total={totalMasterExpected} color={G.primary} />
+      {masterDiffText && (
         <div style={{ fontSize: 11, textAlign: 'right', marginTop: 2, color: masterDiff > 0 ? G.ok : G.warn }}>
-          {masterDiff > 0 ? `여유분 +${masterDiff}마대 · 余量 +${masterDiff}袋` : `${Math.abs(masterDiff)}마대 미달 · 短缺 ${Math.abs(masterDiff)}袋`}
+          {masterDiffText}
         </div>
       )}
 
