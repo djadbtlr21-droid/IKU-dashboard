@@ -424,14 +424,15 @@ function CellEditor({ G, field, cell, editable, allowStock, onChange }) {
 
   if (!editable) {
     const empty = !v && !d
-    // item ④ — center the status text in read mode for clearer label spacing
+    // item ④ — mid status (chip, not done) blinks red, synced with the label
+    const midRead = field.type === 'chip' && !!v && !done
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap', padding: h ? '3px 6px' : 0, background: h ? hlBg : 'transparent', borderRadius: 6, textAlign: 'center' }}>
         {empty ? (
           <span style={{ fontSize: 11, color: G.fa }}>—</span>
         ) : (
           <>
-            {v && <span style={{ fontSize: 11, fontWeight: 600, color: done ? G.ok : G.tx, padding: '2px 8px', background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999 }}>{done ? '✅ ' : ''}{statusLabel(v)}</span>}
+            {v && <span className={midRead ? 'iku-blink' : undefined} style={{ fontSize: 11, fontWeight: 600, color: done ? G.ok : (midRead ? G.bad : G.tx), padding: '2px 8px', background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999 }}>{done ? '✅ ' : ''}{statusLabel(v)}</span>}
             {d && <span className="num" style={{ fontSize: 11, color: G.accent, fontWeight: 600 }}>{d}</span>}
           </>
         )}
@@ -509,10 +510,11 @@ function MemoBadge({ G, memo }) {
   if (!memo) return null
   return (
     <span style={{ position: 'relative', display: 'inline-flex' }}>
-      <button type="button" onClick={() => setOpen(o => !o)} title="비고 备注"
-        style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', color: G.accent, padding: '0 2px' }}>
-        <MessageSquare size={13} />
-        <span style={{ position: 'absolute', top: -1, right: 0, width: 5, height: 5, borderRadius: '50%', background: G.bad }} />
+      {/* item ⑤ — gold/orange slow blink (distinct from the red status blink) */}
+      <button type="button" onClick={() => setOpen(o => !o)} title="비고 备注" className="iku-blink"
+        style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', color: G.warn, padding: '0 2px' }}>
+        <MessageSquare size={15} />
+        <span style={{ position: 'absolute', top: -1, right: 0, width: 5, height: 5, borderRadius: '50%', background: G.warn }} />
       </button>
       {open && (
         <>
@@ -560,6 +562,7 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
   const monthKey = getMonthKey(mo)
   const fabric = getFabricInfo(mo)
   const imgUrl = styleImageUrl(mo)
+  const fabricName = cells['fabric.fabricName']?.v || ''  // item ① free-text 원단명
 
   const handleSave = async () => {
     if (saving) return
@@ -626,37 +629,48 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
         )}
       </div>
 
-      {/* Checklist */}
-      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Checklist — item ⑥: roomier spacing + 1px divider between sections */}
+      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 20 }}>
         {SECTIONS.map(sec => {
           const allowStock = RAW_SECTIONS.has(sec.id)
           const memoKey = `${sec.id}._memo`
           const memo = cells[memoKey]?.v || ''
           return (
-            <div key={sec.id}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: G.tx, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div key={sec.id} style={{ paddingBottom: 20, borderBottom: `1px solid ${G.hair}` }}>
+              {/* item ⑥ — section title 2× size (number scales with it); flexWrap so
+                  right-side items drop below instead of overlapping on narrow cards */}
+              <div style={{ fontSize: 23, fontWeight: 700, color: G.tx, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.2 }}>
                 <span><span style={{ color: G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: G.mu, fontWeight: 500 }}>{sec.cn}</span></span>
                 {!editable && <MemoBadge G={G} memo={memo} />}
-                {/* item ① — fabric summary at the ④ 원단 section title (right-aligned, truncated) */}
-                {sec.id === 'fabric' && fabric.has && (
-                  <span title={fabric.summary} style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 500, color: G.mu, maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    🧵 {fabric.summary}
+                {/* item ① — free-text 원단명 shown at the ④ section title in read mode */}
+                {sec.id === 'fabric' && !editable && fabricName && (
+                  <span title={fabricName} style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 500, color: G.mu, maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    🧵 {fabricName}
                   </span>
                 )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: editable ? 8 : 4, paddingLeft: 4 }}>
+                {/* item ① — free-text 원단명 input (edit mode, ④ section only) */}
+                {editable && sec.id === 'fabric' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '104px 1fr', gap: 8, alignItems: 'center' }}>
+                    <div style={{ fontSize: 12.1, color: G.mu, lineHeight: 1.3 }}>원단명<br /><span style={{ color: G.fa, fontSize: 11 }}>面料名称</span></div>
+                    <input value={fabricName} onChange={e => setCell('fabric.fabricName', { v: e.target.value })} placeholder="面料名称输入"
+                      style={{ padding: '6px 8px', borderRadius: 6, fontSize: 12, border: `1px solid ${G.border}`, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
+                  </div>
+                )}
                 {sec.fields.map(f => {
                   const cellKey = `${sec.id}.${f.key}`
                   const cell = cells[cellKey]
                   const st = f.type === 'chip' ? chipStatus(cell) : 'none'
                   const labelColor = st === 'done' ? G.ok : (st === 'mid' ? G.bad : G.mu)
                   return (
-                    <div key={cellKey} style={{ display: 'grid', gridTemplateColumns: '92px 1fr', gap: 8, alignItems: editable ? 'start' : 'center' }}>
-                      <div style={{ fontSize: 10.5, paddingTop: editable ? 7 : 0, lineHeight: 1.3 }}>
-                        {/* item ⑧ ✅ + item ⑨ red blink on label text only */}
+                    <div key={cellKey} style={{ display: 'grid', gridTemplateColumns: '104px 1fr', gap: 8, alignItems: editable ? 'start' : 'center' }}>
+                      <div style={{ fontSize: 12.1, paddingTop: editable ? 7 : 0, lineHeight: 1.3 }}>
+                        {/* item ② label = status text(11) × 1.1; item ③ done = green text (no ✅);
+                            item ⑨ mid = red blink on label text */}
                         <span className={st === 'mid' ? 'iku-blink' : undefined} style={{ color: labelColor, fontWeight: st === 'none' ? 400 : 600 }}>
-                          {st === 'done' ? '✅ ' : ''}{f.kr}<br />
-                          <span style={{ color: st === 'none' ? G.fa : labelColor, fontSize: 9.5 }}>{f.cn}</span>
+                          {f.kr}<br />
+                          <span style={{ color: st === 'none' ? G.fa : labelColor, fontSize: 11 }}>{f.cn}</span>
                         </span>
                       </div>
                       <CellEditor G={G} field={f} cell={cell} editable={editable} allowStock={allowStock} onChange={(val) => setCell(cellKey, val)} />
@@ -666,8 +680,8 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
                 {/* item ⑤ per-section 비고 — editable input only; read mode shows
                     the 💬 popover next to the section title (item ④) */}
                 {editable && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '92px 1fr', gap: 8, alignItems: 'center' }}>
-                    <div style={{ fontSize: 10.5, color: G.mu }}>비고 <span style={{ color: G.fa, fontSize: 9.5 }}>备注</span></div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '104px 1fr', gap: 8, alignItems: 'center' }}>
+                    <div style={{ fontSize: 12.1, color: G.mu }}>비고 <span style={{ color: G.fa, fontSize: 11 }}>备注</span></div>
                     <input value={memo} onChange={e => setCell(memoKey, { v: e.target.value })} placeholder="특이사항 입력 · 输入备注"
                       style={{ padding: '6px 8px', borderRadius: 6, fontSize: 11.5, border: `1px solid ${G.border}`, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
                   </div>
@@ -679,7 +693,7 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
 
         {/* ⑨ card-wide 비고 */}
         <div>
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: G.tx, marginBottom: 6 }}>
+          <div style={{ fontSize: 23, fontWeight: 700, color: G.tx, marginBottom: 8, lineHeight: 1.2 }}>
             <span style={{ color: G.accent, marginRight: 5 }}>⑨</span>전체 비고 <span style={{ color: G.mu, fontWeight: 500 }}>整体备注</span>
           </div>
           {editable ? (
