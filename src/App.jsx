@@ -116,10 +116,10 @@ button{font-family:inherit;touch-action:manipulation}
 `
 
 const TABS = [
+  { id: "process", label: "⭐产前确认", sub: "생산 전 체크", icon: ClipboardCheck, active: true },
   { id: "overview", label: "Overview", sub: "대시보드 · 仪表盘", icon: BarChart2, active: true },
   { id: "mo", label: "MO View", sub: "생산진행 · 生产进度", icon: Package, active: true },
   { id: "shipment", label: "Shipment", sub: "출고현황 · 出货状况", icon: Truck, active: true },
-  { id: "process", label: "공정 확인", sub: "工序确认", icon: ClipboardCheck, active: true },
 ]
 
 function Rail({ G }) { return G.dk ? <span className="rail" /> : null }

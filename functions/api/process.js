@@ -22,7 +22,7 @@ import { getKV } from './_kv.js'
 const HIDDEN_KEY = 'process:_hidden'
 const KEY_PREFIX = 'process:'
 const MAX_REMARK = 4000
-const MAX_CELLS_BYTES = 20000
+const MAX_CELLS_BYTES = 60000  // generous: many fields + per-section memos
 
 // Read an env var defensively. EdgeOne exposes config on the `env` arg, but
 // fall back to process.env so the function also works under a Node-like runtime.

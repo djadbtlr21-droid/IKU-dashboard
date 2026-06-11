@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   ClipboardCheck, Search, Eye, EyeOff, Lock, Save, X,
-  AlertTriangle, RotateCcw, Pencil, CheckCircle2,
+  AlertTriangle, RotateCcw, Pencil, CheckCircle2, Calendar,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { fetchMoList } from '../api/client'
 import {
@@ -14,10 +15,29 @@ import { SkeletonCard } from '../components/SkeletonLoader'
 // ──────────────────────────────────────────────────────────
 // Process checklist schema (한중 병기 / 中韩对照)
 // cells[`${section.id}.${field.key}`] = { v, d, h }
-//   v = chip/free-text value · d = date · h = yellow highlight
-// ⑨ 비고 备注 is stored separately as record.remark
+//   v = status/free-text value · d = date (yyyy-mm-dd) · h = yellow highlight
+// cells[`${section.id}._memo`]      = { v }   ← per-section 비고 (item ⑤)
+// record.remark                     = card-wide 비고 ⑨
+//
+// KV key layout (process:{itemNo}) is unchanged — section memos live inside the
+// same `cells` object so old saved records stay compatible.
 // ──────────────────────────────────────────────────────────
-const QUICK_CHIPS = ['完成', '进行中', '已下单', '未下单', '确认中', '修改中', '已入库']
+
+// New status system — every chip shows "한국어 中文" (item ③).
+// `value` is the canonical stored token (Chinese) so old data + filters keep
+// working; `stock` marks the 입고완료 chip (raw-material sections only).
+const STATUS_OPTIONS = [
+  { v: '未下单', ko: '미오더', cn: '未下单' },
+  { v: '已下单', ko: '오더완료', cn: '已下单' },
+  { v: '制作中', ko: '제작 중', cn: '制作中' },
+  { v: '修改中', ko: '수정 중', cn: '修改中' },
+  { v: '已入库', ko: '입고완료', cn: '已入库', stock: true },
+  { v: '完成', ko: '완성', cn: '完成' },
+]
+const DONE_VALUES = new Set(['完成', '已入库'])
+
+// Raw-material sections that may use the 입고완료 已入库 chip (item ③).
+const RAW_SECTIONS = new Set(['fabric', 'sub_material', 'label', 'wash_label'])
 
 const SECTIONS = [
   {
@@ -78,20 +98,41 @@ const SECTIONS = [
   },
 ]
 
-// ── data helpers ──
-const itemNoOf = (m) => String(m?.ID || m?.MO_Number || '')
-
-function isHexiang(factory) {
-  return /hexiang|合祥/i.test(String(factory || ''))
+// ── status helpers ──
+function statusLabel(v) {
+  const o = STATUS_OPTIONS.find(x => x.v === v)
+  return o ? `${o.ko} ${o.cn}` : v
+}
+// 'done' (✅) · 'mid' (red blink) · 'none'
+function chipStatus(cell) {
+  const v = cell?.v || ''
+  if (DONE_VALUES.has(v)) return 'done'
+  if (v) return 'mid'
+  return 'none'
 }
 
+// ── date helpers (yyyy-mm-dd, compatible with prior input[type=date] values) ──
+function parseYMD(s) {
+  if (!s || typeof s !== 'string') return null
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  const d = new Date(s)
+  return isNaN(d.getTime()) ? null : d
+}
+function formatYMD(date) {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`
+}
+
+// ── data helpers ──
+const itemNoOf = (m) => String(m?.ID || m?.MO_Number || '')
+function isHexiang(factory) { return /hexiang|合祥/i.test(String(factory || '')) }
 function isShipped(m) {
   const ps = String(m?.Production_Status || '')
   const ds = String(m?.Delivery_Status || '')
-  if (/hold|pending|待/i.test(ps)) return false // warehouse-hold = pre-shipment, keep
+  if (/hold|pending|待/i.test(ps)) return false
   return /shipped|delivered|出库|出货完/i.test(ps) || /shipped|delivered|出库|出货完/i.test(ds)
 }
-
 function procStatusBadge(m, G) {
   const raw = String(m?.Production_Status || '').trim()
   const s = raw.toLowerCase()
@@ -108,10 +149,7 @@ function procStatusBadge(m, G) {
   return mk(raw, '', G.mu)
 }
 
-const isOrdered = (cell) => {
-  const v = cell?.v || ''
-  return /已下单|完成|已入库/.test(v)
-}
+const isOrdered = (cell) => /已下单|完成|已入库/.test(cell?.v || '')
 const hasVal = (cell) => !!(cell && (cell.v || cell.d))
 
 const PROC_FILTERS = [
@@ -123,6 +161,93 @@ const PROC_FILTERS = [
   { key: 'label_unordered', label: '라벨 미발주 / 标签未下单', test: (c) => !isOrdered(c['label.ordered']) },
   { key: 'in_production', label: '생산중 / 生产中', test: (c) => hasVal(c['production.in_production']) },
 ]
+
+// CSS injected once for this page (shake / blink / 5-col grid).
+const PAGE_CSS = `
+@keyframes ikuShake {0%,100%{transform:translateX(0)}15%{transform:translateX(-6px)}30%{transform:translateX(6px)}45%{transform:translateX(-5px)}60%{transform:translateX(5px)}75%{transform:translateX(-3px)}90%{transform:translateX(3px)}}
+@keyframes ikuBlink {0%,100%{opacity:1}50%{opacity:.35}}
+.iku-blink{animation:ikuBlink 1.6s ease-in-out infinite}
+.proc-grid{display:grid;gap:16px;align-items:start;grid-template-columns:repeat(5,minmax(0,1fr))}
+@media(max-width:1500px){.proc-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:1150px){.proc-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:860px){.proc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.proc-grid{grid-template-columns:repeat(1,minmax(0,1fr))}}
+`
+
+// ──────────────────────────────────────────────────────────
+// Lightweight bilingual date picker (item ④)
+// ──────────────────────────────────────────────────────────
+const WEEKDAYS_KO = ['일', '월', '화', '수', '목', '금', '토']
+function DatePicker({ G, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const sel = parseYMD(value)
+  const [view, setView] = useState(() => {
+    const b = sel || new Date()
+    return { y: b.getFullYear(), m: b.getMonth() }
+  })
+
+  const today = new Date()
+  const firstDow = new Date(view.y, view.m, 1).getDay()
+  const daysInMonth = new Date(view.y, view.m + 1, 0).getDate()
+  const cells = []
+  for (let i = 0; i < firstDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+
+  const pick = (d) => { onChange(formatYMD(new Date(view.y, view.m, d))); setOpen(false) }
+  const goToday = () => { const t = new Date(); setView({ y: t.getFullYear(), m: t.getMonth() }); onChange(formatYMD(t)); setOpen(false) }
+  const clear = () => { onChange(''); setOpen(false) }
+  const prev = () => setView(v => (v.m === 0 ? { y: v.y - 1, m: 11 } : { y: v.y, m: v.m - 1 }))
+  const next = () => setView(v => (v.m === 11 ? { y: v.y + 1, m: 0 } : { y: v.y, m: v.m + 1 }))
+
+  const isSel = (d) => sel && sel.getFullYear() === view.y && sel.getMonth() === view.m && sel.getDate() === d
+  const isToday = (d) => today.getFullYear() === view.y && today.getMonth() === view.m && today.getDate() === d
+
+  return (
+    <div style={{ position: 'relative', flex: '1 1 auto', minWidth: 0 }}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 6, fontSize: 12, border: `1px solid ${G.border}`, background: G.bg, color: value ? G.tx : G.fa, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
+        <Calendar size={12} style={{ flexShrink: 0, color: G.mu }} />
+        <span className="num" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || '날짜 선택 · 选择日期'}</span>
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 1200 }} />
+          <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 1201, background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: 10, width: 232, maxWidth: '80vw' }}>
+            {/* header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <button type="button" onClick={prev} style={{ background: 'none', border: 'none', cursor: 'pointer', color: G.mu, display: 'flex', padding: 4 }}><ChevronLeft size={16} /></button>
+              <span style={{ fontSize: 12, fontWeight: 700, color: G.tx }}>{view.y}년 {view.m + 1}월 · {view.y}年{view.m + 1}月</span>
+              <button type="button" onClick={next} style={{ background: 'none', border: 'none', cursor: 'pointer', color: G.mu, display: 'flex', padding: 4 }}><ChevronRight size={16} /></button>
+            </div>
+            {/* weekday row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 2 }}>
+              {WEEKDAYS_KO.map((w, i) => (
+                <div key={w} style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, color: i === 0 ? G.bad : (i === 6 ? G.cool : G.mu), padding: '2px 0' }}>{w}</div>
+              ))}
+            </div>
+            {/* days */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+              {cells.map((d, i) => d === null ? <div key={`e${i}`} /> : (
+                <button key={d} type="button" onClick={() => pick(d)}
+                  style={{
+                    height: 26, borderRadius: 6, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit',
+                    border: isToday(d) && !isSel(d) ? `1px solid ${G.primary}` : '1px solid transparent',
+                    background: isSel(d) ? G.primary : 'transparent',
+                    color: isSel(d) ? '#fff' : G.tx, fontWeight: isSel(d) ? 700 : 500,
+                  }}>{d}</button>
+              ))}
+            </div>
+            {/* footer */}
+            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              <button type="button" onClick={goToday} style={{ flex: 1, padding: '5px 0', fontSize: 11, borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.accent, cursor: 'pointer', fontWeight: 600 }}>오늘 今天</button>
+              <button type="button" onClick={clear} style={{ flex: 1, padding: '5px 0', fontSize: 11, borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.bad, cursor: 'pointer', fontWeight: 600 }}>삭제 删除</button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 // ──────────────────────────────────────────────────────────
 // Toast
@@ -169,8 +294,6 @@ function PwModal({ G, onClose, onSuccess }) {
       onSuccess(pw)
     } else {
       setBusy(false)
-      // Distinguish a genuinely wrong password from a server/config error so a
-      // missing PROCESS_KV binding or outage isn't mislabelled as "wrong password".
       setErr(result.message || '비밀번호가 틀렸습니다 · 密码错误')
     }
   }
@@ -201,13 +324,14 @@ function PwModal({ G, onClose, onSuccess }) {
 }
 
 // ──────────────────────────────────────────────────────────
-// Cell editor — chips + free text + date + highlight toggle
+// Cell editor — status chips / datepicker / text + highlight toggle
 // ──────────────────────────────────────────────────────────
-function CellEditor({ G, field, cell, editable, onChange }) {
+function CellEditor({ G, field, cell, editable, allowStock, onChange }) {
   const v = cell?.v || ''
   const d = cell?.d || ''
   const h = !!cell?.h
   const hlBg = G.dk ? 'rgba(212,165,114,0.18)' : 'rgba(252,211,77,0.28)'
+  const done = DONE_VALUES.has(v)
 
   if (!editable) {
     const empty = !v && !d
@@ -217,7 +341,7 @@ function CellEditor({ G, field, cell, editable, onChange }) {
           <span style={{ fontSize: 11, color: G.fa }}>—</span>
         ) : (
           <>
-            {v && <span style={{ fontSize: 11, fontWeight: 600, color: G.tx, padding: '2px 8px', background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999 }}>{v}</span>}
+            {v && <span style={{ fontSize: 11, fontWeight: 600, color: done ? G.ok : G.tx, padding: '2px 8px', background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999 }}>{done ? '✅ ' : ''}{statusLabel(v)}</span>}
             {d && <span className="num" style={{ fontSize: 11, color: G.accent, fontWeight: 600 }}>{d}</span>}
           </>
         )}
@@ -227,38 +351,60 @@ function CellEditor({ G, field, cell, editable, onChange }) {
   }
 
   const inputStyle = { padding: '6px 8px', borderRadius: 6, fontSize: 12, border: `1px solid ${G.border}`, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }
+  const isStandard = STATUS_OPTIONS.some(o => o.v === v)
+  const HL = (
+    <button type="button" title="주의 필요 · 需注意"
+      onClick={() => onChange({ ...cell, h: !h })}
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', border: `1px solid ${h ? G.warn : G.border}`, background: h ? hlBg : 'transparent', color: h ? G.warn : G.mu, flexShrink: 0 }}>
+      <AlertTriangle size={12} />
+    </button>
+  )
 
+  // text field (e.g. 공장명)
+  if (field.type === 'text') {
+    return (
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: 6, background: h ? hlBg : 'transparent', borderRadius: 6 }}>
+        <input value={v} onChange={e => onChange({ ...cell, v: e.target.value })} placeholder="입력 · 输入" style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+        {HL}
+      </div>
+    )
+  }
+
+  // date field
+  if (field.type === 'date') {
+    return (
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: 6, background: h ? hlBg : 'transparent', borderRadius: 6 }}>
+        <DatePicker G={G} value={d} onChange={(nd) => onChange({ ...cell, d: nd })} />
+        {HL}
+      </div>
+    )
+  }
+
+  // chip (status) field
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '6px', background: h ? hlBg : 'transparent', borderRadius: 6 }}>
-      {(field.type === 'chip' || field.type === 'date') && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {QUICK_CHIPS.map(c => {
-            const on = v === c
-            return (
-              <button key={c} type="button"
-                onClick={() => onChange({ ...cell, v: on ? '' : c })}
-                style={{ padding: '3px 9px', fontSize: 10.5, borderRadius: 999, cursor: 'pointer', fontWeight: 600, border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.18)' : 'rgba(201,168,110,0.16)') : 'transparent', color: on ? G.accent : G.mu, lineHeight: 1.4 }}>
-                {c}
-              </button>
-            )
-          })}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 6, background: h ? hlBg : 'transparent', borderRadius: 6 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+        {STATUS_OPTIONS.filter(o => allowStock || !o.stock).map(o => {
+          const on = v === o.v
+          const isDone = DONE_VALUES.has(o.v)
+          return (
+            <button key={o.v} type="button"
+              onClick={() => onChange({ ...cell, v: on ? '' : o.v })}
+              style={{ padding: '3px 8px', fontSize: 10, borderRadius: 999, cursor: 'pointer', fontWeight: 600, border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.18)' : 'rgba(201,168,110,0.16)') : 'transparent', color: on ? G.accent : G.mu, lineHeight: 1.35 }}>
+              {on && isDone ? '✅ ' : ''}{o.ko} {o.cn}
+            </button>
+          )
+        })}
+        {HL}
+      </div>
+      {/* legacy / non-standard saved value — editable for backward compatibility */}
+      {v && !isStandard && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: G.mu }}>
+          <span>현재값 当前:</span>
+          <span style={{ fontWeight: 600, color: G.tx, padding: '1px 6px', background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999 }}>{v}</span>
+          <button type="button" onClick={() => onChange({ ...cell, v: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: G.mu, display: 'flex', padding: 0 }}><X size={11} /></button>
         </div>
       )}
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input
-          value={v} onChange={e => onChange({ ...cell, v: e.target.value })}
-          placeholder={field.type === 'text' ? '입력 · 输入' : '자유입력 · 自由输入'}
-          style={{ ...inputStyle, flex: '1 1 120px', minWidth: 100 }}
-        />
-        {field.type === 'date' && (
-          <input type="date" value={d} onChange={e => onChange({ ...cell, d: e.target.value })} style={{ ...inputStyle, flex: '0 0 auto' }} />
-        )}
-        <button type="button" title="주의 필요 · 需注意"
-          onClick={() => onChange({ ...cell, h: !h })}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 6, cursor: 'pointer', border: `1px solid ${h ? G.warn : G.border}`, background: h ? hlBg : 'transparent', color: h ? G.warn : G.mu, flexShrink: 0 }}>
-          <AlertTriangle size={13} />
-        </button>
-      </div>
     </div>
   )
 }
@@ -267,7 +413,6 @@ function CellEditor({ G, field, cell, editable, onChange }) {
 // Process card (one order)
 // ──────────────────────────────────────────────────────────
 function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHidden, canMutate }) {
-  // local draft seeded from saved record; only committed on save
   const [draftCells, setDraftCells] = useState(null)
   const [draftRemark, setDraftRemark] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -279,7 +424,6 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
   const remark = draftRemark ?? savedRemark
   const dirty = draftCells !== null || draftRemark !== null
 
-  // discard local drafts when leaving edit mode
   useEffect(() => {
     if (!editable) { setDraftCells(null); setDraftRemark(null) }
   }, [editable])
@@ -288,7 +432,6 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
     setDraftCells(prev => {
       const base = prev ?? savedCells
       const next = { ...base, [cellKey]: val }
-      // prune fully-empty cells
       if (!val || (!val.v && !val.d && !val.h)) delete next[cellKey]
       return next
     })
@@ -301,7 +444,6 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
   const handleSave = async () => {
     if (saving) return
     setSaving(true)
-    // prune empty cells before sending
     const cleaned = {}
     for (const [k, val] of Object.entries(cells)) {
       if (val && (val.v || val.d || val.h)) cleaned[k] = val
@@ -311,17 +453,18 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
     if (ok) { setDraftCells(null); setDraftRemark(null) }
   }
 
+  // overflow visible so the date-picker popover isn't clipped by the card
   return (
-    <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', opacity: isHidden ? 0.7 : 1 }}>
+    <div className="card" style={{ padding: 0, overflow: 'visible', display: 'flex', flexDirection: 'column', opacity: isHidden ? 0.7 : 1 }}>
       {/* Header */}
-      <div style={{ display: 'flex', gap: 12, padding: 14, borderBottom: `1px solid ${G.hair}` }}>
-        <div style={{ width: 64, height: 80, borderRadius: 8, background: G.cardAlt, overflow: 'hidden', flexShrink: 0, border: `1px solid ${G.hair}` }}>
-          <ZohoImage mo={mo} field="Style_Image" G={G} iconSize={20} placeholderText="" />
+      <div style={{ display: 'flex', gap: 12, padding: 14, borderBottom: `1px solid ${G.hair}`, borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
+        <div style={{ width: 56, height: 72, borderRadius: 8, background: G.cardAlt, overflow: 'hidden', flexShrink: 0, border: `1px solid ${G.hair}` }}>
+          <ZohoImage mo={mo} field="Style_Image" G={G} iconSize={18} placeholderText="" />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span className="num" style={{ fontSize: 14, fontWeight: 700, color: G.accent }}>{getMoNumber(mo)}</span>
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: badge.color, padding: '2px 8px', borderRadius: 999 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span className="num" style={{ fontSize: 13, fontWeight: 700, color: G.accent }}>{getMoNumber(mo)}</span>
+            <span style={{ fontSize: 9.5, fontWeight: 700, color: '#fff', background: badge.color, padding: '2px 7px', borderRadius: 999 }}>
               {badge.kr}{badge.cn ? ` · ${badge.cn}` : ''}
             </span>
             {isShipped(mo) && <span style={{ fontSize: 9, color: G.ok, border: `1px solid ${G.ok}`, padding: '1px 6px', borderRadius: 999 }}>출고 已出货</span>}
@@ -333,15 +476,14 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
             {monthKey && <span>📅 {monthKey}</span>}
           </div>
         </div>
-        {/* actions */}
         {editable && canMutate && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
             <button onClick={handleSave} disabled={saving || !dirty} className="btn-primary"
-              style={{ minHeight: 32, padding: '6px 12px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 5, opacity: (saving || !dirty) ? 0.5 : 1 }}>
+              style={{ minHeight: 32, padding: '6px 10px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 5, opacity: (saving || !dirty) ? 0.5 : 1 }}>
               <Save size={13} /> {saving ? '저장중' : '저장'}
             </button>
             <button onClick={() => onToggleHidden(itemNoOf(mo), !isHidden)} className="btn-ghost"
-              style={{ minHeight: 30, padding: '5px 10px', fontSize: 10.5, display: 'flex', alignItems: 'center', gap: 5 }}>
+              style={{ minHeight: 30, padding: '5px 8px', fontSize: 10.5, display: 'flex', alignItems: 'center', gap: 5 }}>
               {isHidden ? <><RotateCcw size={12} /> 복원</> : <><EyeOff size={12} /> 숨기기</>}
             </button>
           </div>
@@ -349,32 +491,57 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
       </div>
 
       {/* Checklist */}
-      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {SECTIONS.map(sec => (
-          <div key={sec.id}>
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: G.tx, marginBottom: 6 }}>
-              <span style={{ color: G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: G.mu, fontWeight: 500 }}>{sec.cn}</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: editable ? 8 : 4, paddingLeft: 4 }}>
-              {sec.fields.map(f => {
-                const cellKey = `${sec.id}.${f.key}`
-                return (
-                  <div key={cellKey} style={{ display: 'grid', gridTemplateColumns: editable ? '110px 1fr' : '110px 1fr', gap: 8, alignItems: editable ? 'start' : 'center' }}>
-                    <div style={{ fontSize: 10.5, color: G.mu, paddingTop: editable ? 8 : 0, lineHeight: 1.3 }}>
-                      {f.kr}<br /><span style={{ color: G.fa, fontSize: 9.5 }}>{f.cn}</span>
+      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {SECTIONS.map(sec => {
+          const allowStock = RAW_SECTIONS.has(sec.id)
+          const memoKey = `${sec.id}._memo`
+          const memo = cells[memoKey]?.v || ''
+          return (
+            <div key={sec.id}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: G.tx, marginBottom: 6 }}>
+                <span style={{ color: G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: G.mu, fontWeight: 500 }}>{sec.cn}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: editable ? 8 : 4, paddingLeft: 4 }}>
+                {sec.fields.map(f => {
+                  const cellKey = `${sec.id}.${f.key}`
+                  const cell = cells[cellKey]
+                  const st = f.type === 'chip' ? chipStatus(cell) : 'none'
+                  const labelColor = st === 'done' ? G.ok : (st === 'mid' ? G.bad : G.mu)
+                  return (
+                    <div key={cellKey} style={{ display: 'grid', gridTemplateColumns: '92px 1fr', gap: 8, alignItems: editable ? 'start' : 'center' }}>
+                      <div style={{ fontSize: 10.5, paddingTop: editable ? 7 : 0, lineHeight: 1.3 }}>
+                        {/* item ⑧ ✅ + item ⑨ red blink on label text only */}
+                        <span className={st === 'mid' ? 'iku-blink' : undefined} style={{ color: labelColor, fontWeight: st === 'none' ? 400 : 600 }}>
+                          {st === 'done' ? '✅ ' : ''}{f.kr}<br />
+                          <span style={{ color: st === 'none' ? G.fa : labelColor, fontSize: 9.5 }}>{f.cn}</span>
+                        </span>
+                      </div>
+                      <CellEditor G={G} field={f} cell={cell} editable={editable} allowStock={allowStock} onChange={(val) => setCell(cellKey, val)} />
                     </div>
-                    <CellEditor G={G} field={f} cell={cells[cellKey]} editable={editable} onChange={(val) => setCell(cellKey, val)} />
+                  )
+                })}
+                {/* item ⑤ per-section 비고 */}
+                {editable ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '92px 1fr', gap: 8, alignItems: 'center' }}>
+                    <div style={{ fontSize: 10.5, color: G.mu }}>비고 <span style={{ color: G.fa, fontSize: 9.5 }}>备注</span></div>
+                    <input value={memo} onChange={e => setCell(memoKey, { v: e.target.value })} placeholder="특이사항 입력 · 输入备注"
+                      style={{ padding: '6px 8px', borderRadius: 6, fontSize: 11.5, border: `1px solid ${G.border}`, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
                   </div>
-                )
-              })}
+                ) : memo ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '92px 1fr', gap: 8 }}>
+                    <div style={{ fontSize: 10.5, color: G.mu }}>비고 备注</div>
+                    <div style={{ fontSize: 11.5, color: G.tx, whiteSpace: 'pre-wrap' }}>{memo}</div>
+                  </div>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
 
-        {/* ⑨ 비고 */}
+        {/* ⑨ card-wide 비고 */}
         <div>
           <div style={{ fontSize: 11.5, fontWeight: 700, color: G.tx, marginBottom: 6 }}>
-            <span style={{ color: G.accent, marginRight: 5 }}>⑨</span>비고 <span style={{ color: G.mu, fontWeight: 500 }}>备注</span>
+            <span style={{ color: G.accent, marginRight: 5 }}>⑨</span>전체 비고 <span style={{ color: G.mu, fontWeight: 500 }}>整体备注</span>
           </div>
           {editable ? (
             <textarea value={remark} onChange={e => setDraftRemark(e.target.value)} rows={2}
@@ -419,15 +586,18 @@ export default function ProcessPage({ G }) {
   // edit state
   const [editMode, setEditMode] = useState(false)
   const [pwOpen, setPwOpen] = useState(false)
-  const [password, setPassword] = useState('')   // kept in memory during edit session
+  const [password, setPassword] = useState('')
   const [editorName, setEditorName] = useState('')
+  const [editorError, setEditorError] = useState(false)
+  const [shaking, setShaking] = useState(false)
   const [toast, setToast] = useState(null)
+  const editorRef = useRef(null)
 
   // filters
-  const [category, setCategory] = useState('all') // all | hexiang | outsource
-  const [subFactory, setSubFactory] = useState('') // specific outsource factory
+  const [category, setCategory] = useState('all')
+  const [subFactory, setSubFactory] = useState('')
   const [search, setSearch] = useState('')
-  const [factorySel, setFactorySel] = useState([]) // multi-select factory dropdown
+  const [factorySel, setFactorySel] = useState([])
   const [month, setMonth] = useState('')
   const [procFilter, setProcFilter] = useState('')
   const [showHidden, setShowHidden] = useState(false)
@@ -465,7 +635,6 @@ export default function ProcessPage({ G }) {
   const hiddenSet = useMemo(() => new Set(proc.hidden || []), [proc.hidden])
   const searching = search.trim().length > 0
 
-  // base list before category/secondary filters
   const baseList = useMemo(() => {
     return moList.filter(m => {
       const id = itemNoOf(m)
@@ -473,13 +642,11 @@ export default function ProcessPage({ G }) {
       const hidden = hiddenSet.has(id)
       if (showHidden) return hidden
       if (hidden) return false
-      // default: hide shipped — unless actively searching (manual lookup)
       if (!searching && isShipped(m)) return false
       return true
     })
   }, [moList, hiddenSet, showHidden, searching])
 
-  // outsource factory chip options (from base list, non-hexiang)
   const outsourceFactories = useMemo(() => {
     const set = new Set()
     baseList.forEach(m => { const f = getMoFactory(m); if (f && f !== '—' && !isHexiang(f)) set.add(f) })
@@ -496,13 +663,9 @@ export default function ProcessPage({ G }) {
     return [...new Set(baseList.map(getMonthKey).filter(Boolean))].sort().reverse()
   }, [baseList])
 
-  // category counts (ignore the category filter itself)
   const catCounts = useMemo(() => {
     let all = 0, hx = 0, out = 0
-    baseList.forEach(m => {
-      all++
-      if (isHexiang(getMoFactory(m))) hx++; else out++
-    })
+    baseList.forEach(m => { all++; if (isHexiang(getMoFactory(m))) hx++; else out++ })
     return { all, hx, out }
   }, [baseList])
 
@@ -512,20 +675,15 @@ export default function ProcessPage({ G }) {
     const s = search.trim().toLowerCase()
     return baseList.filter(m => {
       const f = getMoFactory(m)
-      // category
       if (category === 'hexiang' && !isHexiang(f)) return false
       if (category === 'outsource' && isHexiang(f)) return false
       if (category === 'outsource' && subFactory && f !== subFactory) return false
-      // factory multi-select
       if (factorySel.length && !factorySel.includes(f)) return false
-      // month
       if (month && getMonthKey(m) !== month) return false
-      // search
       if (s) {
         const blob = `${getMoNumber(m)} ${getMoSku(m)} ${f} ${m.Chi_Style_Name || ''} ${m.Eng_Style_Name || ''}`.toLowerCase()
         if (!blob.includes(s)) return false
       }
-      // process-status filter (acts on saved cells)
       if (procFilterFn) {
         const cells = proc.items[itemNoOf(m)]?.cells || {}
         if (!procFilterFn(cells)) return false
@@ -536,25 +694,26 @@ export default function ProcessPage({ G }) {
 
   // ── edit flow ──
   const onEditClick = () => {
-    if (editMode) {
-      // exit edit mode
-      setEditMode(false); setPassword('')
-    } else {
-      setPwOpen(true)
-    }
+    if (editMode) { setEditMode(false); setPassword(''); setEditorError(false) }
+    else setPwOpen(true)
   }
   const onPwSuccess = (pw) => {
     setPassword(pw); setPwOpen(false); setEditMode(true)
     showToast('편집 모드 · 编辑模式', 'ok')
   }
 
-  const requireEditor = () => {
+  // item ② — inline warning + shake + scroll + focus when editor name missing
+  const requireEditor = useCallback(() => {
     if (!editorName.trim()) {
-      showToast('수정자 이름을 입력하세요 · 请输入修改人姓名', 'bad')
+      setEditorError(true)
+      setShaking(false)
+      requestAnimationFrame(() => setShaking(true))
+      editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setTimeout(() => editorRef.current?.focus(), 250)
       return false
     }
     return true
-  }
+  }, [editorName])
 
   const handleSaveItem = useCallback(async (itemNo, cells, remark) => {
     if (!requireEditor()) return false
@@ -571,8 +730,7 @@ export default function ProcessPage({ G }) {
       showToast(err?.data?.message || '저장 실패 · 保存失败', 'bad')
       return false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [password, editorName, showToast])
+  }, [password, editorName, requireEditor, showToast])
 
   const handleToggleHidden = useCallback(async (itemNo, hide) => {
     if (!requireEditor()) return
@@ -588,8 +746,7 @@ export default function ProcessPage({ G }) {
     } catch (err) {
       showToast(err?.data?.message || '실패 · 失败', 'bad')
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [password, editorName, proc.hidden, showToast])
+  }, [password, editorName, proc.hidden, requireEditor, showToast])
 
   const resetFilters = () => {
     setCategory('all'); setSubFactory(''); setSearch(''); setFactorySel([]); setMonth(''); setProcFilter('')
@@ -621,14 +778,16 @@ export default function ProcessPage({ G }) {
 
   return (
     <div style={{ animation: 'fadeIn 0.4s ease' }}>
+      <style>{PAGE_CSS}</style>
+
       {/* Header */}
       <div className="card" style={{ padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, gap: 12, flexWrap: 'wrap' }}>
         <Rail G={G} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <span className="syne" style={{ background: G.primary, color: '#FFF', padding: '6px 10px', borderRadius: 6, display: 'flex' }}><ClipboardCheck size={16} /></span>
           <div>
-            <div className="syne" style={{ fontSize: 18, fontWeight: 700, color: G.tx, letterSpacing: '-.3px' }}>공정 확인 · 工序确认</div>
-            <div style={{ fontSize: 11, color: G.mu, marginTop: 1 }}>오더별 공정 진행 관리 · 订单工序进度管理</div>
+            <div className="syne" style={{ fontSize: 18, fontWeight: 700, color: G.tx, letterSpacing: '-.3px' }}>产前确认 · 생산 전 체크</div>
+            <div style={{ fontSize: 11, color: G.mu, marginTop: 1 }}>오더별 생산 전 공정 체크 · 订单产前工序确认</div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -646,14 +805,25 @@ export default function ProcessPage({ G }) {
 
       {/* Edit bar */}
       {editMode && (
-        <div className="card" style={{ padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderColor: G.primary }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: G.accent, display: 'flex', alignItems: 'center', gap: 6 }}><Pencil size={13} /> 편집 모드 · 编辑模式</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 11, color: G.mu }}>수정자 · 修改人 <span style={{ color: G.bad }}>*</span></span>
-            <input value={editorName} onChange={e => setEditorName(e.target.value)} placeholder="이름 · 姓名"
-              style={{ ...inputStyle, padding: '6px 10px', minWidth: 140 }} />
+        <div className="card" style={{ padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', borderColor: G.primary }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: G.accent, display: 'flex', alignItems: 'center', gap: 6, paddingTop: 6 }}><Pencil size={13} /> 편집 모드 · 编辑模式</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11, color: G.mu }}>수정자 · 修改人 <span style={{ color: G.bad }}>*</span></span>
+              <input
+                ref={editorRef}
+                value={editorName}
+                onChange={e => { setEditorName(e.target.value); if (editorError) setEditorError(false) }}
+                onAnimationEnd={() => setShaking(false)}
+                placeholder="이름 · 姓名"
+                style={{ ...inputStyle, padding: '6px 10px', minWidth: 150, border: `1px solid ${editorError ? G.bad : G.border}`, animation: shaking ? 'ikuShake .4s ease' : undefined }}
+              />
+            </div>
+            {editorError && (
+              <span style={{ fontSize: 10.5, color: G.bad, fontWeight: 600 }}>수정자 이름을 입력하세요 · 请输入修改人姓名</span>
+            )}
           </div>
-          <span style={{ fontSize: 10.5, color: G.fa }}>저장하려면 수정자 이름이 필요합니다 · 保存需填写修改人</span>
+          <span style={{ fontSize: 10.5, color: G.fa, paddingTop: 6 }}>저장하려면 수정자 이름이 필요합니다 · 保存需填写修改人</span>
         </div>
       )}
 
@@ -722,8 +892,8 @@ export default function ProcessPage({ G }) {
 
       {/* Cards */}
       {loading || procLoading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
-          {[...Array(4)].map((_, i) => <SkeletonCard key={i} G={G} />)}
+        <div className="proc-grid">
+          {[...Array(5)].map((_, i) => <SkeletonCard key={i} G={G} />)}
         </div>
       ) : visible.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: G.mu }}>
@@ -732,7 +902,7 @@ export default function ProcessPage({ G }) {
           <div style={{ fontSize: 12, color: G.fa, marginTop: 4 }}>필터를 조정하거나 검색해 보세요 · 请调整筛选或搜索</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16, alignItems: 'start' }}>
+        <div className="proc-grid">
           {visible.map(mo => (
             <ProcessCard
               key={itemNoOf(mo)} G={G} mo={mo}
