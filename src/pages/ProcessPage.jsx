@@ -164,12 +164,14 @@ function PwModal({ G, onClose, onSuccess }) {
     e?.preventDefault()
     if (busy || !pw) return
     setBusy(true); setErr('')
-    const ok = await verifyProcessPassword(pw)
-    if (ok) {
+    const result = await verifyProcessPassword(pw)
+    if (result.ok) {
       onSuccess(pw)
     } else {
       setBusy(false)
-      setErr('비밀번호가 틀렸습니다 · 密码错误')
+      // Distinguish a genuinely wrong password from a server/config error so a
+      // missing PROCESS_KV binding or outage isn't mislabelled as "wrong password".
+      setErr(result.message || '비밀번호가 틀렸습니다 · 密码错误')
     }
   }
 

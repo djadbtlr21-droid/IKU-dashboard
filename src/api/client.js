@@ -43,19 +43,36 @@ export async function fetchProcessData() {
   return apiFetch('/api/process')
 }
 
-// Verify the edit password (server-side). Returns true/false (never throws on 401).
+// Verify the edit password (server-side). Returns a structured result so the
+// UI can distinguish a wrong password (401) from a server/config error (5xx)
+// or a network failure — never throws.
+//   { ok: true, source }                       password accepted
+//   { ok: false, kind: 'wrong_password', ... }  401 — actually incorrect
+//   { ok: false, kind: 'server_error', ... }    4xx/5xx other than 401
+//   { ok: false, kind: 'network', ... }         fetch failed / offline
 export async function verifyProcessPassword(password) {
+  let res
   try {
-    const res = await fetch('/api/process', {
+    res = await fetch('/api/process', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'verify', password }),
     })
-    if (!res.ok) return false
-    const data = await res.json().catch(() => null)
-    return !!(data && data.ok)
   } catch {
-    return false
+    return { ok: false, kind: 'network', message: '서버에 연결할 수 없습니다 · 无法连接服务器' }
+  }
+  const data = await res.json().catch(() => null)
+  if (res.ok && data && data.ok) {
+    return { ok: true, source: data.passwordSource }
+  }
+  if (res.status === 401) {
+    return { ok: false, kind: 'wrong_password', message: data?.message || '비밀번호가 틀렸습니다 · 密码错误' }
+  }
+  return {
+    ok: false,
+    kind: 'server_error',
+    status: res.status,
+    message: data?.message || `서버 오류 (${res.status}) · 服务器错误`,
   }
 }
 

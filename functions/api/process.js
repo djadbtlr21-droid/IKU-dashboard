@@ -24,13 +24,39 @@ const MAX_REMARK = 4000
 const MAX_CELLS_BYTES = 20000
 
 function getKV(env) {
-  return env.PROCESS_KV || null
+  return (env && env.PROCESS_KV) || null
 }
 
+// Read an env var defensively. EdgeOne exposes config on the `env` arg, but
+// fall back to process.env so the function also works under a Node-like runtime.
+function readEnvVar(env, name) {
+  if (env && env[name] != null) return env[name]
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env[name] != null) {
+      return process.env[name]
+    }
+  } catch { /* no process global — ignore */ }
+  return undefined
+}
+
+// Resolve the expected edit password + where it came from (for diagnostics).
+function resolveExpectedPassword(env) {
+  const trimmed = trim(readEnvVar(env, 'PROCESS_PASSWORD'))
+  if (typeof trimmed === 'string' && trimmed.length > 0) return { value: trimmed, source: 'env' }
+  return { value: 'jera8888', source: 'default' }
+}
+
+// Returns { ok, reason, source }. `reason` distinguishes a missing password
+// (client sent nothing) from an actual mismatch, so the UI can tell them apart.
 function checkPassword(env, password) {
-  const expected = trim(env.PROCESS_PASSWORD) || 'jera8888'
-  if (typeof password !== 'string') return false
-  return safeEqualStr(expected, password)
+  const { value, source } = resolveExpectedPassword(env)
+  if (typeof password !== 'string' || password.length === 0) {
+    return { ok: false, reason: 'missing_password', source }
+  }
+  // Accept the raw value and a trimmed copy (guards against an accidental
+  // trailing space/newline pasted into the password field).
+  const ok = safeEqualStr(value, password) || safeEqualStr(value, password.trim())
+  return { ok, reason: ok ? null : 'invalid_password', source }
 }
 
 function validItemNo(s) {
@@ -87,7 +113,10 @@ async function readAll(kv) {
   return { items, hidden, lastUpdated, lastUpdatedBy }
 }
 
-export async function onRequest({ request, env }) {
+export async function onRequest(context) {
+  const request = context?.request
+  const env = context?.env || {}
+
   if (request.method === 'OPTIONS') return preflight('GET, POST, OPTIONS')
 
   const kv = getKV(env)
@@ -100,7 +129,7 @@ export async function onRequest({ request, env }) {
       return json({ ok: true, ...data }, 200, { 'Cache-Control': 'no-store' })
     } catch (err) {
       console.error('[process] GET error', err)
-      return json({ ok: false, error: 'read failed' }, 500)
+      return json({ ok: false, error: 'read_failed', message: 'KV 읽기 실패 · KV 读取失败' }, 500)
     }
   }
 
@@ -109,26 +138,42 @@ export async function onRequest({ request, env }) {
   }
 
   // ── POST — verified mutation ──
-  if (!kv) return json({ ok: false, error: 'PROCESS_KV not configured' }, 500)
-
+  // Parse the body first (robust: text + JSON.parse). Body/auth errors must be
+  // reported distinctly from a KV/binding error so the UI never mislabels a
+  // server problem as "wrong password".
   let body
-  try { body = await request.json() } catch { return json({ ok: false, error: 'Invalid JSON' }, 400) }
+  try {
+    const raw = await request.text()
+    body = raw ? JSON.parse(raw) : {}
+  } catch {
+    return json({ ok: false, error: 'invalid_json', message: '잘못된 요청 형식 · 请求格式错误' }, 400)
+  }
   const { password, editorName, action } = body || {}
 
-  // 1) password — server-side check
-  if (!checkPassword(env, password)) {
-    return json({ ok: false, error: 'invalid_password', message: '비밀번호가 틀렸습니다 · 密码错误' }, 401)
+  // 1) password — server-side check (does NOT require KV)
+  const pw = checkPassword(env, password)
+  if (pw.reason === 'missing_password') {
+    return json({ ok: false, error: 'missing_password', message: '비밀번호를 입력하세요 · 请输入密码' }, 400)
+  }
+  if (!pw.ok) {
+    return json({ ok: false, error: 'invalid_password', message: '비밀번호가 틀렸습니다 · 密码错误', passwordSource: pw.source }, 401)
   }
 
-  // action: verify — password-only gate for entering edit mode (no editor name yet)
+  // action: verify — password-only gate for entering edit mode (no KV / editor needed)
   if (action === 'verify') {
-    return json({ ok: true, verified: true })
+    return json({ ok: true, verified: true, passwordSource: pw.source })
   }
 
-  // 2) editor name — required
+  // 2) editor name — required for any mutation
   const editor = typeof editorName === 'string' ? editorName.trim() : ''
   if (!editor || editor.length > 60) {
     return json({ ok: false, error: 'editor_required', message: '수정자 이름을 입력하세요 · 请输入修改人姓名' }, 400)
+  }
+
+  // 3) KV is required only for the actual writes — report it clearly (not as an
+  //    auth failure) so a missing/misnamed binding is diagnosable.
+  if (!kv) {
+    return json({ ok: false, error: 'kv_not_configured', message: 'PROCESS_KV 바인딩이 없습니다 · 未绑定 PROCESS_KV' }, 503)
   }
 
   try {
@@ -161,6 +206,6 @@ export async function onRequest({ request, env }) {
     return json({ ok: true, itemNo, record })
   } catch (err) {
     console.error('[process] mutation error', err)
-    return json({ ok: false, error: err.message || 'mutation failed' }, 500)
+    return json({ ok: false, error: 'kv_write_failed', message: 'KV 저장 실패 · KV 保存失败', detail: err.message || String(err) }, 500)
   }
 }
