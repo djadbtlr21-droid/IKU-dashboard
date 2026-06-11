@@ -1,4 +1,4 @@
-import { getAccessToken, zohoBase } from './_zoho.js';
+import { zohoFetch, zohoBase } from './_zoho.js';
 import { json, preflight } from './_resp.js';
 
 export async function onRequest({ request, env }) {
@@ -7,15 +7,9 @@ export async function onRequest({ request, env }) {
     const id = new URL(request.url).searchParams.get('id');
     if (!id) return json({ error: 'Missing id param' }, 400);
 
-    const token = await getAccessToken(env);
     const url = `${zohoBase(env)}/report/All_MO/${encodeURIComponent(id)}`;
 
-    const zres = await fetch(url, {
-      headers: {
-        Authorization: `Zoho-oauthtoken ${token}`,
-        Accept: 'application/json',
-      },
-    });
+    const zres = await zohoFetch(env, url, { headers: { Accept: 'application/json' } });
 
     const raw = await zres.text();
     let body = null;

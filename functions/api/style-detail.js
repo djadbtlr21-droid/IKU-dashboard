@@ -1,4 +1,4 @@
-import { getAccessToken, zohoBase } from './_zoho.js';
+import { zohoFetch, zohoBase } from './_zoho.js';
 import { json, preflight } from './_resp.js';
 
 export async function onRequest({ request, env }) {
@@ -8,8 +8,6 @@ export async function onRequest({ request, env }) {
     const sku = searchParams.get('sku');
     const id = searchParams.get('id');
     if (!sku && !id) return json({ error: 'Missing sku or id param' }, 400);
-
-    const token = await getAccessToken(env);
 
     // ?id= → direct record fetch (fast path)
     let url;
@@ -21,12 +19,7 @@ export async function onRequest({ request, env }) {
       url = `${zohoBase(env)}/report/All_Styles?criteria=${encodeURIComponent(criteria)}&max_records=1`;
     }
 
-    const zres = await fetch(url, {
-      headers: {
-        Authorization: `Zoho-oauthtoken ${token}`,
-        Accept: 'application/json',
-      },
-    });
+    const zres = await zohoFetch(env, url, { headers: { Accept: 'application/json' } });
 
     const raw = await zres.text();
     let body = null;

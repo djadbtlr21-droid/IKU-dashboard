@@ -1,19 +1,13 @@
-import { getAccessToken, zohoBase } from './_zoho.js';
+import { zohoFetch, zohoBase } from './_zoho.js';
 import { json, preflight } from './_resp.js';
 
 export async function onRequest({ request, env }) {
   if (request.method === 'OPTIONS') return preflight('GET, OPTIONS');
   try {
-    const token = await getAccessToken(env);
     const maxRecords = new URL(request.url).searchParams.get('max_records') || '200';
     const url = `${zohoBase(env)}/report/All_Shipment?max_records=${maxRecords}`;
 
-    const zres = await fetch(url, {
-      headers: {
-        Authorization: `Zoho-oauthtoken ${token}`,
-        Accept: 'application/json',
-      },
-    });
+    const zres = await zohoFetch(env, url, { headers: { Accept: 'application/json' } });
 
     const raw = await zres.text();
     let body = null;

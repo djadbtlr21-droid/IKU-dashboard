@@ -40,8 +40,8 @@ async function fetchWithRetry(env, reportName, criteriaField, moNumber) {
 
   if (status === 401) {
     console.log(`[packs-list] 401 (code ${body?.code}) — invalidating token, retrying once`);
-    invalidateToken();
-    token = await getAccessToken(env);
+    await invalidateToken(env);
+    token = await getAccessToken(env, { force: true });
     ({ status, body } = await zohoFetch(env, token, reportName, criteriaField, moNumber));
     console.log(`[packs-list] retry result: status=${status} code=${body?.code}`);
   }

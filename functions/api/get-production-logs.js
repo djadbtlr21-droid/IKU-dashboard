@@ -1,4 +1,4 @@
-import { getAccessToken, zohoBase } from './_zoho.js';
+import { zohoFetch, zohoBase } from './_zoho.js';
 import { json, preflight } from './_resp.js';
 
 // Probe multiple Zoho report name candidates (first 200-OK wins).
@@ -15,12 +15,10 @@ const REPORT_CANDIDATES = [
 // Probe MO criteria field name — Zoho Creator link names vary by schema.
 const CRITERIA_FIELDS = ['MO_Number', 'MO', 'Manufacturing_Order', 'MO_ID'];
 
-async function tryFetch(env, token, reportName, criteriaField, moNumber) {
+async function tryFetch(env, reportName, criteriaField, moNumber) {
   const criteria = encodeURIComponent(`${criteriaField}=="${moNumber}"`);
   const url = `${zohoBase(env)}/report/${reportName}?criteria=${criteria}&max_records=500`;
-  const zres = await fetch(url, {
-    headers: { Authorization: `Zoho-oauthtoken ${token}`, Accept: 'application/json' },
-  });
+  const zres = await zohoFetch(env, url, { headers: { Accept: 'application/json' } });
   const raw = await zres.text();
   let body = null;
   try { body = raw ? JSON.parse(raw) : null; } catch { body = { raw }; }
@@ -33,11 +31,9 @@ export async function onRequest({ request, env }) {
     const mo = new URL(request.url).searchParams.get('mo');
     if (!mo) return json({ error: 'Missing mo query param' }, 400);
 
-    const token = await getAccessToken(env);
-
     for (const reportName of REPORT_CANDIDATES) {
       for (const field of CRITERIA_FIELDS) {
-        const { status, body } = await tryFetch(env, token, reportName, field, mo);
+        const { status, body } = await tryFetch(env, reportName, field, mo);
 
         if (status === 200) {
           const arr = body?.data || [];

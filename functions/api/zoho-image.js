@@ -1,4 +1,4 @@
-import { getAccessToken, trim } from './_zoho.js';
+import { zohoFetch, trim } from './_zoho.js';
 import { CORS_HEADERS } from './_resp.js';
 
 const PLACEHOLDER_SVG = (text) => `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
@@ -45,7 +45,6 @@ export async function onRequest({ request, env }) {
     const index = searchParams.get('index');
     const filepath = searchParams.get('filepath');
 
-    const token = await getAccessToken(env);
     const domain = (trim(env.ZOHO_API_DOMAIN) || 'https://www.zohoapis.com').replace(/\/+$/, '');
     const account = trim(env.ZOHO_ACCOUNT) || 'jeramoda';
     const app = trim(env.ZOHO_APP) || 'eom';
@@ -69,7 +68,7 @@ export async function onRequest({ request, env }) {
         }
       }
 
-      const zres = await fetch(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+      const zres = await zohoFetch(env, url);
       if (!zres.ok) {
         console.error('[zoho-image] filepath upstream', zres.status, url);
         return placeholder('No Image');
@@ -94,7 +93,7 @@ export async function onRequest({ request, env }) {
     }
     segments.push('download');
     const imageUrl = `${domain}/${segments.join('/')}`;
-    const zres = await fetch(imageUrl, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+    const zres = await zohoFetch(env, imageUrl);
     if (zres.ok) return streamUpstream(zres);
     console.error('[zoho-image] upstream', zres.status, imageUrl);
 
@@ -102,7 +101,7 @@ export async function onRequest({ request, env }) {
     if (zres.status === 404 && index !== undefined && index !== '' && index !== null) {
       const fallbackUrl = `${domain}/creator/v2.1/data/${account}/${app}/report/${encodeURIComponent(report)}/${encodeURIComponent(recordId)}/${encodeURIComponent(field)}/download`;
       console.log('[zoho-image] retry w/o index →', fallbackUrl);
-      const retry = await fetch(fallbackUrl, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+      const retry = await zohoFetch(env, fallbackUrl);
       if (retry.ok) return streamUpstream(retry);
       console.error('[zoho-image] retry failed', retry.status);
     }
