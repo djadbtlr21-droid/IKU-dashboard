@@ -429,11 +429,11 @@ function CellEditor({ G, field, cell, editable, allowStock, onChange }) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap', padding: h ? '3px 6px' : 0, background: h ? hlBg : 'transparent', borderRadius: 6, textAlign: 'center' }}>
         {empty ? (
-          <span style={{ fontSize: 11, color: G.fa }}>—</span>
+          <span style={{ fontSize: 11.55, color: G.fa }}>—</span>
         ) : (
           <>
-            {v && <span className={midRead ? 'iku-blink' : undefined} style={{ fontSize: 11, fontWeight: 600, color: done ? G.ok : (midRead ? G.bad : G.tx), padding: '2px 8px', background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999 }}>{done ? '✅ ' : ''}{statusLabel(v)}</span>}
-            {d && <span className="num" style={{ fontSize: 11, color: G.accent, fontWeight: 600 }}>{d}</span>}
+            {v && <span className={midRead ? 'iku-blink' : undefined} style={{ fontSize: 11.55, fontWeight: 600, color: done ? G.ok : (midRead ? G.bad : G.tx), padding: '2px 8px', background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999 }}>{done ? '✅ ' : ''}{statusLabel(v)}</span>}
+            {d && <span className="num" style={{ fontSize: 11.55, color: G.accent, fontWeight: 600 }}>{d}</span>}
           </>
         )}
         {h && <AlertTriangle size={11} style={{ color: G.warn }} />}
@@ -482,7 +482,7 @@ function CellEditor({ G, field, cell, editable, allowStock, onChange }) {
           return (
             <button key={o.v} type="button"
               onClick={() => onChange({ ...cell, v: on ? '' : o.v })}
-              style={{ padding: '3px 8px', fontSize: 10, borderRadius: 999, cursor: 'pointer', fontWeight: 600, border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.18)' : 'rgba(201,168,110,0.16)') : 'transparent', color: on ? G.accent : G.mu, lineHeight: 1.35 }}>
+              style={{ padding: '3px 8px', fontSize: 10.5, borderRadius: 999, cursor: 'pointer', fontWeight: 600, border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.18)' : 'rgba(201,168,110,0.16)') : 'transparent', color: on ? G.accent : G.mu, lineHeight: 1.35 }}>
               {on && isDone ? '✅ ' : ''}{o.ko} {o.cn}
             </button>
           )
@@ -637,14 +637,14 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
           const memo = cells[memoKey]?.v || ''
           return (
             <div key={sec.id} style={{ paddingBottom: 20, borderBottom: `1px solid ${G.hair}` }}>
-              {/* item ⑥ — section title 2× size (number scales with it); flexWrap so
-                  right-side items drop below instead of overlapping on narrow cards */}
-              <div style={{ fontSize: 23, fontWeight: 700, color: G.tx, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.2 }}>
+              {/* section title (number scales with it); flexWrap so right-side
+                  items drop below instead of overlapping on narrow cards */}
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: G.tx, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.2 }}>
                 <span><span style={{ color: G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: G.mu, fontWeight: 500 }}>{sec.cn}</span></span>
                 {!editable && <MemoBadge G={G} memo={memo} />}
-                {/* item ① — free-text 원단명 shown at the ④ section title in read mode */}
+                {/* item ① — free-text 원단명 (read mode); item ③ centered in the row */}
                 {sec.id === 'fabric' && !editable && fabricName && (
-                  <span title={fabricName} style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 500, color: G.mu, maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span title={fabricName} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 500, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                     🧵 {fabricName}
                   </span>
                 )}
@@ -665,12 +665,11 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
                   const labelColor = st === 'done' ? G.ok : (st === 'mid' ? G.bad : G.mu)
                   return (
                     <div key={cellKey} style={{ display: 'grid', gridTemplateColumns: '104px 1fr', gap: 8, alignItems: editable ? 'start' : 'center' }}>
-                      <div style={{ fontSize: 12.1, paddingTop: editable ? 7 : 0, lineHeight: 1.3 }}>
-                        {/* item ② label = status text(11) × 1.1; item ③ done = green text (no ✅);
-                            item ⑨ mid = red blink on label text */}
+                      <div style={{ fontSize: 12.7, paddingTop: editable ? 7 : 0, lineHeight: 1.3 }}>
+                        {/* label kr/cn (done = green, no ✅; mid = red blink) */}
                         <span className={st === 'mid' ? 'iku-blink' : undefined} style={{ color: labelColor, fontWeight: st === 'none' ? 400 : 600 }}>
                           {f.kr}<br />
-                          <span style={{ color: st === 'none' ? G.fa : labelColor, fontSize: 11 }}>{f.cn}</span>
+                          <span style={{ color: st === 'none' ? G.fa : labelColor, fontSize: 11.55 }}>{f.cn}</span>
                         </span>
                       </div>
                       <CellEditor G={G} field={f} cell={cell} editable={editable} allowStock={allowStock} onChange={(val) => setCell(cellKey, val)} />
@@ -693,7 +692,7 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
 
         {/* ⑨ card-wide 비고 */}
         <div>
-          <div style={{ fontSize: 23, fontWeight: 700, color: G.tx, marginBottom: 8, lineHeight: 1.2 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: G.tx, marginBottom: 8, lineHeight: 1.2 }}>
             <span style={{ color: G.accent, marginRight: 5 }}>⑨</span>전체 비고 <span style={{ color: G.mu, fontWeight: 500 }}>整体备注</span>
           </div>
           {editable ? (
