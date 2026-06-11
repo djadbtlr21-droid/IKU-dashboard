@@ -1,0 +1,107 @@
+import { getAccessToken, invalidateToken, zohoBase } from './_zoho.js';
+import { json, preflight } from './_resp.js';
+
+// Confirmed Zoho report link names — single exact names, no fallback.
+const REPORT_CANDIDATES = {
+  inner: ['All_Inner_Pack'],    // ZOHO-confirmed singular
+  master: ['All_Master_Bags'],  // ZOHO-confirmed plural
+};
+
+// Confirmed MO criteria field.
+const CRITERIA_FIELDS = ['MO_Number'];
+
+async function zohoFetch(env, token, reportName, criteriaField, moNumber) {
+  const criteriaRaw = `(${criteriaField}=="${moNumber}")`;
+  const criteriaEncoded = encodeURIComponent(criteriaRaw);
+  const url = `${zohoBase(env)}/report/${reportName}?criteria=${criteriaEncoded}&max_records=200`;
+  console.log(`[packs-list] criteria raw: ${criteriaRaw}`);
+  console.log(`[packs-list] criteria encoded: ${criteriaEncoded}`);
+  console.log(`[packs-list] FULL URL: ${url}`);
+  const zres = await fetch(url, {
+    headers: { Authorization: `Zoho-oauthtoken ${token}`, Accept: 'application/json' },
+  });
+  console.log(`[packs-list] response status: ${zres.status}`);
+  const raw = await zres.text();
+  let body = null;
+  try { body = raw ? JSON.parse(raw) : null; } catch { body = { raw }; }
+  console.log(`[packs-list] response body keys:`, body ? Object.keys(body) : '(null)');
+  console.log(`[packs-list] response data length:`, body?.data?.length ?? '(no data key)');
+  if (body?.data?.length > 0) {
+    console.log(`[packs-list] SUCCESS — first record:`, JSON.stringify(body.data[0]).slice(0, 500));
+  }
+  return { status: zres.status, body };
+}
+
+// Fetch with 401 → invalidate + refresh + retry once.
+async function fetchWithRetry(env, reportName, criteriaField, moNumber) {
+  let token = await getAccessToken(env);
+  console.log(`[packs-list] TRY report=${reportName} field=${criteriaField}`);
+  let { status, body } = await zohoFetch(env, token, reportName, criteriaField, moNumber);
+
+  if (status === 401) {
+    console.log(`[packs-list] 401 (code ${body?.code}) — invalidating token, retrying once`);
+    invalidateToken();
+    token = await getAccessToken(env);
+    ({ status, body } = await zohoFetch(env, token, reportName, criteriaField, moNumber));
+    console.log(`[packs-list] retry result: status=${status} code=${body?.code}`);
+  }
+
+  return { status, body };
+}
+
+export async function onRequest({ request, env }) {
+  if (request.method === 'OPTIONS') return preflight('GET, OPTIONS');
+  try {
+    const searchParams = new URL(request.url).searchParams;
+    const mo = searchParams.get('mo');
+    const type = searchParams.get('type');
+
+    if (!mo || !type) {
+      return json({ error: 'Missing mo or type query param' }, 400);
+    }
+    if (!REPORT_CANDIDATES[type]) {
+      return json({ error: `Invalid type "${type}" — expected inner or master` }, 400);
+    }
+
+    const reportName = REPORT_CANDIDATES[type][0];
+    const field = CRITERIA_FIELDS[0];
+
+    const { status, body } = await fetchWithRetry(env, reportName, field, mo);
+
+    // Success
+    if (status === 200) {
+      const arr = body?.data || [];
+      console.log(`[packs-list] SUCCESS type=${type} report=${reportName} field=${field} count=${arr.length}`);
+      if (arr.length > 0) {
+        console.log(`[packs-list] sample keys:`, Object.keys(arr[0]).slice(0, 20));
+      }
+      return json({
+        data: arr,
+        _meta: { report: reportName, criteriaField: field, count: arr.length },
+      });
+    }
+
+    // Zoho "no records found" — confirmed report+field, so this is genuinely empty
+    if (status === 400 && body?.code && [3000, 3001, 3100, 9280].includes(body.code)) {
+      console.log(`[packs-list] EMPTY type=${type} report=${reportName} field=${field} code=${body.code}`);
+      return json({
+        data: [],
+        _meta: { report: reportName, criteriaField: field, count: 0, note: 'empty', zohoCode: body.code },
+      });
+    }
+
+    // Unexpected status after retry
+    console.error(`[packs-list] FAIL type=${type} report=${reportName} field=${field} status=${status}`, body?.code, body?.message);
+    return json({
+      data: [],
+      _meta: { count: 0, note: 'unexpected_error', status, zohoCode: body?.code, message: body?.message },
+    });
+  } catch (err) {
+    console.error('[packs-list] FATAL:', err);
+    return json({
+      error: err.message || String(err),
+      stack: err.stack?.split('\n').slice(0, 5).join('\n'),
+      ok: false,
+    }, 500);
+  }
+}

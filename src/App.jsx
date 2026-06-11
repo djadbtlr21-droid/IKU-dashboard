@@ -1,9 +1,10 @@
 import { useState, createContext, useContext, useEffect } from "react"
-import { Package, BarChart2, Truck, Sun, Moon, RefreshCw, Lock, LogOut } from "lucide-react"
+import { Package, BarChart2, Truck, Sun, Moon, RefreshCw, Lock, LogOut, ClipboardCheck } from "lucide-react"
 import CoverPage from "./components/CoverPage"
 import MoView from "./pages/MoView"
 import OverviewPage from "./pages/OverviewPage"
 import ShipmentPage from "./pages/ShipmentPage"
+import ProcessPage from "./pages/ProcessPage"
 import ErrorBoundary from "./components/ErrorBoundary"
 import { DataProvider } from "./contexts/DataContext"
 import { AnnotationProvider } from "./contexts/AnnotationContext"
@@ -118,6 +119,7 @@ const TABS = [
   { id: "overview", label: "Overview", sub: "대시보드 · 仪表盘", icon: BarChart2, active: true },
   { id: "mo", label: "MO View", sub: "생산진행 · 生产进度", icon: Package, active: true },
   { id: "shipment", label: "Shipment", sub: "출고현황 · 出货状况", icon: Truck, active: true },
+  { id: "process", label: "공정 확인", sub: "工序确认", icon: ClipboardCheck, active: true },
 ]
 
 function Rail({ G }) { return G.dk ? <span className="rail" /> : null }
@@ -331,7 +333,12 @@ export default function App() {
                   <ShipmentPage G={G} />
                 </ErrorBoundary>
               )}
-              {tab !== "overview" && tab !== "mo" && tab !== "shipment" && activeTab && <ComingSoon G={G} label={activeTab.label} />}
+              {tab === "process" && (
+                <ErrorBoundary>
+                  <ProcessPage G={G} />
+                </ErrorBoundary>
+              )}
+              {tab !== "overview" && tab !== "mo" && tab !== "shipment" && tab !== "process" && activeTab && <ComingSoon G={G} label={activeTab.label} />}
             </div>
           </main>
         </div>

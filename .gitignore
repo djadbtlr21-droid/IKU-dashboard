@@ -23,6 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+.env
+.env.*
+!.env.example
 .env*.local
 
 # Annotation backups (manual via npm run backup-annotations)
