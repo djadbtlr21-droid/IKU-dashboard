@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   ClipboardCheck, Search, Eye, EyeOff, Lock, Save, X,
   AlertTriangle, RotateCcw, Pencil, CheckCircle2, Calendar,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, MessageSquare,
 } from 'lucide-react'
 import { fetchMoList } from '../api/client'
 import {
@@ -34,7 +34,23 @@ const STATUS_OPTIONS = [
   { v: '已入库', ko: '입고완료', cn: '已入库', stock: true },
   { v: '完成', ko: '완성', cn: '完成' },
 ]
-const DONE_VALUES = new Set(['完成', '已入库'])
+
+// Section-specific status sets (items ⑤ 생산 / ⑥ 가격).
+const PRODUCTION_STATUSES = [
+  { v: '裁剪中', ko: '재단 중', cn: '裁剪中' },
+  { v: '裁缝中', ko: '재봉 중', cn: '裁缝中' },
+  { v: '包装中', ko: '포장 중', cn: '包装中' },
+  { v: '生产完成', ko: '생산완료', cn: '生产完成' },
+]
+const PRICE_STATUSES = [
+  { v: '报价中', ko: '산출중', cn: '报价中' },
+  { v: '报价完成', ko: '산출완료', cn: '报价完成' },
+]
+
+const ALL_STATUS = [...STATUS_OPTIONS, ...PRODUCTION_STATUSES, ...PRICE_STATUSES]
+
+// Values treated as "완료" → ✅ + no blink (item ⑧/⑨).
+const DONE_VALUES = new Set(['完成', '已入库', '生产完成', '报价完成'])
 
 // Raw-material sections that may use the 입고완료 已入库 chip (item ③).
 const RAW_SECTIONS = new Set(['fabric', 'sub_material', 'label', 'wash_label'])
@@ -59,13 +75,13 @@ const SECTIONS = [
   },
   {
     id: 'price', no: '③', kr: '가격', cn: '单价', fields: [
-      { key: 'cost_fixed', kr: '공장가격확정', cn: '成本核算完成', type: 'chip' },
+      { key: 'cost_fixed', kr: '공장가격확정', cn: '成本核算', type: 'chip', statuses: PRICE_STATUSES },
     ],
   },
   {
     id: 'fabric', no: '④', kr: '원단', cn: '面料', fields: [
       { key: 'ordered', kr: '오더완료', cn: '已下单', type: 'chip' },
-      { key: 'type_color', kr: '종류·색상확인', cn: '品种及颜色确认', type: 'chip' },
+      { key: 'type_color', kr: '퀄리티·색상확인', cn: '品质及颜色确认', type: 'chip' },
       { key: 'eta', kr: '예상납기', cn: '预计交期', type: 'date' },
     ],
   },
@@ -90,17 +106,18 @@ const SECTIONS = [
   },
   {
     id: 'production', no: '⑧', kr: '생산', cn: '生产', fields: [
-      { key: 'in_production', kr: '생산중', cn: '生产中', type: 'chip' },
+      { key: 'in_production', kr: '생산상태', cn: '生产状态', type: 'chip', statuses: PRODUCTION_STATUSES },
       { key: 'prod_done_eta', kr: '생산완료예정', cn: '预计生产完成', type: 'date' },
-      { key: 'inspection', kr: '검품', cn: '验货', type: 'chip' },
-      { key: 'shipment', kr: '선적', cn: '装船', type: 'chip' },
+      { key: 'ship_eta', kr: '선적예정일', cn: '预计装船日', type: 'date' },
+      // 검품 验货 / 선적 装船 rows removed (item ⑤). Old saved values are kept in
+      // KV (not deleted) — they are simply no longer rendered.
     ],
   },
 ]
 
 // ── status helpers ──
 function statusLabel(v) {
-  const o = STATUS_OPTIONS.find(x => x.v === v)
+  const o = ALL_STATUS.find(x => x.v === v)
   return o ? `${o.ko} ${o.cn}` : v
 }
 // 'done' (✅) · 'mid' (red blink) · 'none'
@@ -177,7 +194,8 @@ const PAGE_CSS = `
 // ──────────────────────────────────────────────────────────
 // Lightweight bilingual date picker (item ④)
 // ──────────────────────────────────────────────────────────
-const WEEKDAYS_KO = ['일', '월', '화', '수', '목', '금', '토']
+// Monday-first weekday headers, Chinese only (item ③).
+const WEEKDAYS_CN = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 function DatePicker({ G, value, onChange }) {
   const [open, setOpen] = useState(false)
   const sel = parseYMD(value)
@@ -187,10 +205,12 @@ function DatePicker({ G, value, onChange }) {
   })
 
   const today = new Date()
+  // JS getDay(): 0=Sun..6=Sat → convert to Monday-first leading-blank offset.
   const firstDow = new Date(view.y, view.m, 1).getDay()
+  const lead = (firstDow + 6) % 7
   const daysInMonth = new Date(view.y, view.m + 1, 0).getDate()
   const cells = []
-  for (let i = 0; i < firstDow; i++) cells.push(null)
+  for (let i = 0; i < lead; i++) cells.push(null)
   for (let d = 1; d <= daysInMonth; d++) cells.push(d)
 
   const pick = (d) => { onChange(formatYMD(new Date(view.y, view.m, d))); setOpen(false) }
@@ -207,22 +227,22 @@ function DatePicker({ G, value, onChange }) {
       <button type="button" onClick={() => setOpen(o => !o)}
         style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 6, fontSize: 12, border: `1px solid ${G.border}`, background: G.bg, color: value ? G.tx : G.fa, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
         <Calendar size={12} style={{ flexShrink: 0, color: G.mu }} />
-        <span className="num" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || '날짜 선택 · 选择日期'}</span>
+        <span className="num" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || '选择日期'}</span>
       </button>
       {open && (
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 1200 }} />
           <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 1201, background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: 10, width: 232, maxWidth: '80vw' }}>
-            {/* header */}
+            {/* header — Chinese only */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <button type="button" onClick={prev} style={{ background: 'none', border: 'none', cursor: 'pointer', color: G.mu, display: 'flex', padding: 4 }}><ChevronLeft size={16} /></button>
-              <span style={{ fontSize: 12, fontWeight: 700, color: G.tx }}>{view.y}년 {view.m + 1}월 · {view.y}年{view.m + 1}月</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: G.tx }}>{view.y}年{view.m + 1}月</span>
               <button type="button" onClick={next} style={{ background: 'none', border: 'none', cursor: 'pointer', color: G.mu, display: 'flex', padding: 4 }}><ChevronRight size={16} /></button>
             </div>
-            {/* weekday row */}
+            {/* weekday row — Monday first (周六 cool, 周日 red) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 2 }}>
-              {WEEKDAYS_KO.map((w, i) => (
-                <div key={w} style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, color: i === 0 ? G.bad : (i === 6 ? G.cool : G.mu), padding: '2px 0' }}>{w}</div>
+              {WEEKDAYS_CN.map((w, i) => (
+                <div key={w} style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, color: i === 6 ? G.bad : (i === 5 ? G.cool : G.mu), padding: '2px 0' }}>{w}</div>
               ))}
             </div>
             {/* days */}
@@ -239,8 +259,8 @@ function DatePicker({ G, value, onChange }) {
             </div>
             {/* footer */}
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-              <button type="button" onClick={goToday} style={{ flex: 1, padding: '5px 0', fontSize: 11, borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.accent, cursor: 'pointer', fontWeight: 600 }}>오늘 今天</button>
-              <button type="button" onClick={clear} style={{ flex: 1, padding: '5px 0', fontSize: 11, borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.bad, cursor: 'pointer', fontWeight: 600 }}>삭제 删除</button>
+              <button type="button" onClick={goToday} style={{ flex: 1, padding: '5px 0', fontSize: 11, borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.accent, cursor: 'pointer', fontWeight: 600 }}>今天</button>
+              <button type="button" onClick={clear} style={{ flex: 1, padding: '5px 0', fontSize: 11, borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.bad, cursor: 'pointer', fontWeight: 600 }}>删除</button>
             </div>
           </div>
         </>
@@ -335,8 +355,9 @@ function CellEditor({ G, field, cell, editable, allowStock, onChange }) {
 
   if (!editable) {
     const empty = !v && !d
+    // item ④ — center the status text in read mode for clearer label spacing
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', padding: h ? '3px 6px' : 0, background: h ? hlBg : 'transparent', borderRadius: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap', padding: h ? '3px 6px' : 0, background: h ? hlBg : 'transparent', borderRadius: 6, textAlign: 'center' }}>
         {empty ? (
           <span style={{ fontSize: 11, color: G.fa }}>—</span>
         ) : (
@@ -351,7 +372,8 @@ function CellEditor({ G, field, cell, editable, allowStock, onChange }) {
   }
 
   const inputStyle = { padding: '6px 8px', borderRadius: 6, fontSize: 12, border: `1px solid ${G.border}`, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }
-  const isStandard = STATUS_OPTIONS.some(o => o.v === v)
+  const opts = field.statuses || STATUS_OPTIONS
+  const isStandard = opts.some(o => o.v === v)
   const HL = (
     <button type="button" title="주의 필요 · 需注意"
       onClick={() => onChange({ ...cell, h: !h })}
@@ -384,7 +406,7 @@ function CellEditor({ G, field, cell, editable, allowStock, onChange }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 6, background: h ? hlBg : 'transparent', borderRadius: 6 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-        {STATUS_OPTIONS.filter(o => allowStock || !o.stock).map(o => {
+        {opts.filter(o => allowStock || !o.stock).map(o => {
           const on = v === o.v
           const isDone = DONE_VALUES.has(o.v)
           return (
@@ -406,6 +428,33 @@ function CellEditor({ G, field, cell, editable, allowStock, onChange }) {
         </div>
       )}
     </div>
+  )
+}
+
+// ──────────────────────────────────────────────────────────
+// Section memo badge (item ④) — 💬 icon + dot; tap shows a popover bubble
+// with the section's saved 비고; outside click closes. Read-mode only.
+// ──────────────────────────────────────────────────────────
+function MemoBadge({ G, memo }) {
+  const [open, setOpen] = useState(false)
+  if (!memo) return null
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex' }}>
+      <button type="button" onClick={() => setOpen(o => !o)} title="비고 备注"
+        style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', color: G.accent, padding: '0 2px' }}>
+        <MessageSquare size={13} />
+        <span style={{ position: 'absolute', top: -1, right: 0, width: 5, height: 5, borderRadius: '50%', background: G.bad }} />
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 1200 }} />
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 1201, background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: '10px 12px', width: 220, maxWidth: '70vw' }}>
+            <div style={{ fontSize: 10, color: G.mu, fontWeight: 700, marginBottom: 4 }}>비고 · 备注</div>
+            <div style={{ fontSize: 12, color: G.tx, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{memo}</div>
+          </div>
+        </>
+      )}
+    </span>
   )
 }
 
@@ -498,8 +547,9 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
           const memo = cells[memoKey]?.v || ''
           return (
             <div key={sec.id}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: G.tx, marginBottom: 6 }}>
-                <span style={{ color: G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: G.mu, fontWeight: 500 }}>{sec.cn}</span>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: G.tx, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span><span style={{ color: G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: G.mu, fontWeight: 500 }}>{sec.cn}</span></span>
+                {!editable && <MemoBadge G={G} memo={memo} />}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: editable ? 8 : 4, paddingLeft: 4 }}>
                 {sec.fields.map(f => {
@@ -520,19 +570,15 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
                     </div>
                   )
                 })}
-                {/* item ⑤ per-section 비고 */}
-                {editable ? (
+                {/* item ⑤ per-section 비고 — editable input only; read mode shows
+                    the 💬 popover next to the section title (item ④) */}
+                {editable && (
                   <div style={{ display: 'grid', gridTemplateColumns: '92px 1fr', gap: 8, alignItems: 'center' }}>
                     <div style={{ fontSize: 10.5, color: G.mu }}>비고 <span style={{ color: G.fa, fontSize: 9.5 }}>备注</span></div>
                     <input value={memo} onChange={e => setCell(memoKey, { v: e.target.value })} placeholder="특이사항 입력 · 输入备注"
                       style={{ padding: '6px 8px', borderRadius: 6, fontSize: 11.5, border: `1px solid ${G.border}`, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
                   </div>
-                ) : memo ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '92px 1fr', gap: 8 }}>
-                    <div style={{ fontSize: 10.5, color: G.mu }}>비고 备注</div>
-                    <div style={{ fontSize: 11.5, color: G.tx, whiteSpace: 'pre-wrap' }}>{memo}</div>
-                  </div>
-                ) : null}
+                )}
               </div>
             </div>
           )

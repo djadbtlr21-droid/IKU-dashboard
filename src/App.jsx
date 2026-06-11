@@ -116,7 +116,7 @@ button{font-family:inherit;touch-action:manipulation}
 `
 
 const TABS = [
-  { id: "process", label: "⭐产前确认", sub: "생산 전 체크", icon: ClipboardCheck, active: true },
+  { id: "process", label: "⭐产前确认 · 생산 전 체크", sub: "생산 전 체크", icon: ClipboardCheck, active: true },
   { id: "overview", label: "Overview", sub: "대시보드 · 仪表盘", icon: BarChart2, active: true },
   { id: "mo", label: "MO View", sub: "생산진행 · 生产进度", icon: Package, active: true },
   { id: "shipment", label: "Shipment", sub: "출고현황 · 出货状况", icon: Truck, active: true },
@@ -279,7 +279,7 @@ export default function App() {
                   title={!t.active ? "Coming soon · 即将推出" : ""}
                 >
                   <t.icon size={15} strokeWidth={1.8} />
-                  <span className="nv-label">
+                  <span className="nv-label" style={t.id === "process" ? { whiteSpace: "normal", fontSize: 11, lineHeight: 1.25 } : undefined}>
                     {t.label}
                     {!t.active && <span style={{ marginLeft: 6, fontSize: 9, padding: "2px 6px", borderRadius: 999, background: G.dk ? "rgba(232,200,152,0.12)" : "rgba(201,168,110,0.12)", color: G.accent, letterSpacing: ".5px", fontWeight: 600 }}>SOON</span>}
                   </span>
