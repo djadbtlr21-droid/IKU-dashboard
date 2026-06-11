@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   ClipboardCheck, Search, Eye, EyeOff, Lock, Save, X,
   AlertTriangle, RotateCcw, Pencil, CheckCircle2, Calendar,
-  ChevronLeft, ChevronRight, MessageSquare,
+  ChevronLeft, ChevronRight, MessageSquare, ZoomIn,
 } from 'lucide-react'
 import { fetchMoList } from '../api/client'
 import {
@@ -144,6 +144,33 @@ function formatYMD(date) {
 // ── data helpers ──
 const itemNoOf = (m) => String(m?.ID || m?.MO_Number || '')
 function isHexiang(factory) { return /hexiang|合祥/i.test(String(factory || '')) }
+
+// Extract a plain string from a Zoho field (string | {zc_display_value} | etc.)
+function fieldStr(v) {
+  if (v === null || v === undefined) return ''
+  if (typeof v === 'object') return String(v.zc_display_value || v.display_value || '').trim()
+  return String(v).trim()
+}
+
+// 원단 정보 (원단이름 / 중량 / 성분) — reuses the same All_MO fields the MO
+// detail view reads: Material_Type, Fabric_Weight, blended(혼방/성분).
+function getFabricInfo(mo) {
+  const name = fieldStr(mo?.Material_Type)
+  let weight = fieldStr(mo?.Fabric_Weight)
+  if (weight && /^\d+(\.\d+)?$/.test(weight)) weight = `${weight}g`
+  const composition = fieldStr(mo?.blended)
+  const parts = [name, weight, composition].filter(Boolean)
+  return { name, weight, composition, summary: parts.join(' · '), has: parts.length > 0 }
+}
+
+// Build the same proxy URL ZohoImage renders, for the lightbox (item ②).
+function styleImageUrl(mo) {
+  const v = mo?.Style_Image
+  if (!v) return null
+  const first = Array.isArray(v) ? v[0] : v
+  const path = typeof first === 'string' ? first : (first?.url || first?.filepath || first?.path)
+  return path ? `/api/zoho-image?filepath=${encodeURIComponent(path)}` : null
+}
 function isShipped(m) {
   const ps = String(m?.Production_Status || '')
   const ds = String(m?.Delivery_Status || '')
@@ -285,6 +312,48 @@ function Toast({ toast, G }) {
     }}>
       {ok ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
       {toast.msg}
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────────────────
+// Image lightbox (item ②) — overlay, max 90% size, spinner while loading,
+// close via X / backdrop / ESC. Pinch-zoom enabled on the image (touch).
+// ──────────────────────────────────────────────────────────
+function Lightbox({ src, onClose }) {
+  const [loaded, setLoaded] = useState(false)
+  const [err, setErr] = useState(false)
+
+  useEffect(() => {
+    const h = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [onClose])
+
+  return (
+    <div
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+    >
+      <button onClick={onClose} aria-label="close"
+        style={{ position: 'absolute', top: 16, right: 16, width: 40, height: 40, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+        <X size={20} />
+      </button>
+      {!loaded && !err && (
+        <div style={{ width: 44, height: 44, borderRadius: '50%', border: '3px solid rgba(255,255,255,0.25)', borderTopColor: '#fff', animation: 'spin 1s linear infinite' }} />
+      )}
+      {err ? (
+        <div style={{ color: '#fff', fontSize: 14, textAlign: 'center' }}>이미지를 불러올 수 없습니다 · 无法加载图片</div>
+      ) : (
+        <img
+          src={src}
+          alt="order"
+          onLoad={() => setLoaded(true)}
+          onError={() => setErr(true)}
+          onClick={e => e.stopPropagation()}
+          style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', display: loaded ? 'block' : 'none', borderRadius: 8, touchAction: 'pinch-zoom', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}
+        />
+      )}
     </div>
   )
 }
@@ -461,7 +530,7 @@ function MemoBadge({ G, memo }) {
 // ──────────────────────────────────────────────────────────
 // Process card (one order)
 // ──────────────────────────────────────────────────────────
-function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHidden, canMutate }) {
+function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHidden, canMutate, onZoom }) {
   const [draftCells, setDraftCells] = useState(null)
   const [draftRemark, setDraftRemark] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -489,6 +558,8 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
   const badge = procStatusBadge(mo, G)
   const chiName = typeof mo.Chi_Style_Name === 'string' ? mo.Chi_Style_Name : (mo.Chi_Style_Name?.zc_display_value || '')
   const monthKey = getMonthKey(mo)
+  const fabric = getFabricInfo(mo)
+  const imgUrl = styleImageUrl(mo)
 
   const handleSave = async () => {
     if (saving) return
@@ -507,8 +578,17 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
     <div className="card" style={{ padding: 0, overflow: 'visible', display: 'flex', flexDirection: 'column', opacity: isHidden ? 0.7 : 1 }}>
       {/* Header */}
       <div style={{ display: 'flex', gap: 12, padding: 14, borderBottom: `1px solid ${G.hair}`, borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
-        <div style={{ width: 56, height: 72, borderRadius: 8, background: G.cardAlt, overflow: 'hidden', flexShrink: 0, border: `1px solid ${G.hair}` }}>
+        <div
+          onClick={() => { if (imgUrl && onZoom) onZoom(imgUrl) }}
+          title={imgUrl ? '클릭하여 확대 · 点击放大' : ''}
+          style={{ width: 56, height: 72, borderRadius: 8, background: G.cardAlt, overflow: 'hidden', flexShrink: 0, border: `1px solid ${G.hair}`, position: 'relative', cursor: imgUrl ? 'zoom-in' : 'default' }}
+        >
           <ZohoImage mo={mo} field="Style_Image" G={G} iconSize={18} placeholderText="" />
+          {imgUrl && (
+            <span style={{ position: 'absolute', bottom: 2, right: 2, width: 16, height: 16, borderRadius: 4, background: 'rgba(0,0,0,0.55)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ZoomIn size={10} />
+            </span>
+          )}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -524,6 +604,13 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
             <span>🏭 {getMoFactory(mo)}</span>
             {monthKey && <span>📅 {monthKey}</span>}
           </div>
+          {/* item ① — fabric info line (hidden entirely when no data → no empty row) */}
+          {fabric.has && (
+            <div title={fabric.summary} style={{ fontSize: 10, color: G.mu, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, maxWidth: '100%' }}>
+              <span style={{ flexShrink: 0 }}>🧵</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fabric.summary}</span>
+            </div>
+          )}
         </div>
         {editable && canMutate && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
@@ -550,6 +637,12 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
               <div style={{ fontSize: 11.5, fontWeight: 700, color: G.tx, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span><span style={{ color: G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: G.mu, fontWeight: 500 }}>{sec.cn}</span></span>
                 {!editable && <MemoBadge G={G} memo={memo} />}
+                {/* item ① — fabric summary at the ④ 원단 section title (right-aligned, truncated) */}
+                {sec.id === 'fabric' && fabric.has && (
+                  <span title={fabric.summary} style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 500, color: G.mu, maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    🧵 {fabric.summary}
+                  </span>
+                )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: editable ? 8 : 4, paddingLeft: 4 }}>
                 {sec.fields.map(f => {
@@ -637,7 +730,9 @@ export default function ProcessPage({ G }) {
   const [editorError, setEditorError] = useState(false)
   const [shaking, setShaking] = useState(false)
   const [toast, setToast] = useState(null)
+  const [zoomSrc, setZoomSrc] = useState(null)  // image lightbox (item ②)
   const editorRef = useRef(null)
+  const fabricDiagRef = useRef(false)
 
   // filters
   const [category, setCategory] = useState('all')
@@ -677,6 +772,21 @@ export default function ProcessPage({ G }) {
     window.addEventListener('iku:refresh', h)
     return () => window.removeEventListener('iku:refresh', h)
   }, [loadMo, loadProc])
+
+  // One-shot diagnostic: report which fabric fields (if any) are absent from the
+  // MO data so a missing field is visible in the console (item ①).
+  useEffect(() => {
+    if (fabricDiagRef.current || !moList.length) return
+    fabricDiagRef.current = true
+    const FIELDS = ['Material_Type', 'Fabric_Weight', 'blended']
+    const missing = FIELDS.filter(f => !moList.some(m => fieldStr(m?.[f])))
+    if (missing.length) {
+      console.warn('[ProcessPage] 원단 정보 필드 없음/빈값 · fabric fields missing or empty in MO data:', missing,
+        '— 표시는 가능한 필드만 노출하고 나머지 작업은 계속합니다.')
+    } else {
+      console.log('[ProcessPage] 원단 정보 필드 확인 · fabric fields present:', FIELDS)
+    }
+  }, [moList])
 
   const hiddenSet = useMemo(() => new Set(proc.hidden || []), [proc.hidden])
   const searching = search.trim().length > 0
@@ -958,12 +1068,14 @@ export default function ProcessPage({ G }) {
               isHidden={hiddenSet.has(itemNoOf(mo))}
               onSaveItem={handleSaveItem}
               onToggleHidden={handleToggleHidden}
+              onZoom={setZoomSrc}
             />
           ))}
         </div>
       )}
 
       {pwOpen && <PwModal G={G} onClose={() => setPwOpen(false)} onSuccess={onPwSuccess} />}
+      {zoomSrc && <Lightbox src={zoomSrc} onClose={() => setZoomSrc(null)} />}
       <Toast toast={toast} G={G} />
     </div>
   )
