@@ -1,3 +1,5 @@
+import { getKV } from './_kv.js';
+
 // EdgeOne Pages Functions — Zoho OAuth + base URL helper.
 // Ported from /api/_zoho.js. The OAuth flow is fetch-based so it transfers
 // 1:1; the only change is reading config from `env` (EdgeOne binding) instead
@@ -47,13 +49,9 @@ function accountsDomain(env) {
   return 'accounts.zoho.' + tld;
 }
 
-function getKV(env) {
-  return env && env.PROCESS_KV ? env.PROCESS_KV : null;
-}
-
 // Read a still-valid token from KV. Returns the token string or null.
 async function readKvToken(env) {
-  const kv = getKV(env);
+  const kv = getKV(env, 'PROCESS_KV');
   if (!kv) return null;
   try {
     const raw = await kv.get(KV_TOKEN_KEY);
@@ -69,7 +67,7 @@ async function readKvToken(env) {
 }
 
 async function writeKvToken(env, token, expiresAt) {
-  const kv = getKV(env);
+  const kv = getKV(env, 'PROCESS_KV');
   if (!kv) return;
   try {
     await kv.put(KV_TOKEN_KEY, JSON.stringify({ token, expiresAt }));
@@ -79,7 +77,7 @@ async function writeKvToken(env, token, expiresAt) {
 }
 
 async function deleteKvToken(env) {
-  const kv = getKV(env);
+  const kv = getKV(env, 'PROCESS_KV');
   if (!kv) return;
   try {
     await kv.delete(KV_TOKEN_KEY);

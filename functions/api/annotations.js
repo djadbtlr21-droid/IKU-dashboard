@@ -10,6 +10,7 @@
 
 import { isAdminRequest, readJsonBody } from './_auth.js'
 import { json, preflight } from './_resp.js'
+import { getKV } from './_kv.js'
 
 const KV_KEY = 'annotations:_all'
 const EMPTY = { version: 1, updatedAt: null, items: {} }
@@ -19,8 +20,10 @@ const MO_KEY_RE = /^mo:[A-Za-z0-9_-]{1,64}:(overall|stage:(FAB|CUT|SEW|PACK|SHIP
 const FACTORY_KEY_RE = /^factory:[^\r\n\t]{1,80}$/
 const COLORS = new Set(['yellow', 'red', 'blue', 'green', 'pink'])
 
-function getKV(env) {
-  return env.ANNOTATIONS_KV || env.PROCESS_KV || null
+// Prefer a dedicated ANNOTATIONS_KV; fall back to the shared PROCESS_KV.
+// Each name is resolved through the safe multi-layer lookup (env/global/direct).
+function resolveKV(env) {
+  return getKV(env, 'ANNOTATIONS_KV') || getKV(env, 'PROCESS_KV') || null
 }
 function validKey(k) {
   if (typeof k !== 'string' || k.length === 0 || k.length > 160) return false
@@ -55,7 +58,7 @@ async function writeAnnotations(kv, items) {
 export async function onRequest({ request, env }) {
   if (request.method === 'OPTIONS') return preflight('GET, PUT, DELETE, OPTIONS')
 
-  const kv = getKV(env)
+  const kv = resolveKV(env)
 
   if (request.method === 'GET') {
     if (!kv) return json(EMPTY)

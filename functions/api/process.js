@@ -17,15 +17,12 @@
 
 import { safeEqualStr, trim } from './_auth.js'
 import { json, preflight } from './_resp.js'
+import { getKV } from './_kv.js'
 
 const HIDDEN_KEY = 'process:_hidden'
 const KEY_PREFIX = 'process:'
 const MAX_REMARK = 4000
 const MAX_CELLS_BYTES = 20000
-
-function getKV(env) {
-  return (env && env.PROCESS_KV) || null
-}
 
 // Read an env var defensively. EdgeOne exposes config on the `env` arg, but
 // fall back to process.env so the function also works under a Node-like runtime.
@@ -119,7 +116,7 @@ export async function onRequest(context) {
 
   if (request.method === 'OPTIONS') return preflight('GET, POST, OPTIONS')
 
-  const kv = getKV(env)
+  const kv = getKV(env, 'PROCESS_KV')
 
   // ── GET — read everything ──
   if (request.method === 'GET') {
