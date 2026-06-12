@@ -236,6 +236,9 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
     return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}`
   })()
 
+  // Static palette so procStatusBadge works without the live theme object.
+  const PG = { mu: '#7A7264', warn: '#8A5A2E', ok: '#4A7058', cool: '#4E627A' }
+
   const cardHTML = (mo) => {
     const itemNo = String(mo?.ID || mo?.MO_Number || '')
     const rec = items[itemNo] || {}
@@ -247,13 +250,18 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
     const first = Array.isArray(v) ? v[0] : v
     const path = typeof first === 'string' ? first : (first?.url || first?.filepath || first?.path)
     const imgSrc = path ? `${origin}/api/zoho-image?filepath=${encodeURIComponent(path)}` : ''
+    const badge = procStatusBadge(mo, PG)
 
-    // header block
+    // header — mirrors the on-screen card header (image left + info right)
     const header = `
       <div class="card-head">
         ${imgSrc ? `<img class="thumb" src="${escapeHtml(imgSrc)}" alt="" />` : '<div class="thumb"></div>'}
         <div class="head-info">
-          <div class="mono mo-no">${escapeHtml(getMoNumber(mo))}</div>
+          <div class="mo-line">
+            <span class="mono mo-no">${escapeHtml(getMoNumber(mo))}</span>
+            <span class="badge" style="background:${badge.color}">${escapeHtml(badge.kr)}${badge.cn ? ` · ${escapeHtml(badge.cn)}` : ''}</span>
+            ${isShipped(mo) ? '<span class="ship">출고 已出货</span>' : ''}
+          </div>
           <div class="sku">${escapeHtml(getMoSku(mo))}</div>
           ${chiName ? `<div class="chi">${escapeHtml(chiName)}</div>` : ''}
           <div class="meta">🏭 ${escapeHtml(getMoFactory(mo))}${getMonthKey(mo) ? ` · 📅 ${escapeHtml(getMonthKey(mo))}` : ''}</div>
@@ -261,7 +269,7 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
         </div>
       </div>`
 
-    // expanded sections only
+    // expanded sections only — same vertical structure as the screen card
     const secsHTML = SECTIONS.filter(sec => isExpanded(itemNo, sec.id)).map(sec => {
       const rows = sec.fields.map(f => {
         const cell = cells[`${sec.id}.${f.key}`]
@@ -277,24 +285,23 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
           if (!cv) valHTML = '<span class="empty">— 미선택 未选择</span>'
           else valHTML = `<span class="${done ? 'done' : 'mid'}">${done ? '✅ ' : ''}${escapeHtml(statusLabel(cv))}</span>${cd ? ` <span class="mono">${escapeHtml(cd)}</span>` : ''}`
         }
-        const labelDone = f.type === 'chip' && DONE_VALUES.has(cv)
-        const labelMid = f.type === 'chip' && cv && !DONE_VALUES.has(cv)
-        return `<tr><td class="lbl ${labelDone ? 'done' : ''}${labelMid ? 'mid' : ''}">${escapeHtml(f.kr)} ${escapeHtml(f.cn)}</td><td class="val">${valHTML}</td></tr>`
+        const labelCls = f.type === 'chip' && DONE_VALUES.has(cv) ? 'done' : (f.type === 'chip' && cv ? 'mid' : '')
+        return `<tr><td class="lbl ${labelCls}">${escapeHtml(f.kr)}<br><span class="cn">${escapeHtml(f.cn)}</span></td><td class="val">${valHTML}</td></tr>`
       }).join('')
       const memo = cells[`${sec.id}._memo`]?.v || ''
-      const fabricRow = sec.id === 'fabric' && fabricName
-        ? `<tr><td class="lbl">원단명 面料名称</td><td class="val">${escapeHtml(fabricName)}</td></tr>` : ''
-      const memoRow = memo ? `<tr><td class="lbl">비고 备注</td><td class="val">${escapeHtml(memo)}</td></tr>` : ''
+      // fabricName shown in the title (read-mode behaviour on screen)
+      const fabTitle = sec.id === 'fabric' && fabricName ? ` <span class="fabname">🧵 ${escapeHtml(fabricName)}</span>` : ''
+      const memoRow = memo ? `<tr><td class="lbl">비고<br><span class="cn">备注</span></td><td class="val memo">${escapeHtml(memo)}</td></tr>` : ''
       return `
         <div class="sec">
-          <div class="sec-title">${escapeHtml(sec.no)} ${escapeHtml(sec.kr)} ${escapeHtml(sec.cn)}</div>
-          <table class="grid">${fabricRow}${rows}${memoRow}</table>
+          <div class="sec-title"><span class="no">${escapeHtml(sec.no)}</span> ${escapeHtml(sec.kr)} <span class="cn">${escapeHtml(sec.cn)}</span>${fabTitle}</div>
+          <table class="grid">${rows}${memoRow}</table>
         </div>`
     }).join('')
 
     const remark = rec.remark || ''
     const remarkHTML = (secsHTML && remark)
-      ? `<div class="sec"><div class="sec-title">⑨ 전체 비고 整体备注</div><div class="remark">${escapeHtml(remark)}</div></div>` : ''
+      ? `<div class="sec"><div class="sec-title"><span class="no">⑨</span> 전체 비고 <span class="cn">整体备注</span></div><div class="remark">${escapeHtml(remark)}</div></div>` : ''
 
     return `<section class="card">${header}${secsHTML}${remarkHTML}</section>`
   }
@@ -305,37 +312,55 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
 <title>产前确认 · 생산 전 체크</title>
 <style>
   * { box-sizing: border-box; }
-  body { font-family: 'Noto Sans KR','Noto Sans SC',-apple-system,system-ui,sans-serif; color: #1A1714; margin: 0; padding: 24px; background: #fff; }
-  .page-head { display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 2px solid #C9A86E; padding-bottom: 10px; margin-bottom: 16px; }
-  .page-head h1 { font-size: 20px; margin: 0; color: #9A7228; }
+  body { font-family: 'Noto Sans KR','Noto Sans SC',-apple-system,system-ui,sans-serif; color: #1A1714; margin: 0; padding: 20px; background: #fff; }
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 2px solid #C9A86E; padding-bottom: 10px; margin-bottom: 14px; }
+  .page-head h1 { font-size: 19px; margin: 0; color: #9A7228; }
   .page-head .stamp { font-size: 12px; color: #5A5248; }
   .print-btn { background: #1A1714; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
-  .card { border: 1px solid #E4DED2; border-radius: 10px; padding: 14px; margin-bottom: 16px; page-break-inside: avoid; break-inside: avoid; }
-  .card-head { display: flex; gap: 12px; border-bottom: 1px solid #EDE8DE; padding-bottom: 10px; margin-bottom: 10px; }
-  .thumb { width: 90px; height: 120px; object-fit: cover; object-position: top center; border-radius: 6px; border: 1px solid #E4DED2; background: #FBF9F4; flex-shrink: 0; }
+
+  /* item ② — A4 portrait 2-column card grid */
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  .card { border: 1px solid #E4DED2; border-radius: 10px; padding: 12px; break-inside: avoid; page-break-inside: avoid; }
+
+  .card-head { display: flex; gap: 10px; border-bottom: 1px solid #EDE8DE; padding-bottom: 9px; margin-bottom: 9px; }
+  .thumb { width: 72px; height: 96px; object-fit: cover; object-position: top center; border-radius: 6px; border: 1px solid #E4DED2; background: #FBF9F4; flex-shrink: 0; }
   .head-info { flex: 1; min-width: 0; }
-  .mo-no { font-size: 16px; font-weight: 700; color: #9A7228; }
-  .sku { font-size: 12px; margin-top: 2px; }
-  .chi { font-size: 12px; color: #5A5248; }
-  .meta { font-size: 11px; color: #7A7264; margin-top: 3px; }
-  .sec { margin-top: 10px; page-break-inside: avoid; break-inside: avoid; }
-  .sec-title { font-size: 13px; font-weight: 700; color: #1A1714; margin-bottom: 5px; border-left: 3px solid #C9A86E; padding-left: 7px; }
+  .mo-line { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+  .mo-no { font-size: 14px; font-weight: 700; color: #9A7228; }
+  .badge { font-size: 9px; font-weight: 700; color: #fff; padding: 1px 7px; border-radius: 999px; }
+  .ship { font-size: 8.5px; color: #4A7058; border: 1px solid #4A7058; padding: 0 5px; border-radius: 999px; }
+  .sku { font-size: 11px; margin-top: 3px; }
+  .chi { font-size: 11px; color: #5A5248; }
+  .meta { font-size: 10px; color: #7A7264; margin-top: 2px; }
+
+  .sec { padding-bottom: 8px; margin-top: 9px; border-bottom: 1px solid #EDE8DE; break-inside: avoid; page-break-inside: avoid; }
+  .sec:first-of-type { margin-top: 0; }
+  .sec-title { font-size: 12px; font-weight: 700; color: #1A1714; margin-bottom: 5px; }
+  .sec-title .no { color: #9A7228; margin-right: 3px; }
+  .sec-title .cn { color: #7A7264; font-weight: 500; }
+  .sec-title .fabname { color: #7A7264; font-weight: 500; font-size: 11px; }
+
   table.grid { width: 100%; border-collapse: collapse; }
-  table.grid td { padding: 4px 6px; font-size: 12px; vertical-align: top; border-bottom: 1px solid #F2EEE6; }
-  td.lbl { width: 38%; color: #5A5248; }
-  td.lbl.done { color: #2F855A; font-weight: 600; }
-  td.lbl.mid { color: #C53030; font-weight: 600; }
-  td.val { color: #1A1714; }
+  table.grid td { padding: 4px 5px; font-size: 11px; vertical-align: middle; border-bottom: 1px solid #F4F1EA; }
+  td.lbl { width: 42%; color: #5A5248; line-height: 1.25; }
+  td.lbl .cn { color: #9A9080; font-size: 10px; }
+  td.lbl.done { color: #2F855A; }
+  td.lbl.done .cn { color: #2F855A; }
+  td.lbl.mid { color: #C53030; }
+  td.lbl.mid .cn { color: #C53030; }
+  td.val { color: #1A1714; text-align: center; }
+  td.val.memo { text-align: left; white-space: pre-wrap; }
   .val .done { color: #2F855A; font-weight: 600; }
   .val .mid { color: #C53030; font-weight: 600; }
   .val .empty { color: #B7AE9E; }
   .mono { font-variant-numeric: tabular-nums; }
-  .remark { font-size: 12px; white-space: pre-wrap; line-height: 1.5; padding: 4px 6px; }
-  .foot { margin-top: 20px; text-align: center; font-size: 11px; color: #9A9080; letter-spacing: 2px; }
+  .remark { font-size: 11px; white-space: pre-wrap; line-height: 1.5; padding: 3px 5px; }
+
+  .foot { margin-top: 16px; text-align: center; font-size: 11px; color: #9A9080; letter-spacing: 2px; }
   @media print {
     body { padding: 0; }
     .no-print { display: none !important; }
-    @page { size: A4 portrait; margin: 12mm; }
+    @page { size: A4 portrait; margin: 10mm; }
   }
 </style></head>
 <body>
@@ -343,7 +368,7 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
     <div><h1>产前确认 · 생산 전 체크</h1><div class="stamp">출력일시 打印时间: ${escapeHtml(stamp)}</div></div>
     <button class="print-btn no-print" onclick="window.print()">인쇄 打印</button>
   </div>
-  ${body || '<p>출력할 내용이 없습니다 · 无可打印内容</p>'}
+  <div class="cards">${body || '<p>출력할 내용이 없습니다 · 无可打印内容</p>'}</div>
   <div class="foot">IKU × JERA · 产前确认 · 생산 전 체크</div>
 </body></html>`
 }
