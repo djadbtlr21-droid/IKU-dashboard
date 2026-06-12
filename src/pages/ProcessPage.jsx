@@ -316,17 +316,26 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
 <title>产前确认 · 생산 전 체크</title>
 <style>
   * { box-sizing: border-box; }
-  body { font-family: 'Noto Sans KR','Noto Sans SC',-apple-system,system-ui,sans-serif; color: #1A1714; margin: 0; padding: 20px; background: #fff; }
-  .page-head { display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 2px solid #C9A86E; padding-bottom: 10px; margin-bottom: 14px; }
-  .page-head h1 { font-size: 19px; margin: 0; color: #9A7228; }
-  .page-head .stamp { font-size: 12px; color: #5A5248; }
-  .print-btn { background: #1A1714; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  html, body { margin: 0; }
+  body { font-family: 'Noto Sans KR','Noto Sans SC',-apple-system,system-ui,sans-serif; color: #1A1714; background: #8f8f8f; padding: 28px 0 40px; }
 
-  /* Fixed-width vertical cards (screen preview) — never stretch to row width.
-     In print they become an A4 2-up grid (see @media print below). */
-  .cards { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
-  .card { width: 360px; max-width: 360px; flex: 0 0 360px; border: 1px solid #E4DED2; border-radius: 10px; padding: 12px; break-inside: avoid; page-break-inside: avoid; }
+  .toolbar { position: fixed; top: 12px; right: 16px; z-index: 20; }
+  .print-btn { background: #1A1714; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.35); }
 
+  /* offscreen measuring area — same width as a sheet column row */
+  #measure { position: absolute; left: -10000px; top: 0; width: 186mm; visibility: hidden; }
+
+  /* A4 sheets stacked vertically (paper preview) */
+  .sheet { width: 210mm; height: 297mm; background: #fff; margin: 0 auto 20px; box-shadow: 0 6px 22px rgba(0,0,0,0.35); overflow: visible; }
+  .sheet-inner { padding: 12mm; height: 100%; display: flex; flex-direction: column; }
+  .sheet-head { border-bottom: 2px solid #C9A86E; padding-bottom: 8px; margin-bottom: 10px; flex-shrink: 0; }
+  .sheet-head h1 { font-size: 18px; margin: 0; color: #9A7228; }
+  .sheet-head .stamp { font-size: 11px; color: #5A5248; margin-top: 2px; }
+  .sheet-body { flex: 1; display: flex; gap: 6mm; align-items: flex-start; min-height: 0; }
+  .col { width: 90mm; display: flex; flex-direction: column; gap: 6mm; }
+  .sheet-foot { flex-shrink: 0; text-align: center; font-size: 10px; color: #7A7264; padding-top: 6px; letter-spacing: 1px; }
+
+  .card { width: 90mm; border: 1px solid #E4DED2; border-radius: 10px; padding: 12px; }
   .card-head { display: flex; gap: 10px; border-bottom: 1px solid #EDE8DE; padding-bottom: 9px; margin-bottom: 9px; }
   .thumb { width: 72px; height: 96px; object-fit: cover; object-position: top center; border-radius: 6px; border: 1px solid #E4DED2; background: #FBF9F4; flex-shrink: 0; }
   .head-info { flex: 1; min-width: 0; }
@@ -338,7 +347,7 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
   .chi { font-size: 11px; color: #5A5248; }
   .meta { font-size: 10px; color: #7A7264; margin-top: 2px; }
 
-  .sec { padding-bottom: 8px; margin-top: 9px; border-bottom: 1px solid #EDE8DE; break-inside: avoid; page-break-inside: avoid; }
+  .sec { padding-bottom: 8px; margin-top: 9px; border-bottom: 1px solid #EDE8DE; }
   .sec:first-of-type { margin-top: 0; }
   .sec.collapsed { padding-bottom: 6px; }
   .sec-title { font-size: 12px; font-weight: 700; color: #1A1714; margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
@@ -367,23 +376,103 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
   .mono { font-variant-numeric: tabular-nums; }
   .remark { font-size: 11px; white-space: pre-wrap; line-height: 1.5; padding: 3px 5px; }
 
-  .foot { margin-top: 16px; text-align: center; font-size: 11px; color: #9A9080; letter-spacing: 2px; }
+  /* item ③ — print: each sheet = exactly one A4 page, no gray/shadow/gaps.
+     The 2-column flex layout is kept; only fixed heights + chrome are dropped. */
   @media print {
-    body { padding: 0; }
-    .no-print { display: none !important; }
-    @page { size: A4 portrait; margin: 10mm; }
-    /* item ③ — exactly 2 narrow vertical cards per A4 row */
-    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .card { width: auto; max-width: none; flex: none; }
+    body { background: #fff; padding: 0; }
+    .toolbar, .no-print { display: none !important; }
+    @page { size: A4 portrait; margin: 0; }
+    .sheet { width: auto; height: auto; margin: 0; box-shadow: none; page-break-after: always; break-after: page; }
+    .sheet:last-child { page-break-after: auto; break-after: auto; }
+    .sheet-inner { height: auto; }
   }
 </style></head>
 <body>
-  <div class="page-head">
-    <div><h1>产前确认 · 생산 전 체크</h1><div class="stamp">출력일시 打印时间: ${escapeHtml(stamp)}</div></div>
-    <button class="print-btn no-print" onclick="window.print()">인쇄 打印</button>
-  </div>
-  <div class="cards">${body || '<p>출력할 내용이 없습니다 · 无可打印内容</p>'}</div>
-  <div class="foot">IKU × JERA · 产前确认 · 생산 전 체크</div>
+  <div class="toolbar"><button class="print-btn" onclick="window.print()">인쇄 打印</button></div>
+  <div id="measure">${body}</div>
+  <div id="sheets"></div>
+  <script>
+  var STAMP = ${JSON.stringify(stamp)};
+  (function () {
+    var measure = document.getElementById('measure');
+    var sheetsEl = document.getElementById('sheets');
+    if (!measure || !sheetsEl) return;
+
+    function layout() {
+      var PXMM = 96 / 25.4;
+      var GAPV = 6 * PXMM;                 // vertical gap between cards (matches .col gap)
+      var INNER_H = (297 - 24) * PXMM;     // sheet content height (297 - 12mm*2 padding)
+      var FOOTER = 30, HEADER = 54;
+      var availFirst = INNER_H - FOOTER - HEADER;
+      var availOther = INNER_H - FOOTER;
+
+      // reset (in case of re-run after fonts load)
+      sheetsEl.innerHTML = '';
+      var cards = Array.prototype.slice.call(measure.querySelectorAll('.card'));
+
+      function makeSheet(isFirst) {
+        var sheet = document.createElement('div'); sheet.className = 'sheet';
+        var inner = document.createElement('div'); inner.className = 'sheet-inner';
+        if (isFirst) {
+          var h = document.createElement('div'); h.className = 'sheet-head';
+          h.innerHTML = '<h1>产前确认 · 생산 전 체크</h1><div class="stamp">출력일시 打印时间: ' + STAMP + '</div>';
+          inner.appendChild(h);
+        }
+        var bodyEl = document.createElement('div'); bodyEl.className = 'sheet-body';
+        var c0 = document.createElement('div'); c0.className = 'col';
+        var c1 = document.createElement('div'); c1.className = 'col';
+        bodyEl.appendChild(c0); bodyEl.appendChild(c1);
+        inner.appendChild(bodyEl);
+        var foot = document.createElement('div'); foot.className = 'sheet-foot';
+        inner.appendChild(foot);
+        sheet.appendChild(inner);
+        return { el: sheet, isFirst: isFirst, cols: [c0, c1], h: [0, 0], foot: foot };
+      }
+      function avail(s) { return s.isFirst ? availFirst : availOther; }
+      function place(s, card, ch) {
+        var order = s.h[0] <= s.h[1] ? [0, 1] : [1, 0];
+        for (var i = 0; i < 2; i++) {
+          var c = order[i];
+          var g = s.h[c] > 0 ? GAPV : 0;
+          if (s.h[c] + g + ch <= avail(s)) { s.cols[c].appendChild(card); s.h[c] += g + ch; return true; }
+        }
+        return false;
+      }
+
+      var sheets = [makeSheet(true)];
+      for (var k = 0; k < cards.length; k++) {
+        var card = cards[k];
+        var ch = card.getBoundingClientRect().height;
+        var cur = sheets[sheets.length - 1];
+        if (!place(cur, card, ch)) {
+          if (cur.h[0] === 0 && cur.h[1] === 0) {
+            // current sheet is empty but the card is taller than a whole sheet —
+            // place it alone here and allow it to overflow / break (extreme case)
+            card.classList.add('tall'); cur.cols[0].appendChild(card); cur.h[0] = ch;
+          } else {
+            cur = makeSheet(false); sheets.push(cur);
+            if (!place(cur, card, ch)) { card.classList.add('tall'); cur.cols[0].appendChild(card); cur.h[0] = ch; }
+          }
+        }
+      }
+      for (var s = 0; s < sheets.length; s++) {
+        sheetsEl.appendChild(sheets[s].el);
+        sheets[s].foot.textContent = (s + 1) + ' / ' + sheets.length;
+      }
+      // hide the now-empty measuring node
+      measure.style.display = 'none';
+    }
+
+    function run() { try { layout(); } catch (e) { /* leave measure visible on failure */ } }
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(function () { setTimeout(run, 30); });
+    } else if (document.readyState === 'complete') {
+      setTimeout(run, 30);
+    } else {
+      window.addEventListener('load', function () { setTimeout(run, 30); });
+    }
+  })();
+  </script>
 </body></html>`
 }
 
