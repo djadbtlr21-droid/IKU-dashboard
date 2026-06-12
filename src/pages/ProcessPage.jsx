@@ -139,12 +139,6 @@ function sectionStatus(sec, cells) {
   const anyMid = selected.some(f => !DONE_VALUES.has(cells[`${sec.id}.${f.key}`]?.v))
   return anyMid ? 'warn' : 'ok'
 }
-// Default-collapse rule: every chip field in the section is done.
-function sectionAllDone(sec, cells) {
-  const chips = sec.fields.filter(f => f.type === 'chip')
-  if (!chips.length) return false
-  return chips.every(f => DONE_VALUES.has(cells[`${sec.id}.${f.key}`]?.v))
-}
 
 // ── date helpers (yyyy-mm-dd, compatible with prior input[type=date] values) ──
 function parseYMD(s) {
@@ -224,6 +218,136 @@ const PROC_FILTERS = [
   { key: 'in_production', label: '생산중 / 生产中', test: (c) => hasVal(c['production.in_production']) },
 ]
 
+// ──────────────────────────────────────────────────────────
+// Print page builder (item ④) — generates a standalone, print-optimised HTML
+// document for the selected MOs, including only the sections expanded on screen.
+// All UI text is bilingual (KO 中). Blink animations are dropped; mid statuses
+// render as static red text.
+// ──────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
+function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
+  const stamp = (() => {
+    const p = (n) => String(n).padStart(2, '0')
+    return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}`
+  })()
+
+  const cardHTML = (mo) => {
+    const itemNo = String(mo?.ID || mo?.MO_Number || '')
+    const rec = items[itemNo] || {}
+    const cells = rec.cells || {}
+    const fab = getFabricInfo(mo)
+    const fabricName = cells['fabric.fabricName']?.v || ''
+    const chiName = typeof mo.Chi_Style_Name === 'string' ? mo.Chi_Style_Name : (mo.Chi_Style_Name?.zc_display_value || '')
+    const v = mo?.Style_Image
+    const first = Array.isArray(v) ? v[0] : v
+    const path = typeof first === 'string' ? first : (first?.url || first?.filepath || first?.path)
+    const imgSrc = path ? `${origin}/api/zoho-image?filepath=${encodeURIComponent(path)}` : ''
+
+    // header block
+    const header = `
+      <div class="card-head">
+        ${imgSrc ? `<img class="thumb" src="${escapeHtml(imgSrc)}" alt="" />` : '<div class="thumb"></div>'}
+        <div class="head-info">
+          <div class="mono mo-no">${escapeHtml(getMoNumber(mo))}</div>
+          <div class="sku">${escapeHtml(getMoSku(mo))}</div>
+          ${chiName ? `<div class="chi">${escapeHtml(chiName)}</div>` : ''}
+          <div class="meta">🏭 ${escapeHtml(getMoFactory(mo))}${getMonthKey(mo) ? ` · 📅 ${escapeHtml(getMonthKey(mo))}` : ''}</div>
+          ${fab.has ? `<div class="meta">🧵 ${escapeHtml(fab.summary)}</div>` : ''}
+        </div>
+      </div>`
+
+    // expanded sections only
+    const secsHTML = SECTIONS.filter(sec => isExpanded(itemNo, sec.id)).map(sec => {
+      const rows = sec.fields.map(f => {
+        const cell = cells[`${sec.id}.${f.key}`]
+        const cv = cell?.v || ''
+        const cd = cell?.d || ''
+        let valHTML = ''
+        if (f.type === 'date') {
+          valHTML = cd ? `<span class="mono">${escapeHtml(cd)}</span>` : '<span class="empty">— 미입력 未填写</span>'
+        } else if (f.type === 'text') {
+          valHTML = cv ? escapeHtml(cv) : '<span class="empty">— 미입력 未填写</span>'
+        } else {
+          const done = DONE_VALUES.has(cv)
+          if (!cv) valHTML = '<span class="empty">— 미선택 未选择</span>'
+          else valHTML = `<span class="${done ? 'done' : 'mid'}">${done ? '✅ ' : ''}${escapeHtml(statusLabel(cv))}</span>${cd ? ` <span class="mono">${escapeHtml(cd)}</span>` : ''}`
+        }
+        const labelDone = f.type === 'chip' && DONE_VALUES.has(cv)
+        const labelMid = f.type === 'chip' && cv && !DONE_VALUES.has(cv)
+        return `<tr><td class="lbl ${labelDone ? 'done' : ''}${labelMid ? 'mid' : ''}">${escapeHtml(f.kr)} ${escapeHtml(f.cn)}</td><td class="val">${valHTML}</td></tr>`
+      }).join('')
+      const memo = cells[`${sec.id}._memo`]?.v || ''
+      const fabricRow = sec.id === 'fabric' && fabricName
+        ? `<tr><td class="lbl">원단명 面料名称</td><td class="val">${escapeHtml(fabricName)}</td></tr>` : ''
+      const memoRow = memo ? `<tr><td class="lbl">비고 备注</td><td class="val">${escapeHtml(memo)}</td></tr>` : ''
+      return `
+        <div class="sec">
+          <div class="sec-title">${escapeHtml(sec.no)} ${escapeHtml(sec.kr)} ${escapeHtml(sec.cn)}</div>
+          <table class="grid">${fabricRow}${rows}${memoRow}</table>
+        </div>`
+    }).join('')
+
+    const remark = rec.remark || ''
+    const remarkHTML = (secsHTML && remark)
+      ? `<div class="sec"><div class="sec-title">⑨ 전체 비고 整体备注</div><div class="remark">${escapeHtml(remark)}</div></div>` : ''
+
+    return `<section class="card">${header}${secsHTML}${remarkHTML}</section>`
+  }
+
+  const body = mos.map(cardHTML).join('')
+
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8" />
+<title>产前确认 · 생산 전 체크</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Noto Sans KR','Noto Sans SC',-apple-system,system-ui,sans-serif; color: #1A1714; margin: 0; padding: 24px; background: #fff; }
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 2px solid #C9A86E; padding-bottom: 10px; margin-bottom: 16px; }
+  .page-head h1 { font-size: 20px; margin: 0; color: #9A7228; }
+  .page-head .stamp { font-size: 12px; color: #5A5248; }
+  .print-btn { background: #1A1714; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .card { border: 1px solid #E4DED2; border-radius: 10px; padding: 14px; margin-bottom: 16px; page-break-inside: avoid; break-inside: avoid; }
+  .card-head { display: flex; gap: 12px; border-bottom: 1px solid #EDE8DE; padding-bottom: 10px; margin-bottom: 10px; }
+  .thumb { width: 90px; height: 120px; object-fit: cover; object-position: top center; border-radius: 6px; border: 1px solid #E4DED2; background: #FBF9F4; flex-shrink: 0; }
+  .head-info { flex: 1; min-width: 0; }
+  .mo-no { font-size: 16px; font-weight: 700; color: #9A7228; }
+  .sku { font-size: 12px; margin-top: 2px; }
+  .chi { font-size: 12px; color: #5A5248; }
+  .meta { font-size: 11px; color: #7A7264; margin-top: 3px; }
+  .sec { margin-top: 10px; page-break-inside: avoid; break-inside: avoid; }
+  .sec-title { font-size: 13px; font-weight: 700; color: #1A1714; margin-bottom: 5px; border-left: 3px solid #C9A86E; padding-left: 7px; }
+  table.grid { width: 100%; border-collapse: collapse; }
+  table.grid td { padding: 4px 6px; font-size: 12px; vertical-align: top; border-bottom: 1px solid #F2EEE6; }
+  td.lbl { width: 38%; color: #5A5248; }
+  td.lbl.done { color: #2F855A; font-weight: 600; }
+  td.lbl.mid { color: #C53030; font-weight: 600; }
+  td.val { color: #1A1714; }
+  .val .done { color: #2F855A; font-weight: 600; }
+  .val .mid { color: #C53030; font-weight: 600; }
+  .val .empty { color: #B7AE9E; }
+  .mono { font-variant-numeric: tabular-nums; }
+  .remark { font-size: 12px; white-space: pre-wrap; line-height: 1.5; padding: 4px 6px; }
+  .foot { margin-top: 20px; text-align: center; font-size: 11px; color: #9A9080; letter-spacing: 2px; }
+  @media print {
+    body { padding: 0; }
+    .no-print { display: none !important; }
+    @page { size: A4 portrait; margin: 12mm; }
+  }
+</style></head>
+<body>
+  <div class="page-head">
+    <div><h1>产前确认 · 생산 전 체크</h1><div class="stamp">출력일시 打印时间: ${escapeHtml(stamp)}</div></div>
+    <button class="print-btn no-print" onclick="window.print()">인쇄 打印</button>
+  </div>
+  ${body || '<p>출력할 내용이 없습니다 · 无可打印内容</p>'}
+  <div class="foot">IKU × JERA · 产前确认 · 생산 전 체크</div>
+</body></html>`
+}
+
 // CSS injected once for this page (shake / blink / 5-col grid).
 const PAGE_CSS = `
 @keyframes ikuShake {0%,100%{transform:translateX(0)}15%{transform:translateX(-6px)}30%{transform:translateX(6px)}45%{transform:translateX(-5px)}60%{transform:translateX(5px)}75%{transform:translateX(-3px)}90%{transform:translateX(3px)}}
@@ -241,6 +365,7 @@ const PAGE_CSS = `
 // ──────────────────────────────────────────────────────────
 // Monday-first weekday headers, Chinese only (item ③).
 const WEEKDAYS_CN = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+const WEEKDAYS_KO = ['월', '화', '수', '목', '금', '토', '일']  // Monday-first
 function DatePicker({ G, value, onChange }) {
   const [open, setOpen] = useState(false)
   const sel = parseYMD(value)
@@ -272,22 +397,22 @@ function DatePicker({ G, value, onChange }) {
       <button type="button" onClick={() => setOpen(o => !o)}
         style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 6, fontSize: 12, border: `1px solid ${G.border}`, background: G.bg, color: value ? G.tx : G.fa, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
         <Calendar size={12} style={{ flexShrink: 0, color: G.mu }} />
-        <span className="num" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || '选择日期'}</span>
+        <span className="num" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || '날짜 선택 · 选择日期'}</span>
       </button>
       {open && (
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 1200 }} />
           <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 1201, background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: 10, width: 232, maxWidth: '80vw' }}>
-            {/* header — Chinese only */}
+            {/* header — bilingual (KO 中) */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <button type="button" onClick={prev} style={{ background: 'none', border: 'none', cursor: 'pointer', color: G.mu, display: 'flex', padding: 4 }}><ChevronLeft size={16} /></button>
-              <span style={{ fontSize: 12, fontWeight: 700, color: G.tx }}>{view.y}年{view.m + 1}月</span>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: G.tx }}>{view.y}년 {view.m + 1}월 · {view.y}年{view.m + 1}月</span>
               <button type="button" onClick={next} style={{ background: 'none', border: 'none', cursor: 'pointer', color: G.mu, display: 'flex', padding: 4 }}><ChevronRight size={16} /></button>
             </div>
-            {/* weekday row — Monday first (周六 cool, 周日 red) */}
+            {/* weekday row — Monday first, bilingual two-line (土 cool, 日 red) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 2 }}>
               {WEEKDAYS_CN.map((w, i) => (
-                <div key={w} style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, color: i === 6 ? G.bad : (i === 5 ? G.cool : G.mu), padding: '2px 0' }}>{w}</div>
+                <div key={w} style={{ textAlign: 'center', fontSize: 9, fontWeight: 600, lineHeight: 1.2, color: i === 6 ? G.bad : (i === 5 ? G.cool : G.mu), padding: '2px 0' }}>{WEEKDAYS_KO[i]}<br />{w}</div>
               ))}
             </div>
             {/* days */}
@@ -304,8 +429,8 @@ function DatePicker({ G, value, onChange }) {
             </div>
             {/* footer */}
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-              <button type="button" onClick={goToday} style={{ flex: 1, padding: '5px 0', fontSize: 11, borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.accent, cursor: 'pointer', fontWeight: 600 }}>今天</button>
-              <button type="button" onClick={clear} style={{ flex: 1, padding: '5px 0', fontSize: 11, borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.bad, cursor: 'pointer', fontWeight: 600 }}>删除</button>
+              <button type="button" onClick={goToday} style={{ flex: 1, padding: '5px 0', fontSize: 10.5, borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.accent, cursor: 'pointer', fontWeight: 600 }}>오늘 今天</button>
+              <button type="button" onClick={clear} style={{ flex: 1, padding: '5px 0', fontSize: 10.5, borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.bad, cursor: 'pointer', fontWeight: 600 }}>삭제 删除</button>
             </div>
           </div>
         </>
@@ -422,8 +547,8 @@ function PwModal({ G, onClose, onSuccess }) {
         />
         {err && <div style={{ marginTop: 8, fontSize: 11, color: G.bad }}>{err}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 18, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} className="btn-ghost" style={{ minHeight: 36, padding: '8px 14px', fontSize: 12 }}>취소</button>
-          <button type="submit" disabled={busy || !pw} className="btn-primary" style={{ minHeight: 36, padding: '8px 14px', fontSize: 12, opacity: (busy || !pw) ? 0.55 : 1 }}>{busy ? '확인중…' : '확인'}</button>
+          <button type="button" onClick={onClose} className="btn-ghost" style={{ minHeight: 36, padding: '8px 14px', fontSize: 12 }}>취소 取消</button>
+          <button type="submit" disabled={busy || !pw} className="btn-primary" style={{ minHeight: 36, padding: '8px 14px', fontSize: 12, opacity: (busy || !pw) ? 0.55 : 1 }}>{busy ? '확인중 确认中…' : '확인 确认'}</button>
         </div>
       </form>
     </div>
@@ -555,13 +680,13 @@ function SectionIndicator({ G, status }) {
   return null
 }
 
-// Collapse / expand toggle for a section (item ①).
+// Collapse / expand toggle for a section (item ①) — bilingual label.
 function SectionToggle({ G, collapsed, onToggle }) {
   return (
-    <button type="button" onClick={onToggle} title={collapsed ? '펴기 · 展开' : '접기 · 收起'}
+    <button type="button" onClick={onToggle} title={collapsed ? '펴기 展开' : '접기 收起'}
       style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: 'none', border: `1px solid ${G.border}`, borderRadius: 6, cursor: 'pointer', color: G.mu, padding: '2px 7px', fontSize: 10, fontWeight: 600, fontFamily: 'inherit' }}>
       {collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
-      {collapsed ? '펴기' : '접기'}
+      {collapsed ? '펴기 展开' : '접기 收起'}
     </button>
   )
 }
@@ -569,7 +694,8 @@ function SectionToggle({ G, collapsed, onToggle }) {
 // ──────────────────────────────────────────────────────────
 // Process card (one order)
 // ──────────────────────────────────────────────────────────
-function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHidden, canMutate, onZoom }) {
+function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHidden, canMutate, onZoom,
+  collapsedFor, onToggleSection, printMode, checked, onToggleChecked }) {
   const [draftCells, setDraftCells] = useState(null)
   const [draftRemark, setDraftRemark] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -577,14 +703,9 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
   const savedCells = record?.cells || {}
   const savedRemark = record?.remark || ''
 
-  // Section collapse state (item ①) — session-only, defaults from saved cells:
-  // a section is collapsed when all its chip items are done. Not persisted.
-  const [collapsed, setCollapsed] = useState(() => {
-    const init = {}
-    for (const sec of SECTIONS) init[sec.id] = sectionAllDone(sec, savedCells)
-    return init
-  })
-  const toggleSection = useCallback((id) => setCollapsed(c => ({ ...c, [id]: !c[id] })), [])
+  // Collapse state is owned by the parent (item ②, all collapsed by default) so
+  // the print feature (item ④) can read which sections are expanded.
+  const toggleSection = onToggleSection
 
   const cells = draftCells ?? savedCells
   const remark = draftRemark ?? savedRemark
@@ -624,13 +745,21 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
 
   // overflow visible so the date-picker popover isn't clipped by the card
   return (
-    <div className="card" style={{ padding: 0, overflow: 'visible', display: 'flex', flexDirection: 'column', opacity: isHidden ? 0.7 : 1 }}>
+    <div className="card" style={{ padding: 0, overflow: 'visible', display: 'flex', flexDirection: 'column', opacity: isHidden ? 0.7 : 1, outline: printMode && checked ? `2px solid ${G.primary}` : 'none' }}>
+      {/* item ④ — print-selection checkbox (top-right) */}
+      {printMode && (
+        <label title="프린트 선택 · 打印选择"
+          style={{ position: 'absolute', top: 8, right: 8, zIndex: 5, display: 'flex', alignItems: 'center', gap: 4, background: G.card, border: `1px solid ${G.border}`, borderRadius: 6, padding: '3px 7px', cursor: 'pointer', boxShadow: G.cardShadow }}>
+          <input type="checkbox" checked={!!checked} onChange={onToggleChecked} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: G.primary }} />
+          <span style={{ fontSize: 9.5, color: G.mu, fontWeight: 600 }}>선택 选择</span>
+        </label>
+      )}
       {/* Header */}
       <div style={{ display: 'flex', gap: 12, padding: 14, borderBottom: `1px solid ${G.hair}`, borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
         <div
           onClick={() => { if (imgUrl && onZoom) onZoom(imgUrl) }}
           title={imgUrl ? '클릭하여 확대 · 点击放大' : ''}
-          style={{ width: 56, height: 72, borderRadius: 8, background: G.cardAlt, overflow: 'hidden', flexShrink: 0, border: `1px solid ${G.hair}`, position: 'relative', cursor: imgUrl ? 'zoom-in' : 'default' }}
+          style={{ width: 64, alignSelf: 'stretch', minHeight: 80, borderRadius: 8, background: G.cardAlt, overflow: 'hidden', flexShrink: 0, border: `1px solid ${G.hair}`, position: 'relative', cursor: imgUrl ? 'zoom-in' : 'default' }}
         >
           <ZohoImage mo={mo} field="Style_Image" G={G} iconSize={18} placeholderText="" />
           {imgUrl && (
@@ -665,11 +794,11 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
             <button onClick={handleSave} disabled={saving || !dirty} className="btn-primary"
               style={{ minHeight: 32, padding: '6px 10px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 5, opacity: (saving || !dirty) ? 0.5 : 1 }}>
-              <Save size={13} /> {saving ? '저장중' : '저장'}
+              <Save size={13} /> {saving ? '저장중 保存中' : '저장 保存'}
             </button>
             <button onClick={() => onToggleHidden(itemNoOf(mo), !isHidden)} className="btn-ghost"
               style={{ minHeight: 30, padding: '5px 8px', fontSize: 10.5, display: 'flex', alignItems: 'center', gap: 5 }}>
-              {isHidden ? <><RotateCcw size={12} /> 복원</> : <><EyeOff size={12} /> 숨기기</>}
+              {isHidden ? <><RotateCcw size={12} /> 복원 恢复</> : <><EyeOff size={12} /> 숨기기 隐藏</>}
             </button>
           </div>
         )}
@@ -682,7 +811,7 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
           const memoKey = `${sec.id}._memo`
           const memo = cells[memoKey]?.v || ''
           const status = sectionStatus(sec, cells)   // item ② aggregate status
-          const isCollapsed = !!collapsed[sec.id]    // item ① collapse state
+          const isCollapsed = collapsedFor(sec.id)   // item ① collapse state (parent-owned)
           return (
             <div key={sec.id} style={{ paddingBottom: 20, borderBottom: `1px solid ${G.hair}` }}>
               {/* section title (number scales with it); flexWrap so right-side
@@ -712,7 +841,7 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
                 {editable && sec.id === 'fabric' && (
                   <div style={{ display: 'grid', gridTemplateColumns: '104px 1fr', gap: 8, alignItems: 'center' }}>
                     <div style={{ fontSize: 12.1, color: G.mu, lineHeight: 1.3 }}>원단명<br /><span style={{ color: G.fa, fontSize: 11 }}>面料名称</span></div>
-                    <input value={fabricName} onChange={e => setCell('fabric.fabricName', { v: e.target.value })} placeholder="面料名称输入"
+                    <input value={fabricName} onChange={e => setCell('fabric.fabricName', { v: e.target.value })} placeholder="원단명 입력 · 面料名称输入"
                       style={{ padding: '6px 8px', borderRadius: 6, fontSize: 12, border: `1px solid ${G.border}`, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
                   </div>
                 )}
@@ -808,9 +937,28 @@ export default function ProcessPage({ G }) {
   const [editorError, setEditorError] = useState(false)
   const [shaking, setShaking] = useState(false)
   const [toast, setToast] = useState(null)
-  const [zoomSrc, setZoomSrc] = useState(null)  // image lightbox (item ②)
+  const [zoomSrc, setZoomSrc] = useState(null)  // image lightbox
   const editorRef = useRef(null)
   const fabricDiagRef = useRef(false)
+
+  // Section collapse — owned here so the print feature can read expanded sections.
+  // Shape: { [itemNo]: { [secId]: bool } }. Default (absent) = collapsed (item ②).
+  const [collapsedByItem, setCollapsedByItem] = useState({})
+  const sectionCollapsed = useCallback((itemNo, secId) => {
+    const m = collapsedByItem[itemNo]
+    return m && secId in m ? m[secId] : true
+  }, [collapsedByItem])
+  const toggleCardSection = useCallback((itemNo, secId) => {
+    setCollapsedByItem(prev => {
+      const cur = prev[itemNo] || {}
+      const curVal = secId in cur ? cur[secId] : true
+      return { ...prev, [itemNo]: { ...cur, [secId]: !curVal } }
+    })
+  }, [])
+
+  // Print selection mode (item ④)
+  const [printMode, setPrintMode] = useState(false)
+  const [selectedToPrint, setSelectedToPrint] = useState(() => new Set())
 
   // filters
   const [category, setCategory] = useState('all')
@@ -986,6 +1134,31 @@ export default function ProcessPage({ G }) {
     setCategory('all'); setSubFactory(''); setSearch(''); setFactorySel([]); setMonth(''); setProcFilter('')
   }
 
+  // ── print (item ④) ──
+  const enterPrintMode = useCallback(() => {
+    setSelectedToPrint(new Set(visible.map(itemNoOf)))  // default: all selected
+    setPrintMode(true)
+  }, [visible])
+  const togglePrintChecked = useCallback((id) => {
+    setSelectedToPrint(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  }, [])
+  const doPrint = useCallback(() => {
+    const sel = visible.filter(m => selectedToPrint.has(itemNoOf(m)))
+    if (!sel.length) { showToast('선택된 오더가 없습니다 · 未选择订单', 'bad'); return }
+    let win
+    try { win = window.open('', '_blank') } catch { win = null }
+    if (!win) { showToast('팝업이 차단되었습니다 · 弹窗被拦截', 'bad'); return }
+    const html = buildPrintHTML({
+      mos: sel,
+      items: proc.items,
+      isExpanded: (itemNo, secId) => !sectionCollapsed(itemNo, secId),
+      origin: window.location.origin,
+      now: new Date(),
+    })
+    win.document.open(); win.document.write(html); win.document.close()
+    setPrintMode(false)
+  }, [visible, selectedToPrint, proc.items, sectionCollapsed, showToast])
+
   const activeFilterChips = []
   if (category !== 'all') activeFilterChips.push({ k: 'cat', label: category === 'hexiang' ? 'HEXIANG 合祥' : '외주 外发', clear: () => { setCategory('all'); setSubFactory('') } })
   if (subFactory) activeFilterChips.push({ k: 'sub', label: subFactory, clear: () => setSubFactory('') })
@@ -1096,7 +1269,7 @@ export default function ProcessPage({ G }) {
           {allFactories.map(f => <option key={f} value={f}>{f}</option>)}
         </select>
         <button onClick={() => setShowHidden(s => !s)} className="chip" style={{ border: `1px solid ${showHidden ? G.primary : G.border}`, background: showHidden ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: showHidden ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          {showHidden ? <Eye size={13} /> : <EyeOff size={13} />} 숨긴 오더 {showHidden ? '숨기기' : '보기'} · {proc.hidden?.length || 0}
+          {showHidden ? <Eye size={13} /> : <EyeOff size={13} />} {showHidden ? '숨긴 오더 숨기기 · 收起隐藏' : '숨긴 오더 보기 · 查看隐藏'} · {proc.hidden?.length || 0}
         </button>
       </div>
 
@@ -1147,8 +1320,30 @@ export default function ProcessPage({ G }) {
               onSaveItem={handleSaveItem}
               onToggleHidden={handleToggleHidden}
               onZoom={setZoomSrc}
+              collapsedFor={(secId) => sectionCollapsed(itemNoOf(mo), secId)}
+              onToggleSection={(secId) => toggleCardSection(itemNoOf(mo), secId)}
+              printMode={printMode}
+              checked={selectedToPrint.has(itemNoOf(mo))}
+              onToggleChecked={() => togglePrintChecked(itemNoOf(mo))}
             />
           ))}
+        </div>
+      )}
+
+      {/* item ④ — floating print button (hidden while selecting) */}
+      {!printMode && !loading && !procLoading && visible.length > 0 && (
+        <button onClick={enterPrintMode} title="프린트 打印"
+          style={{ position: 'fixed', right: 20, bottom: 140, zIndex: 900, display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 999, border: `1px solid ${G.border}`, background: G.tx, color: G.bg, cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}>
+          🖨 프린트 打印
+        </button>
+      )}
+
+      {/* item ④ — print selection bottom bar */}
+      {printMode && (
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 1400, background: G.surf, borderTop: `1px solid ${G.border}`, boxShadow: '0 -4px 16px rgba(0,0,0,0.12)', padding: '12px 16px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: G.tx }}>{selectedToPrint.size}개 선택 · 已选 {selectedToPrint.size} 个</span>
+          <button onClick={doPrint} className="btn-primary" style={{ minHeight: 40, padding: '8px 18px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>🖨 프린트하기 打印</button>
+          <button onClick={() => setPrintMode(false)} className="btn-ghost" style={{ minHeight: 40, padding: '8px 18px', fontSize: 13 }}>취소 取消</button>
         </div>
       )}
 
