@@ -269,8 +269,18 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
         </div>
       </div>`
 
-    // expanded sections only — same vertical structure as the screen card
-    const secsHTML = SECTIONS.filter(sec => isExpanded(itemNo, sec.id)).map(sec => {
+    // all sections — expanded → full content, collapsed → title row only (item ②)
+    const secsHTML = SECTIONS.map(sec => {
+      const expanded = isExpanded(itemNo, sec.id)
+      const status = sectionStatus(sec, cells)
+      const ind = status === 'ok' ? '<span class="ind ok">✓</span>'
+        : status === 'warn' ? '<span class="ind warn">⚠</span>' : ''
+      // fabricName shown in the title (read-mode behaviour on screen)
+      const fabTitle = sec.id === 'fabric' && fabricName ? `<span class="fabname">🧵 ${escapeHtml(fabricName)}</span>` : ''
+      const title = `<div class="sec-title"><span class="ttl"><span class="no">${escapeHtml(sec.no)}</span> ${escapeHtml(sec.kr)} <span class="cn">${escapeHtml(sec.cn)}</span></span>${fabTitle}${ind ? `<span class="ind-wrap">${ind}</span>` : ''}</div>`
+
+      if (!expanded) return `<div class="sec collapsed">${title}</div>`
+
       const rows = sec.fields.map(f => {
         const cell = cells[`${sec.id}.${f.key}`]
         const cv = cell?.v || ''
@@ -289,19 +299,13 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
         return `<tr><td class="lbl ${labelCls}">${escapeHtml(f.kr)}<br><span class="cn">${escapeHtml(f.cn)}</span></td><td class="val">${valHTML}</td></tr>`
       }).join('')
       const memo = cells[`${sec.id}._memo`]?.v || ''
-      // fabricName shown in the title (read-mode behaviour on screen)
-      const fabTitle = sec.id === 'fabric' && fabricName ? ` <span class="fabname">🧵 ${escapeHtml(fabricName)}</span>` : ''
       const memoRow = memo ? `<tr><td class="lbl">비고<br><span class="cn">备注</span></td><td class="val memo">${escapeHtml(memo)}</td></tr>` : ''
-      return `
-        <div class="sec">
-          <div class="sec-title"><span class="no">${escapeHtml(sec.no)}</span> ${escapeHtml(sec.kr)} <span class="cn">${escapeHtml(sec.cn)}</span>${fabTitle}</div>
-          <table class="grid">${rows}${memoRow}</table>
-        </div>`
+      return `<div class="sec">${title}<table class="grid">${rows}${memoRow}</table></div>`
     }).join('')
 
+    // ⑨ card-wide remark — always shown (not collapsible on screen)
     const remark = rec.remark || ''
-    const remarkHTML = (secsHTML && remark)
-      ? `<div class="sec"><div class="sec-title"><span class="no">⑨</span> 전체 비고 <span class="cn">整体备注</span></div><div class="remark">${escapeHtml(remark)}</div></div>` : ''
+    const remarkHTML = `<div class="sec"><div class="sec-title"><span class="ttl"><span class="no">⑨</span> 전체 비고 <span class="cn">整体备注</span></span></div><div class="remark">${remark ? escapeHtml(remark) : '—'}</div></div>`
 
     return `<section class="card">${header}${secsHTML}${remarkHTML}</section>`
   }
@@ -318,9 +322,10 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
   .page-head .stamp { font-size: 12px; color: #5A5248; }
   .print-btn { background: #1A1714; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
 
-  /* item ② — A4 portrait 2-column card grid */
-  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
-  .card { border: 1px solid #E4DED2; border-radius: 10px; padding: 12px; break-inside: avoid; page-break-inside: avoid; }
+  /* Fixed-width vertical cards (screen preview) — never stretch to row width.
+     In print they become an A4 2-up grid (see @media print below). */
+  .cards { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+  .card { width: 360px; max-width: 360px; flex: 0 0 360px; border: 1px solid #E4DED2; border-radius: 10px; padding: 12px; break-inside: avoid; page-break-inside: avoid; }
 
   .card-head { display: flex; gap: 10px; border-bottom: 1px solid #EDE8DE; padding-bottom: 9px; margin-bottom: 9px; }
   .thumb { width: 72px; height: 96px; object-fit: cover; object-position: top center; border-radius: 6px; border: 1px solid #E4DED2; background: #FBF9F4; flex-shrink: 0; }
@@ -335,10 +340,16 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
 
   .sec { padding-bottom: 8px; margin-top: 9px; border-bottom: 1px solid #EDE8DE; break-inside: avoid; page-break-inside: avoid; }
   .sec:first-of-type { margin-top: 0; }
-  .sec-title { font-size: 12px; font-weight: 700; color: #1A1714; margin-bottom: 5px; }
+  .sec.collapsed { padding-bottom: 6px; }
+  .sec-title { font-size: 12px; font-weight: 700; color: #1A1714; margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
+  .sec.collapsed .sec-title { margin-bottom: 0; }
   .sec-title .no { color: #9A7228; margin-right: 3px; }
   .sec-title .cn { color: #7A7264; font-weight: 500; }
-  .sec-title .fabname { color: #7A7264; font-weight: 500; font-size: 11px; }
+  .sec-title .fabname { color: #7A7264; font-weight: 500; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sec-title .ind-wrap { margin-left: auto; }
+  .ind { font-size: 12px; font-weight: 700; }
+  .ind.ok { color: #2F855A; }
+  .ind.warn { color: #C53030; }
 
   table.grid { width: 100%; border-collapse: collapse; }
   table.grid td { padding: 4px 5px; font-size: 11px; vertical-align: middle; border-bottom: 1px solid #F4F1EA; }
@@ -361,6 +372,9 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
     body { padding: 0; }
     .no-print { display: none !important; }
     @page { size: A4 portrait; margin: 10mm; }
+    /* item ③ — exactly 2 narrow vertical cards per A4 row */
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .card { width: auto; max-width: none; flex: none; }
   }
 </style></head>
 <body>
