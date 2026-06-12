@@ -759,7 +759,7 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
         <div
           onClick={() => { if (imgUrl && onZoom) onZoom(imgUrl) }}
           title={imgUrl ? '클릭하여 확대 · 点击放大' : ''}
-          style={{ width: 64, alignSelf: 'stretch', minHeight: 80, borderRadius: 8, background: G.cardAlt, overflow: 'hidden', flexShrink: 0, border: `1px solid ${G.hair}`, position: 'relative', cursor: imgUrl ? 'zoom-in' : 'default' }}
+          style={{ width: 72, height: 96, alignSelf: 'flex-start', borderRadius: 8, background: G.cardAlt, overflow: 'hidden', flexShrink: 0, border: `1px solid ${G.hair}`, position: 'relative', cursor: imgUrl ? 'zoom-in' : 'default' }}
         >
           <ZohoImage mo={mo} field="Style_Image" G={G} iconSize={18} placeholderText="" />
           {imgUrl && (
@@ -1207,6 +1207,13 @@ export default function ProcessPage({ G }) {
             style={{ minHeight: 38, padding: '8px 16px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
             {editMode ? <><X size={14} /> 편집 종료 · 退出</> : <><Pencil size={14} /> 수정 · 修改</>}
           </button>
+          {/* item ② — print button beside 수정; hidden while editing */}
+          {!editMode && (
+            <button onClick={enterPrintMode} disabled={loading || procLoading || visible.length === 0} className="btn-ghost"
+              style={{ minHeight: 38, padding: '8px 16px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: (loading || procLoading || visible.length === 0) ? 0.5 : 1 }}>
+              🖨 프린트 打印
+            </button>
+          )}
         </div>
       </div>
 
@@ -1330,15 +1337,7 @@ export default function ProcessPage({ G }) {
         </div>
       )}
 
-      {/* item ④ — floating print button (hidden while selecting) */}
-      {!printMode && !loading && !procLoading && visible.length > 0 && (
-        <button onClick={enterPrintMode} title="프린트 打印"
-          style={{ position: 'fixed', right: 20, bottom: 140, zIndex: 900, display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: 999, border: `1px solid ${G.border}`, background: G.tx, color: G.bg, cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}>
-          🖨 프린트 打印
-        </button>
-      )}
-
-      {/* item ④ — print selection bottom bar */}
+      {/* print selection bottom bar */}
       {printMode && (
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 1400, background: G.surf, borderTop: `1px solid ${G.border}`, boxShadow: '0 -4px 16px rgba(0,0,0,0.12)', padding: '12px 16px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: G.tx }}>{selectedToPrint.size}개 선택 · 已选 {selectedToPrint.size} 个</span>
