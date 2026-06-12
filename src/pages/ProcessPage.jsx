@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   ClipboardCheck, Search, Eye, EyeOff, Lock, Save, X,
   AlertTriangle, RotateCcw, Pencil, CheckCircle2, Calendar,
-  ChevronLeft, ChevronRight, MessageSquare, ZoomIn,
+  ChevronLeft, ChevronRight, MessageSquare, ZoomIn, ChevronUp, ChevronDown,
 } from 'lucide-react'
 import { fetchMoList } from '../api/client'
 import {
@@ -126,6 +126,24 @@ function chipStatus(cell) {
   if (DONE_VALUES.has(v)) return 'done'
   if (v) return 'mid'
   return 'none'
+}
+
+// Section aggregate status (chip fields only — dates/text excluded).
+//   'ok'   : at least one chip selected and ALL selected are done
+//   'warn' : at least one selected chip is a mid (incomplete) status
+//   'none' : no chip selected
+function sectionStatus(sec, cells) {
+  const chips = sec.fields.filter(f => f.type === 'chip')
+  const selected = chips.filter(f => cells[`${sec.id}.${f.key}`]?.v)
+  if (!selected.length) return 'none'
+  const anyMid = selected.some(f => !DONE_VALUES.has(cells[`${sec.id}.${f.key}`]?.v))
+  return anyMid ? 'warn' : 'ok'
+}
+// Default-collapse rule: every chip field in the section is done.
+function sectionAllDone(sec, cells) {
+  const chips = sec.fields.filter(f => f.type === 'chip')
+  if (!chips.length) return false
+  return chips.every(f => DONE_VALUES.has(cells[`${sec.id}.${f.key}`]?.v))
 }
 
 // ── date helpers (yyyy-mm-dd, compatible with prior input[type=date] values) ──
@@ -529,6 +547,25 @@ function MemoBadge({ G, memo }) {
   )
 }
 
+// Section status dot (item ②): green ✅ when complete, red blinking ⚠ when a
+// mid status is present, nothing when no status is selected.
+function SectionIndicator({ G, status }) {
+  if (status === 'ok') return <CheckCircle2 size={14} style={{ color: G.ok, flexShrink: 0 }} />
+  if (status === 'warn') return <AlertTriangle size={14} className="iku-blink" style={{ color: G.bad, flexShrink: 0 }} />
+  return null
+}
+
+// Collapse / expand toggle for a section (item ①).
+function SectionToggle({ G, collapsed, onToggle }) {
+  return (
+    <button type="button" onClick={onToggle} title={collapsed ? '펴기 · 展开' : '접기 · 收起'}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: 'none', border: `1px solid ${G.border}`, borderRadius: 6, cursor: 'pointer', color: G.mu, padding: '2px 7px', fontSize: 10, fontWeight: 600, fontFamily: 'inherit' }}>
+      {collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+      {collapsed ? '펴기' : '접기'}
+    </button>
+  )
+}
+
 // ──────────────────────────────────────────────────────────
 // Process card (one order)
 // ──────────────────────────────────────────────────────────
@@ -539,6 +576,15 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
 
   const savedCells = record?.cells || {}
   const savedRemark = record?.remark || ''
+
+  // Section collapse state (item ①) — session-only, defaults from saved cells:
+  // a section is collapsed when all its chip items are done. Not persisted.
+  const [collapsed, setCollapsed] = useState(() => {
+    const init = {}
+    for (const sec of SECTIONS) init[sec.id] = sectionAllDone(sec, savedCells)
+    return init
+  })
+  const toggleSection = useCallback((id) => setCollapsed(c => ({ ...c, [id]: !c[id] })), [])
 
   const cells = draftCells ?? savedCells
   const remark = draftRemark ?? savedRemark
@@ -635,6 +681,8 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
           const allowStock = RAW_SECTIONS.has(sec.id)
           const memoKey = `${sec.id}._memo`
           const memo = cells[memoKey]?.v || ''
+          const status = sectionStatus(sec, cells)   // item ② aggregate status
+          const isCollapsed = !!collapsed[sec.id]    // item ① collapse state
           return (
             <div key={sec.id} style={{ paddingBottom: 20, borderBottom: `1px solid ${G.hair}` }}>
               {/* section title (number scales with it); flexWrap so right-side
@@ -648,7 +696,17 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
                     🧵 {fabricName}
                   </span>
                 )}
+                {/* item ②/① — when collapsed, indicator + expand toggle live in the title row */}
+                {isCollapsed && (
+                  <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <SectionIndicator G={G} status={status} />
+                    <SectionToggle G={G} collapsed onToggle={() => toggleSection(sec.id)} />
+                  </span>
+                )}
               </div>
+              {/* collapsible body (item ① — smooth grid-rows animation) */}
+              <div style={{ display: 'grid', gridTemplateRows: isCollapsed ? '0fr' : '1fr', transition: 'grid-template-rows .25s ease' }}>
+              <div style={{ overflow: 'hidden', minHeight: 0 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: editable ? 8 : 4, paddingLeft: 4 }}>
                 {/* item ① — free-text 원단명 input (edit mode, ④ section only) */}
                 {editable && sec.id === 'fabric' && (
@@ -685,6 +743,13 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
                       style={{ padding: '6px 8px', borderRadius: 6, fontSize: 11.5, border: `1px solid ${G.border}`, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
                   </div>
                 )}
+                {/* item ②/① — expanded: indicator + collapse toggle at section bottom-right */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <SectionIndicator G={G} status={status} />
+                  <SectionToggle G={G} collapsed={false} onToggle={() => toggleSection(sec.id)} />
+                </div>
+              </div>
+              </div>
               </div>
             </div>
           )
