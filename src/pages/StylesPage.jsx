@@ -102,7 +102,9 @@ const PAGE_CSS = `
 @media(max-width:560px){.sty-grid{grid-template-columns:repeat(1,minmax(0,1fr))}}
 `
 
-const PAGE_SIZE = 50
+// Zoho Creator v2.1(이 계정)에서 max_records 가 200 미만이면 HTTP 400(빈 결과)을
+// 반환하는 특성이 있어, 앱 전역(mo-list 등)과 동일하게 200 으로 고정한다.
+const PAGE_SIZE = 200
 
 // 필터 드롭다운 (모듈 레벨 — 렌더 중 컴포넌트 생성 방지)
 function FilterSelect({ G, value, onChange, ph, list }) {
