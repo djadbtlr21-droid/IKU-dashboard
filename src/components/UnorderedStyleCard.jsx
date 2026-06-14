@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil, Save, X, Check, Factory, MessageSquare } from 'lucide-react'
+import { Pencil, Save, X, Check, Factory, MessageSquare, Trash2 } from 'lucide-react'
 import ZohoImage from './ZohoImage'
 import {
   F, pick, styleKey, imageField, styleImageUrl, styleStatusBadge,
@@ -10,7 +10,7 @@ import {
 // 체크리스트 대신: 스타일/샘플 상태 배지 + 오더예정공장 + 비고 + 오더 전환
 // 오더예정공장·비고는 비밀번호 없이 "수정" 버튼 → input → 저장 (KV).
 // ──────────────────────────────────────────────────────────
-export default function UnorderedStyleCard({ G, style, factory, note, onZoom, onSaveFactory, onSaveNote, onConvert }) {
+export default function UnorderedStyleCard({ G, style, factory, note, onZoom, onSaveFactory, onSaveNote, onConvert, onDelete }) {
   const sku = styleKey(style)
   const eng = pick(style, F.eng)
   const chi = pick(style, F.chi)
@@ -31,6 +31,8 @@ export default function UnorderedStyleCard({ G, style, factory, note, onZoom, on
   const [draftNote, setDraftNote] = useState(note || '')
   // 오더 전환 확인
   const [confirmConvert, setConfirmConvert] = useState(false)
+  // 삭제 확인
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const startFactory = () => { setDraftFactory(factory || ''); setEditFactory(true) }
   const saveFactory = () => { onSaveFactory(sku, draftFactory.trim()); setEditFactory(false) }
@@ -59,7 +61,14 @@ export default function UnorderedStyleCard({ G, style, factory, note, onZoom, on
           {sb && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: sb.color, padding: '2px 8px', borderRadius: 999, boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }}>{sb.label}</span>}
           {sampleSt && <span style={{ fontSize: 9.5, fontWeight: 600, color: G.tx, background: 'rgba(255,255,255,0.88)', padding: '2px 7px', borderRadius: 999 }}>{sampleSt}</span>}
         </div>
-        <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 9, fontWeight: 700, color: '#fff', background: G.bad, padding: '2px 7px', borderRadius: 999 }}>未下单</span>
+        {/* ② 미오더 배지(한/중) + ③ 삭제 버튼 (우상단) */}
+        <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: G.bad, padding: '2px 7px', borderRadius: 999 }}>미오더 · 未下单</span>
+          <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }} title="삭제 · 删除"
+            style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: 'none', background: 'rgba(0,0,0,0.5)', color: '#fff' }}>
+            <Trash2 size={12} />
+          </button>
+        </div>
       </div>
 
       {/* 정보 */}
@@ -136,6 +145,22 @@ export default function UnorderedStyleCard({ G, style, factory, note, onZoom, on
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
               <button type="button" onClick={() => setConfirmConvert(false)} className="btn-ghost" style={{ minHeight: 32, padding: '6px 12px', fontSize: 11 }}>취소 取消</button>
               <button type="button" onClick={() => { setConfirmConvert(false); onConvert(sku) }} className="btn-primary" style={{ minHeight: 32, padding: '6px 12px', fontSize: 11 }}>확인 确认</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ③ 삭제 확인 모달 */}
+      {confirmDelete && (
+        <div onClick={e => { if (e.target === e.currentTarget) setConfirmDelete(false) }}
+          style={{ position: 'absolute', inset: 0, background: G.overlayBg, borderRadius: 12, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 }}>
+          <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, padding: 16, boxShadow: G.cardShadow, textAlign: 'center', maxWidth: 230 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: G.tx, marginBottom: 4 }}>이 항목을 목록에서 삭제하시겠습니까?</div>
+            <div style={{ fontSize: 11, color: G.mu, marginBottom: 10 }}>确认从列表中删除此项目？</div>
+            <div style={{ fontSize: 10, color: G.fa, marginBottom: 12 }}>Zoho ERP 데이터는 변경되지 않습니다<br />Zoho ERP数据不会被修改</div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <button type="button" onClick={() => setConfirmDelete(false)} className="btn-ghost" style={{ minHeight: 32, padding: '6px 12px', fontSize: 11 }}>취소 取消</button>
+              <button type="button" onClick={() => { setConfirmDelete(false); onDelete(sku) }} className="btn-primary" style={{ minHeight: 32, padding: '6px 12px', fontSize: 11, background: G.bad, borderColor: G.bad }}>확인 确认</button>
             </div>
           </div>
         </div>

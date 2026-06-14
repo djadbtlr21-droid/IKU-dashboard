@@ -120,6 +120,19 @@ export async function saveProcessHidden({ password, editorName, hidden }) {
   })
 }
 
+// ── 목록 삭제 (deleted_mo:{id} / deleted_style:{sku}, public, no password) ──
+export async function fetchDeletions() {
+  return apiFetch('/api/deletions')
+}
+export const deleteMo = (id) => apiFetch('/api/deletions', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ type: 'mo', id }),
+})
+export const deleteStyle = (sku) => apiFetch('/api/deletions', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ type: 'style', id: sku }),
+})
+
 // ── MO 원단명 오버라이드 (key: fabric:{MO_ID}, public, no password) ──
 export async function fetchMoFabric() {
   return apiFetch('/api/mo-fabric')

@@ -1,14 +1,15 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
-  ClipboardCheck, Search, Eye, EyeOff, Lock, Save, X,
-  AlertTriangle, RotateCcw, Pencil, CheckCircle2, Calendar,
-  ChevronLeft, ChevronRight, MessageSquare, ZoomIn, ChevronUp, ChevronDown,
+  ClipboardCheck, Search, Lock, Save, X,
+  AlertTriangle, Pencil, CheckCircle2, Calendar,
+  ChevronLeft, ChevronRight, MessageSquare, ZoomIn, ChevronUp, ChevronDown, Trash2,
 } from 'lucide-react'
 import { fetchMoList } from '../api/client'
 import {
-  fetchProcessData, verifyProcessPassword, saveProcessItem, saveProcessHidden,
+  fetchProcessData, verifyProcessPassword, saveProcessItem,
   fetchStyleList, fetchStyleMeta, saveStyleFactory, saveStyleNote, hideStyle,
   fetchMoFabric, saveMoFabric,
+  fetchDeletions, deleteMo, deleteStyle,
 } from '../api/client'
 import { getMoNumber, getMoSku, getMoFactory, getMonthKey } from '../utils/moHelpers'
 import { pick, F as SF, isOrdered as styleIsOrdered, styleKey, seasonOf, monthOf } from '../utils/styleFields'
@@ -827,10 +828,11 @@ function SectionToggle({ G, collapsed, onToggle }) {
 // ──────────────────────────────────────────────────────────
 // Process card (one order)
 // ──────────────────────────────────────────────────────────
-function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHidden, canMutate, onZoom,
-  collapsedFor, onToggleSection, printMode, checked, onToggleChecked, fabricKv = '', onSaveFabric }) {
+function ProcessCard({ G, mo, record, editable, onSaveItem, canMutate, onZoom,
+  collapsedFor, onToggleSection, printMode, checked, onToggleChecked, fabricKv = '', onSaveFabric, onDelete }) {
   const [draftCells, setDraftCells] = useState(null)
   const [draftRemark, setDraftRemark] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)   // ③ 삭제 확인
   const [draftFabric, setDraftFabric] = useState(null)   // ⑥ 원단명 오버라이드 draft
   const [saving, setSaving] = useState(false)
 
@@ -890,7 +892,7 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
 
   // overflow visible so the date-picker popover isn't clipped by the card
   return (
-    <div className="card" style={{ padding: 0, overflow: 'visible', display: 'flex', flexDirection: 'column', opacity: isHidden ? 0.7 : 1, outline: printMode && checked ? `2px solid ${G.primary}` : 'none' }}>
+    <div className="card" style={{ padding: 0, overflow: 'visible', display: 'flex', flexDirection: 'column', outline: printMode && checked ? `2px solid ${G.primary}` : 'none' }}>
       {/* item ④ — print-selection checkbox (top-right) */}
       {printMode && (
         <label title="프린트 선택 · 打印选择"
@@ -898,6 +900,28 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
           <input type="checkbox" checked={!!checked} onChange={onToggleChecked} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: G.primary }} />
           <span style={{ fontSize: 9.5, color: G.mu, fontWeight: 600 }}>선택 选择</span>
         </label>
+      )}
+      {/* ③ 삭제 버튼 (우상단) — 프린트 모드가 아닐 때 */}
+      {!printMode && (
+        <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }} title="삭제 · 删除"
+          style={{ position: 'absolute', top: 8, right: 8, zIndex: 5, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: `1px solid ${G.border}`, background: G.card, color: G.bad, boxShadow: G.cardShadow }}>
+          <Trash2 size={13} />
+        </button>
+      )}
+      {/* ③ 삭제 확인 모달 */}
+      {confirmDelete && (
+        <div onClick={e => { if (e.target === e.currentTarget) setConfirmDelete(false) }}
+          style={{ position: 'absolute', inset: 0, background: G.overlayBg, borderRadius: 12, zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 }}>
+          <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, padding: 16, boxShadow: G.cardShadow, textAlign: 'center', maxWidth: 240 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: G.tx, marginBottom: 4 }}>이 항목을 목록에서 삭제하시겠습니까?</div>
+            <div style={{ fontSize: 11, color: G.mu, marginBottom: 10 }}>确认从列表中删除此项目？</div>
+            <div style={{ fontSize: 10, color: G.fa, marginBottom: 12 }}>Zoho ERP 데이터는 변경되지 않습니다<br />Zoho ERP数据不会被修改</div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <button type="button" onClick={() => setConfirmDelete(false)} className="btn-ghost" style={{ minHeight: 32, padding: '6px 12px', fontSize: 11 }}>취소 取消</button>
+              <button type="button" onClick={() => { setConfirmDelete(false); onDelete?.(itemNoOf(mo)) }} className="btn-primary" style={{ minHeight: 32, padding: '6px 12px', fontSize: 11, background: G.bad, borderColor: G.bad }}>확인 确认</button>
+            </div>
+          </div>
+        </div>
       )}
       {/* Header */}
       <div style={{ display: 'flex', gap: 12, padding: 14, borderBottom: `1px solid ${G.hair}`, borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
@@ -944,10 +968,6 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
             <button onClick={handleSave} disabled={saving || !dirty} className="btn-primary"
               style={{ minHeight: 32, padding: '6px 10px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 5, opacity: (saving || !dirty) ? 0.5 : 1 }}>
               <Save size={13} /> {saving ? '저장중 保存中' : '저장 保存'}
-            </button>
-            <button onClick={() => onToggleHidden(itemNoOf(mo), !isHidden)} className="btn-ghost"
-              style={{ minHeight: 30, padding: '5px 8px', fontSize: 10.5, display: 'flex', alignItems: 'center', gap: 5 }}>
-              {isHidden ? <><RotateCcw size={12} /> 복원 恢复</> : <><EyeOff size={12} /> 숨기기 隐藏</>}
             </button>
           </div>
         )}
@@ -1115,7 +1135,9 @@ export default function ProcessPage({ G }) {
   const [factorySel, setFactorySel] = useState([])
   const [month, setMonth] = useState('')
   const [procFilter, setProcFilter] = useState('')
-  const [showHidden, setShowHidden] = useState(false)
+
+  // ③ 삭제 목록 (deleted_mo / deleted_style) — 숨기기 기능 대체
+  const [deletions, setDeletions] = useState({ mo: [], style: [] })
 
   // 데이터 소스 모드: 'ordered'(오더완료/MO) | 'unordered'(미오더/Style)
   const [mode, setMode] = useState('ordered')
@@ -1160,6 +1182,13 @@ export default function ProcessPage({ G }) {
       .catch(err => console.error('[ProcessPage] mo-fabric', err))
   }, [])
 
+  // ③ 삭제 목록 로드 (deleted_mo / deleted_style)
+  const loadDeletions = useCallback(() => {
+    fetchDeletions()
+      .then(d => setDeletions({ mo: d?.mo || [], style: d?.style || [] }))
+      .catch(err => console.error('[ProcessPage] deletions', err))
+  }, [])
+
   // 미오더 섹션: Style 목록 + 메타를 함께 로드.
   // 넉넉히 200개 로드. 스타일이 수백 개 이상으로 늘면 서버사이드 criteria 필터 권장.
   const loadStyles = useCallback(() => {
@@ -1175,11 +1204,11 @@ export default function ProcessPage({ G }) {
   }, [])
 
   useEffect(() => {
-    loadMo(); loadProc(); loadStyles(); loadMoFabric()
-    const h = () => { loadMo(); loadProc(); loadStyles(); loadMoFabric() }
+    loadMo(); loadProc(); loadStyles(); loadMoFabric(); loadDeletions()
+    const h = () => { loadMo(); loadProc(); loadStyles(); loadMoFabric(); loadDeletions() }
     window.addEventListener('iku:refresh', h)
     return () => window.removeEventListener('iku:refresh', h)
-  }, [loadMo, loadProc, loadStyles, loadMoFabric])
+  }, [loadMo, loadProc, loadStyles, loadMoFabric, loadDeletions])
 
   // One-shot diagnostic: report which fabric fields (if any) are absent from the
   // MO data so a missing field is visible in the console (item ①).
@@ -1196,20 +1225,26 @@ export default function ProcessPage({ G }) {
     }
   }, [moList])
 
-  const hiddenSet = useMemo(() => new Set(proc.hidden || []), [proc.hidden])
+  const deletedMo = useMemo(() => new Set(deletions.mo || []), [deletions.mo])
+  const deletedStyle = useMemo(() => new Set(deletions.style || []), [deletions.style])
   const searching = search.trim().length > 0
+
+  // 오더완료 MO 의 SKU 집합 (대소문자 무시·trim) — 미오더 제외용
+  const moSkuSet = useMemo(() => {
+    const s = new Set()
+    moList.forEach(m => { const sku = getMoSku(m); if (sku && sku !== '—') s.add(sku.trim().toLowerCase()) })
+    return s
+  }, [moList])
 
   const baseList = useMemo(() => {
     return moList.filter(m => {
       const id = itemNoOf(m)
       if (!id) return false
-      const hidden = hiddenSet.has(id)
-      if (showHidden) return hidden
-      if (hidden) return false
+      if (deletedMo.has(id)) return false               // ③ 삭제된 오더완료 제외
       if (!searching && isShipped(m)) return false
       return true
     })
-  }, [moList, hiddenSet, showHidden, searching])
+  }, [moList, deletedMo, searching])
 
   const outsourceFactories = useMemo(() => {
     const set = new Set()
@@ -1258,9 +1293,19 @@ export default function ProcessPage({ G }) {
 
   // ── 미오더(Style) 파생값 ──
   const styleHiddenSet = useMemo(() => new Set(styleMeta.hidden || []), [styleMeta.hidden])
+  // ① 오더완료 MO 의 SKU 와 일치하는 Style 은 미오더에서 제외 (대소문자/공백 무시)
+  // ③ 삭제된 Style(deleted_style) 도 제외 · 기존 오더전환(style_hidden)도 유지
   const unorderedStyles = useMemo(
-    () => styleList.filter(s => !styleIsOrdered(s) && !styleHiddenSet.has(styleKey(s))),
-    [styleList, styleHiddenSet]
+    () => styleList.filter(s => {
+      if (styleIsOrdered(s)) return false
+      const sku = styleKey(s)
+      if (styleHiddenSet.has(sku)) return false
+      if (deletedStyle.has(sku)) return false
+      const skuNorm = pick(s, SF.sku).trim().toLowerCase()
+      if (skuNorm && moSkuSet.has(skuNorm)) return false   // 오더완료에 있는 SKU 제외
+      return true
+    }),
+    [styleList, styleHiddenSet, deletedStyle, moSkuSet]
   )
   // 월별/시즌 탭 (Style 데이터에서 동적 추출 + 건수)
   const unorderedTabs = useMemo(() => {
@@ -1332,21 +1377,21 @@ export default function ProcessPage({ G }) {
     }
   }, [password, editorName, requireEditor, showToast])
 
-  const handleToggleHidden = useCallback(async (itemNo, hide) => {
-    if (!requireEditor()) return
-    const next = hide ? [...new Set([...(proc.hidden || []), itemNo])] : (proc.hidden || []).filter(x => x !== itemNo)
-    try {
-      const res = await saveProcessHidden({ password, editorName: editorName.trim(), hidden: next })
-      if (res?.ok) {
-        setProc(p => ({ ...p, hidden: res.hidden }))
-        showToast(hide ? '숨김 처리 · 已隐藏' : '복원 완료 · 已恢复', 'ok')
-      } else {
-        showToast(res?.message || '실패 · 失败', 'bad')
-      }
-    } catch (err) {
-      showToast(err?.data?.message || '실패 · 失败', 'bad')
-    }
-  }, [password, editorName, proc.hidden, requireEditor, showToast])
+  // ③ 삭제 (오더완료 MO) — 비밀번호 불필요, 복원 없음. Zoho 변경 없음.
+  const handleDeleteMo = useCallback((id) => {
+    setDeletions(prev => ({ ...prev, mo: [...new Set([...(prev.mo || []), id])] }))
+    deleteMo(id)
+      .then(r => showToast(r?.ok ? '삭제됨 · 已删除' : '삭제 실패 · 删除失败', r?.ok ? 'ok' : 'bad'))
+      .catch(() => showToast('삭제 실패 · 删除失败', 'bad'))
+  }, [showToast])
+
+  // ③ 삭제 (미오더 Style)
+  const handleDeleteStyle = useCallback((sku) => {
+    setDeletions(prev => ({ ...prev, style: [...new Set([...(prev.style || []), sku])] }))
+    deleteStyle(sku)
+      .then(r => showToast(r?.ok ? '삭제됨 · 已删除' : '삭제 실패 · 删除失败', r?.ok ? 'ok' : 'bad'))
+      .catch(() => showToast('삭제 실패 · 删除失败', 'bad'))
+  }, [showToast])
 
   const resetFilters = () => {
     setCategory('all'); setSubFactory(''); setSearch(''); setFactorySel([]); setMonth(''); setProcFilter('')
@@ -1560,9 +1605,6 @@ export default function ProcessPage({ G }) {
           <option value="">공장 추가 · 添加工厂</option>
           {allFactories.map(f => <option key={f} value={f}>{f}</option>)}
         </select>
-        <button onClick={() => setShowHidden(s => !s)} className="chip" style={{ border: `1px solid ${showHidden ? G.primary : G.border}`, background: showHidden ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: showHidden ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          {showHidden ? <Eye size={13} /> : <EyeOff size={13} />} {showHidden ? '숨긴 오더 숨기기 · 收起隐藏' : '숨긴 오더 보기 · 查看隐藏'} · {proc.hidden?.length || 0}
-        </button>
       </div>
 
       {/* Active filter chips */}
@@ -1589,7 +1631,7 @@ export default function ProcessPage({ G }) {
 
       {/* Result count */}
       <div style={{ fontSize: 11, color: G.mu, marginBottom: 12 }}>
-        {loading ? '불러오는 중 · 加载中…' : `${visible.length}개 오더 · ${visible.length} 个订单`}{showHidden ? ' (숨김 목록 · 隐藏列表)' : ''}
+        {loading ? '불러오는 중 · 加载中…' : `${visible.length}개 오더 · ${visible.length} 个订单`}
       </div>
 
       {/* Cards */}
@@ -1611,9 +1653,7 @@ export default function ProcessPage({ G }) {
               record={proc.items[itemNoOf(mo)]}
               editable={editMode}
               canMutate={editMode}
-              isHidden={hiddenSet.has(itemNoOf(mo))}
               onSaveItem={handleSaveItem}
-              onToggleHidden={handleToggleHidden}
               onZoom={setZoomSrc}
               collapsedFor={(secId) => sectionCollapsed(itemNoOf(mo), secId)}
               onToggleSection={(secId) => toggleCardSection(itemNoOf(mo), secId)}
@@ -1622,6 +1662,7 @@ export default function ProcessPage({ G }) {
               onToggleChecked={() => togglePrintChecked(itemNoOf(mo))}
               fabricKv={moFabric[itemNoOf(mo)] || ''}
               onSaveFabric={onSaveFabric}
+              onDelete={handleDeleteMo}
             />
           ))}
         </div>
@@ -1676,6 +1717,7 @@ export default function ProcessPage({ G }) {
                   onSaveFactory={onSaveStyleFactory}
                   onSaveNote={onSaveStyleNote}
                   onConvert={onConvertStyle}
+                  onDelete={handleDeleteStyle}
                 />
               )
             })}

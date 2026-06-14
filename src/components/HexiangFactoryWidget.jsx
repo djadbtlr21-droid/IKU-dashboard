@@ -16,7 +16,7 @@ import { fetchFactoryConfig, saveFactoryConfig, verifyProcessPassword } from '..
 
 const LINES = [
   { id: 'old', kr: '老车间 · 기존 라인' },
-  { id: 'yoga', kr: '4楼瑜伽车间 · 4층 요가 라인' },
+  { id: 'yoga', kr: '4楼挂式车间 · 4층 자동화라인' },
 ]
 
 // 옷감(검정·다크그레이만) / 작업복 / 피부색 순환 팔레트
@@ -182,7 +182,7 @@ function PwModal({ G, onClose, onSuccess }) {
 // 읽기 모드: 인원 텍스트 · 비고 텍스트 · 공정명 읽기전용 · "수정" 버튼
 // 편집 모드: 인원 ± · 비고 input · 공정명 input · "저장 / 취소"
 // ──────────────────────────────────────────────────────────
-function WorkerLine({ G, lineIdx, def, line, editing, onRequestEdit, onSave, onCancel }) {
+function WorkerLine({ G, lineIdx, def, line, editing, onRequestEdit, onSave, onCancel, onLiveCount }) {
   const { count, tasks, remark } = line
 
   // 편집용 draft — 이 컴포넌트는 editing 토글 시 key 변경으로 remount 되므로
@@ -203,6 +203,7 @@ function WorkerLine({ G, lineIdx, def, line, editing, onRequestEdit, onSave, onC
     if (!editing || dCount >= 100 || leaving !== null) return
     const newIdx = dCount
     setDCount(dCount + 1)
+    onLiveCount?.(def.id, dCount + 1)   // ⑤ 실시간 합산
     setEntering(newIdx)
     clearTimeout(enterTimer.current)
     enterTimer.current = setTimeout(() => setEntering(null), 320)
@@ -213,6 +214,7 @@ function WorkerLine({ G, lineIdx, def, line, editing, onRequestEdit, onSave, onC
     const removeIdx = dCount - 1
     setLeaving(removeIdx)
     clearTimeout(leaveTimer.current)
+    onLiveCount?.(def.id, removeIdx)   // ⑤ 실시간 합산
     leaveTimer.current = setTimeout(() => {
       setLeaving(null)
       setDCount(removeIdx)
@@ -333,6 +335,8 @@ export default function HexiangFactoryWidget({ G, visible }) {
   })
   const [loaded, setLoaded] = useState(false)
   const [toast, setToast] = useState(null)   // { type:'ok'|'bad', msg }
+  // ⑤ 실시간 합산 인원 (편집 중 +/- 즉시 반영)
+  const [liveCounts, setLiveCounts] = useState({ old: 15, yoga: 6 })
 
   // ③ 라인별 편집 상태 + 검증된 비밀번호
   const [editing, setEditing] = useState({ old: false, yoga: false })
@@ -363,10 +367,13 @@ export default function HexiangFactoryWidget({ G, visible }) {
       .then(d => {
         if (!alive) return
         if (d?.lines) {
+          const oc = d.lines.old?.count ?? 15
+          const yc = d.lines.yoga?.count ?? 6
           setLines({
-            old: { count: d.lines.old?.count ?? 15, tasks: d.lines.old?.tasks || {}, remark: d.lines.old?.remark || '' },
-            yoga: { count: d.lines.yoga?.count ?? 6, tasks: d.lines.yoga?.tasks || {}, remark: d.lines.yoga?.remark || '' },
+            old: { count: oc, tasks: d.lines.old?.tasks || {}, remark: d.lines.old?.remark || '' },
+            yoga: { count: yc, tasks: d.lines.yoga?.tasks || {}, remark: d.lines.yoga?.remark || '' },
           })
+          setLiveCounts({ old: oc, yoga: yc })
         }
       })
       .catch(err => console.error('[HexiangWidget] load', err))
@@ -388,13 +395,19 @@ export default function HexiangFactoryWidget({ G, visible }) {
   const handleSaveLine = useCallback((lineId, draftLine) => {
     const next = { ...lines, [lineId]: draftLine }
     setLines(next)
+    setLiveCounts(c => ({ ...c, [lineId]: draftLine.count }))
     setEditing(e => ({ ...e, [lineId]: false }))
     saveFactoryConfig(next, password)
       .then(res => { if (res?.ok) showToast('ok', '저장됨 · 已保存'); else showToast('bad', '저장 실패 · 保存失败') })
       .catch(() => showToast('bad', '저장 실패 · 保存失败'))
   }, [lines, password, showToast])
 
-  const handleCancel = (lineId) => setEditing(e => ({ ...e, [lineId]: false }))
+  const handleCancel = (lineId) => {
+    setLiveCounts(c => ({ ...c, [lineId]: lines[lineId].count }))   // 취소 시 합산 원복
+    setEditing(e => ({ ...e, [lineId]: false }))
+  }
+  const onLiveCount = useCallback((lineId, n) => setLiveCounts(c => ({ ...c, [lineId]: n })), [])
+  const totalWorkers = (liveCounts.old || 0) + (liveCounts.yoga || 0)
 
   return (
     <div style={{ display: visible ? 'block' : 'none' }} aria-hidden={!visible}>
@@ -411,6 +424,10 @@ export default function HexiangFactoryWidget({ G, visible }) {
           <div style={{ fontSize: 14, fontWeight: 700, color: G.tx }}>
             🏭 HEXIANG 合祥 공인 현황 · 工人情况
           </div>
+          {/* ⑤ 총 투입 인원 (실시간 합산) */}
+          <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: G.mu, background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>
+            총 <span className="num" style={{ color: G.accent, fontWeight: 700 }}>{totalWorkers}</span>명 투입 · 共{totalWorkers}名投入
+          </span>
         </div>
 
         {/* 본문 — 접힘 시 height 0 트랜지션 */}
@@ -424,6 +441,7 @@ export default function HexiangFactoryWidget({ G, visible }) {
                 onRequestEdit={() => requestEdit(def.id)}
                 onSave={(draft) => handleSaveLine(def.id, draft)}
                 onCancel={() => handleCancel(def.id)}
+                onLiveCount={onLiveCount}
               />
             ))}
           </div>
