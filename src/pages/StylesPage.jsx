@@ -4,7 +4,7 @@ import { fetchStyleList } from '../api/client'
 import ZohoImage from '../components/ZohoImage'
 import {
   F, pick, recId, imageField, styleImageUrl, styleStatusBadge,
-  isOrdered, fmtTime, monthLabel, seasonOf, hasSizeSpec, isInProgress,
+  isOrdered, fmtTime, monthOf, monthLabel, seasonOf, hasSizeSpec,
 } from '../utils/styleFields'
 
 // ──────────────────────────────────────────────────────────
@@ -20,9 +20,18 @@ const PAGE_CSS = `
 @media(max-width:1200px){.sty-grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
 @media(max-width:900px){.sty-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:560px){.sty-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@keyframes styBlink{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes styBlink{0%,100%{opacity:1}50%{opacity:.25}}
 .sty-blink{animation:styBlink 1.6s ease-in-out infinite}
 `
+
+// 상태값 분류 → 색상/깜빡임 (In Progress·진행=빨강깜빡 · 승인됨·완료=초록 · 그외=뮤트)
+function statusInfo(G, val) {
+  const s = String(val || '').toLowerCase()
+  if (!s) return null
+  if (/in.?progress|进行|sampling|제작\s*중|제작중|진행/.test(s)) return { color: G.bad, blink: true }
+  if (/approved|승인|已批准|complete|完成|完了|完工/.test(s)) return { color: G.ok, blink: false }
+  return { color: G.mu, blink: false }
+}
 
 // Zoho Creator v2.1(이 계정)에서 max_records 가 200 미만이면 HTTP 400(빈 결과)을
 // 반환하는 특성이 있어, 앱 전역(mo-list 등)과 동일하게 200 으로 고정한다.
@@ -148,61 +157,58 @@ function StyleCard({ G, rec, onOpen, onZoom }) {
   const gender = pick(rec, F.gender)
   const category = pick(rec, F.category)
   const fabric = pick(rec, F.fabric)
-  const cost = pick(rec, F.cost)
-  const sample = pick(rec, F.sampleStatus)
-  const styleSt = pick(rec, F.styleStatus)
-  const sb = styleStatusBadge(G, styleSt)
+  const sampleSt = pick(rec, F.sampleStatus)   // 승인 상태 (Approved / In Progress …)
+  const styleSt = pick(rec, F.styleStatus)     // 샘플 상태 (Sampling / Active …)
+  const ordered = isOrdered(rec)
   const imgUrl = styleImageUrl(rec)
-  const inProgress = isInProgress(rec)   // 샘플 제작 중 → 빨강+깜빡임
   const hasSize = hasSizeSpec(rec)
-  const mLabel = monthLabel(rec)         // "6月"
-  const season = seasonOf(rec)           // "FW26"
 
-  // 라벨 한/중 병행
-  const line = (kr, cn, val) => val ? (
-    <div style={{ display: 'flex', gap: 4, fontSize: 9.5, lineHeight: 1.4 }}>
-      <span style={{ color: G.fa, flexShrink: 0 }}>{kr} {cn}</span>
-      <span style={{ color: G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val}</span>
-    </div>
+  const sampleInfo = statusInfo(G, styleSt)    // 샘플 상태 색/깜빡
+  const approvalInfo = statusInfo(G, sampleSt) // 승인 상태 색/깜빡
+  const skuRed = (sampleInfo?.blink || approvalInfo?.blink)   // 제작중이면 SKU 빨강
+
+  // 하단 상태 배지
+  const badge = (label, info, key) => label ? (
+    <span key={key} className={info?.blink ? 'sty-blink' : undefined}
+      style={{ display: 'inline-block', fontSize: 8.5, fontWeight: 700, padding: '2px 6px', borderRadius: 6, lineHeight: 1.3,
+        color: info?.color || G.mu, border: `1px solid ${info?.color || G.border}`, background: 'transparent' }}>
+      {label}
+    </span>
   ) : null
+
+  const meta = [brand, gender, category].filter(Boolean).join(' · ')
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', cursor: 'pointer' }}
       onClick={() => onOpen(rec)}>
-      {/* 이미지 (높이 고정, object-fit cover) */}
-      <div style={{ position: 'relative', width: '100%', height: 150, background: G.cardAlt }}>
-        <div style={{ width: '100%', height: '100%' }}
-          onClick={(e) => { if (imgUrl) { e.stopPropagation(); onZoom(imgUrl) } }}>
-          <ZohoImage mo={rec} field={imageField(rec) || 'Style_Image'} G={G} alt={sku} placeholderText="" iconSize={20} />
-        </div>
-        {/* 상태 배지 (좌상단, 우선순위 1·2) */}
-        <div style={{ position: 'absolute', top: 5, left: 5, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start', maxWidth: '90%' }}>
-          {sb && <span className={inProgress ? 'sty-blink' : undefined} style={{ fontSize: 8, fontWeight: 700, color: '#fff', background: inProgress ? G.bad : sb.color, padding: '1px 5px', borderRadius: 999, boxShadow: '0 1px 4px rgba(0,0,0,0.25)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{sb.label}</span>}
-          {sample && <span className={inProgress ? 'sty-blink' : undefined} style={{ fontSize: 7.5, fontWeight: 600, color: inProgress ? '#fff' : G.tx, background: inProgress ? G.bad : 'rgba(255,255,255,0.9)', padding: '1px 5px', borderRadius: 999, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{sample}</span>}
-        </div>
-        {/* 월/시즌 (우상단) */}
-        <div style={{ position: 'absolute', top: 5, right: 5, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
-          {mLabel && <span style={{ fontSize: 7.5, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,0.5)', padding: '1px 5px', borderRadius: 999 }}>{mLabel}</span>}
-          {season && <span style={{ fontSize: 7.5, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,0.5)', padding: '1px 5px', borderRadius: 999 }}>{season}</span>}
-        </div>
+      {/* ① 이미지 영역 — 오버레이 없음, 고정 높이, object-fit cover, 클릭 시 라이트박스 */}
+      <div style={{ width: '100%', height: 185, background: G.cardAlt }}
+        onClick={(e) => { if (imgUrl) { e.stopPropagation(); onZoom(imgUrl) } }}>
+        <ZohoImage mo={rec} field={imageField(rec) || 'Style_Image'} G={G} alt={sku} placeholderText="" iconSize={22} />
       </div>
 
-      {/* 정보 (축소) */}
-      <div style={{ padding: 7, display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-        {/* SKU — 제작 중이면 빨강(깜빡임 없음) */}
-        <div className="syne" style={{ fontSize: 10.5, fontWeight: 700, color: inProgress ? G.bad : G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sku || '—'}</div>
-        {chi && <div style={{ fontSize: 9, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chi}</div>}
-        <div style={{ height: 1, background: G.hair, margin: '3px 0' }} />
-        {line('브랜드', '品牌', brand)}
-        {line('성별', '性别', gender)}
-        {line('분류', '分类', category)}
-        {line('원단', '面料', fabric)}
-        {line('원가', '成本', cost)}
-        {/* 사이즈 표기 유무 배지 */}
-        <div style={{ marginTop: 3 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 999, border: `1px solid ${hasSize ? G.ok : G.border}`, color: hasSize ? G.ok : G.mu }}>
+      {/* ② 텍스트 영역 (이미지 아래) */}
+      <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
+        {/* 1. SKU */}
+        <div className="syne" style={{ fontSize: 11, fontWeight: 700, color: skuRed ? G.bad : G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sku || '—'}</div>
+        {/* 2. 중문명 */}
+        {chi && <div style={{ fontSize: 9.5, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chi}</div>}
+        {/* 3. 브랜드·성별·분류 한줄 */}
+        {meta && <div style={{ fontSize: 9, color: G.fa, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta}</div>}
+        {/* 4. 원단 */}
+        {fabric && <div style={{ fontSize: 9, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><span style={{ color: G.fa }}>面料 </span>{fabric}</div>}
+        {/* 5. 사이즈 유무 (없음=빨강 깜빡) */}
+        <div style={{ marginTop: 2 }}>
+          <span className={hasSize ? undefined : 'sty-blink'}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 8.5, fontWeight: 700, padding: '1px 6px', borderRadius: 999, border: `1px solid ${hasSize ? G.ok : G.bad}`, color: hasSize ? G.ok : G.bad }}>
             {hasSize ? '✓ 사이즈 있음 有尺码' : '✗ 사이즈 없음 无尺码'}
           </span>
+        </div>
+        {/* 6. 하단 상태 배지 영역 */}
+        <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {badge(styleSt, sampleInfo, 'st')}
+          {badge(sampleSt, approvalInfo, 'ap')}
+          {badge(ordered ? '오더완료 · 已下单' : '미오더 · 未下单', { color: ordered ? G.ok : G.bad, blink: false }, 'od')}
         </div>
       </div>
     </div>
@@ -239,9 +245,10 @@ export default function StylesPage({ G }) {
   const [search, setSearch] = useState('')
   const [brand, setBrand] = useState('')
   const [category, setCategory] = useState('')
-  const [season, setSeason] = useState('')
   const [styleStatus, setStyleStatus] = useState('')
   const [sampleStatus, setSampleStatus] = useState('')
+  // ③ 월별/시즌 버튼 필터: { type:'all'|'month'|'season', value }
+  const [ms, setMs] = useState({ type: 'all', value: '' })
 
   const [selected, setSelected] = useState(null)   // 상세 모달 record
   const [zoomSrc, setZoomSrc] = useState(null)     // 라이트박스
@@ -293,30 +300,49 @@ export default function StylesPage({ G }) {
   const opts = useMemo(() => {
     const u = (keys) => [...new Set(items.map(r => pick(r, keys)).filter(Boolean))].sort()
     return {
-      brand: u(F.brand), category: u(F.category), season: u(F.season),
+      brand: u(F.brand), category: u(F.category),
       styleStatus: u(F.styleStatus), sampleStatus: u(F.sampleStatus),
     }
   }, [items])
 
-  // 클라이언트 사이드 검색/필터
+  // ③ 월/시즌 버튼 목록 (실제 데이터 기준 + 카운트)
+  const msButtons = useMemo(() => {
+    const months = {}, seasons = {}
+    items.forEach(r => {
+      const m = monthOf(r); if (m) months[m] = (months[m] || 0) + 1
+      const se = seasonOf(r); if (se) seasons[se] = (seasons[se] || 0) + 1
+    })
+    const monthBtns = Object.keys(months).sort().map(v => ({ type: 'month', value: v, label: monthLabel({ Plan_Month: v }) || `${v}月`, count: months[v] }))
+    const seasonBtns = Object.keys(seasons).sort().map(v => ({ type: 'season', value: v, label: `${v} 시즌`, count: seasons[v] }))
+    return [...monthBtns, ...seasonBtns]
+  }, [items])
+
+  const msMatch = (r) => {
+    if (ms.type === 'month') return monthOf(r) === ms.value
+    if (ms.type === 'season') return seasonOf(r) === ms.value
+    return true
+  }
+
+  // 클라이언트 사이드 검색/필터 (샘플 상태 + 월/시즌 AND 조합)
   const visible = useMemo(() => {
     const s = search.trim().toLowerCase()
     return items.filter(r => {
       if (brand && pick(r, F.brand) !== brand) return false
       if (category && pick(r, F.category) !== category) return false
-      if (season && pick(r, F.season) !== season) return false
       if (styleStatus && pick(r, F.styleStatus) !== styleStatus) return false
       if (sampleStatus && pick(r, F.sampleStatus) !== sampleStatus) return false
+      if (ms.type !== 'all' && !msMatch(r)) return false
       if (s) {
         const blob = `${pick(r, F.sku)} ${pick(r, F.eng)} ${pick(r, F.chi)}`.toLowerCase()
         if (!blob.includes(s)) return false
       }
       return true
     })
-  }, [items, search, brand, category, season, styleStatus, sampleStatus])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, search, brand, category, styleStatus, sampleStatus, ms])
 
-  const resetFilters = () => { setSearch(''); setBrand(''); setCategory(''); setSeason(''); setStyleStatus(''); setSampleStatus('') }
-  const anyFilter = search || brand || category || season || styleStatus || sampleStatus
+  const resetFilters = () => { setSearch(''); setBrand(''); setCategory(''); setStyleStatus(''); setSampleStatus(''); setMs({ type: 'all', value: '' }) }
+  const anyFilter = search || brand || category || styleStatus || sampleStatus || ms.type !== 'all'
 
   const inputStyle = { padding: '8px 12px', borderRadius: 8, fontSize: 12, border: `1px solid ${G.border}`, background: G.card, color: G.tx, outline: 'none', fontFamily: 'inherit' }
 
@@ -349,7 +375,6 @@ export default function StylesPage({ G }) {
         </div>
         <FilterSelect G={G} value={brand} onChange={setBrand} ph="브랜드 · 品牌" list={opts.brand} />
         <FilterSelect G={G} value={category} onChange={setCategory} ph="카테고리 · 分类" list={opts.category} />
-        <FilterSelect G={G} value={season} onChange={setSeason} ph="시즌 · 季节" list={opts.season} />
         <FilterSelect G={G} value={styleStatus} onChange={setStyleStatus} ph="스타일 상태 · 样品状态" list={opts.styleStatus} />
         {anyFilter && (
           <button onClick={resetFilters} className="btn-ghost" style={{ minHeight: 38, padding: '8px 12px', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -358,9 +383,9 @@ export default function StylesPage({ G }) {
         )}
       </div>
 
-      {/* ③ 샘플 상태 필터 버튼 그룹 (Sample_Status 실제 값으로 동적 생성, 기본 전체) */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, marginRight: 2 }}>샘플 상태 · 打样状态</span>
+      {/* ③ [1줄] 샘플 상태 · 打样状态 (Sample_Status 동적 생성, 기본 전체) */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, marginRight: 2, width: 96 }}>샘플 상태 · 打样状态</span>
         {[''].concat(opts.sampleStatus).map(v => {
           const on = sampleStatus === v
           const cnt = v ? items.filter(r => pick(r, F.sampleStatus) === v).length : items.length
@@ -369,6 +394,31 @@ export default function StylesPage({ G }) {
               style={{ border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: on ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5 }}>
               {v || '전체 全部'}
               <span className="num" style={{ fontSize: 9, padding: '1px 5px', borderRadius: 999, background: on ? G.primary : G.hair, color: on ? '#fff' : G.mu }}>{cnt}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ③ [2줄] 월별 · 月份 / 시즌 · 季节 (실제 값 동적 생성, 기본 전체) */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, marginRight: 2, width: 96 }}>월별·月份 / 시즌·季节</span>
+        {(() => {
+          const allOn = ms.type === 'all'
+          return (
+            <button onClick={() => setMs({ type: 'all', value: '' })} className="chip"
+              style={{ border: `1px solid ${allOn ? G.primary : G.border}`, background: allOn ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: allOn ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5 }}>
+              전체 全部
+              <span className="num" style={{ fontSize: 9, padding: '1px 5px', borderRadius: 999, background: allOn ? G.primary : G.hair, color: allOn ? '#fff' : G.mu }}>{items.length}</span>
+            </button>
+          )
+        })()}
+        {msButtons.map(b => {
+          const on = ms.type === b.type && ms.value === b.value
+          return (
+            <button key={`${b.type}:${b.value}`} onClick={() => setMs({ type: b.type, value: b.value })} className="chip"
+              style={{ border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: on ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5 }}>
+              {b.label}
+              <span className="num" style={{ fontSize: 9, padding: '1px 5px', borderRadius: 999, background: on ? G.primary : G.hair, color: on ? '#fff' : G.mu }}>{b.count}</span>
             </button>
           )
         })}
