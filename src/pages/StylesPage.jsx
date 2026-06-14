@@ -303,7 +303,7 @@ export default function StylesPage({ G }) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
   const [hasMore, setHasMore] = useState(false)
-  const fromIndexRef = useRef(1)
+  const cursorRef = useRef('')   // Zoho v2.1 record_cursor (next page)
 
   // filters
   const [search, setSearch] = useState('')
@@ -318,16 +318,16 @@ export default function StylesPage({ G }) {
 
   const extract = (d) => d?.data || d?.records || d?.result || []
 
-  // 초기 로드 (첫 50개) — 재시도용으로 분리
+  // 초기 로드 (첫 페이지) — 재시도용으로 분리
   const loadInitial = useCallback(() => {
     setLoading(true); setError(null)
-    fromIndexRef.current = 1
-    fetchStyleList({ fromIndex: 1, maxRecords: PAGE_SIZE })
+    cursorRef.current = ''
+    fetchStyleList({ maxRecords: PAGE_SIZE })
       .then(d => {
         const list = extract(d)
         setItems(list)
-        setHasMore(list.length >= PAGE_SIZE)
-        fromIndexRef.current = 1 + list.length
+        cursorRef.current = d?.record_cursor || ''
+        setHasMore(!!d?.record_cursor)
       })
       .catch(err => { console.error('[StylesPage] load', err); setError(err.message || String(err)) })
       .finally(() => setLoading(false))
@@ -343,17 +343,17 @@ export default function StylesPage({ G }) {
   }, [loadInitial])
 
   const loadMore = useCallback(() => {
-    if (loadingMore) return
+    if (loadingMore || !cursorRef.current) return
     setLoadingMore(true)
-    fetchStyleList({ fromIndex: fromIndexRef.current, maxRecords: PAGE_SIZE })
+    fetchStyleList({ cursor: cursorRef.current, maxRecords: PAGE_SIZE })
       .then(d => {
         const list = extract(d)
         setItems(prev => {
           const seen = new Set(prev.map(recId))
           return [...prev, ...list.filter(r => !seen.has(recId(r)))]
         })
-        setHasMore(list.length >= PAGE_SIZE)
-        fromIndexRef.current += list.length
+        cursorRef.current = d?.record_cursor || ''
+        setHasMore(!!d?.record_cursor)
       })
       .catch(err => console.error('[StylesPage] loadMore', err))
       .finally(() => setLoadingMore(false))

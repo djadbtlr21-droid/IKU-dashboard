@@ -1143,7 +1143,7 @@ export default function ProcessPage({ G }) {
   const loadStyles = useCallback(() => {
     setStyleLoading(true); setStyleErr(null)
     Promise.all([
-      fetchStyleList({ fromIndex: 1, maxRecords: 200 }),
+      fetchStyleList({ maxRecords: 200 }),
       fetchStyleMeta().catch(() => ({ factory: {}, note: {}, hidden: [] })),
     ]).then(([list, meta]) => {
       setStyleList(list?.data || list?.records || list?.result || [])

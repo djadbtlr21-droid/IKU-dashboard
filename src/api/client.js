@@ -24,11 +24,13 @@ export async function fetchStyleDetail(sku) {
   return apiFetch(`/api/style-detail?sku=${encodeURIComponent(sku)}`)
 }
 
-// All_Styles list (Style / Sample 管理). Paginated via from_index / max_records.
-export async function fetchStyleList({ fromIndex = 1, maxRecords = 50 } = {}) {
+// All_Styles list (Style / Sample 管理). Zoho v2.1 cursor pagination:
+// pass the `record_cursor` from the previous response to get the next page.
+// (from_index is NOT a valid Zoho v2.1 param — it triggers error 1060.)
+export async function fetchStyleList({ cursor = '', maxRecords = 50 } = {}) {
   const qs = new URLSearchParams()
-  qs.set('from_index', String(fromIndex))
   qs.set('max_records', String(maxRecords))
+  if (cursor) qs.set('cursor', cursor)
   return apiFetch(`/api/style-list?${qs}`)
 }
 
