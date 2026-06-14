@@ -93,3 +93,16 @@ export async function saveProcessHidden({ password, editorName, hidden }) {
     body: JSON.stringify({ action: 'hidden', password, editorName, hidden }),
   })
 }
+
+// ── HEXIANG 工厂现场 (worker-line config — public, no password) ──
+export async function fetchFactoryConfig() {
+  return apiFetch('/api/factory-config')
+}
+
+export async function saveFactoryConfig(lines) {
+  return apiFetch('/api/factory-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lines }),
+  })
+}

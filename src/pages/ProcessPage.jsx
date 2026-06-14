@@ -11,6 +11,7 @@ import {
 import { getMoNumber, getMoSku, getMoFactory, getMonthKey } from '../utils/moHelpers'
 import ZohoImage from '../components/ZohoImage'
 import { SkeletonCard } from '../components/SkeletonLoader'
+import HexiangFactoryWidget from '../components/HexiangFactoryWidget'
 
 // ──────────────────────────────────────────────────────────
 // Process checklist schema (한중 병기 / 中韩对照)
@@ -1426,6 +1427,9 @@ export default function ProcessPage({ G }) {
           <strong>오류 · 错误:</strong> {error}
         </div>
       )}
+
+      {/* HEXIANG 工厂现场 위젯 — HEXIANG 탭에서만 표시 (DOM 유지, display none) */}
+      <HexiangFactoryWidget G={G} visible={category === 'hexiang'} />
 
       {/* Result count */}
       <div style={{ fontSize: 11, color: G.mu, marginBottom: 12 }}>
