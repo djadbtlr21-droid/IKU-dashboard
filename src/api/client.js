@@ -24,6 +24,14 @@ export async function fetchStyleDetail(sku) {
   return apiFetch(`/api/style-detail?sku=${encodeURIComponent(sku)}`)
 }
 
+// All_Styles list (Style / Sample 管理). Paginated via from_index / max_records.
+export async function fetchStyleList({ fromIndex = 1, maxRecords = 50 } = {}) {
+  const qs = new URLSearchParams()
+  qs.set('from_index', String(fromIndex))
+  qs.set('max_records', String(maxRecords))
+  return apiFetch(`/api/style-list?${qs}`)
+}
+
 export async function fetchShipments(params = {}) {
   const qs = new URLSearchParams()
   if (params.perPage) qs.set('max_records', params.perPage)

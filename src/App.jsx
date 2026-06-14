@@ -1,10 +1,11 @@
 import { useState, createContext, useContext, useEffect } from "react"
-import { Package, BarChart2, Truck, Sun, Moon, RefreshCw, Lock, LogOut, ClipboardCheck } from "lucide-react"
+import { Package, BarChart2, Truck, Sun, Moon, RefreshCw, Lock, LogOut, ClipboardCheck, Shirt } from "lucide-react"
 import CoverPage from "./components/CoverPage"
 import MoView from "./pages/MoView"
 import OverviewPage from "./pages/OverviewPage"
 import ShipmentPage from "./pages/ShipmentPage"
 import ProcessPage from "./pages/ProcessPage"
+import StylesPage from "./pages/StylesPage"
 import ErrorBoundary from "./components/ErrorBoundary"
 import { DataProvider } from "./contexts/DataContext"
 import { AnnotationProvider } from "./contexts/AnnotationContext"
@@ -118,6 +119,7 @@ button{font-family:inherit;touch-action:manipulation}
 const TABS = [
   { id: "process", label: "⭐产前确认 · 생산 전 체크", sub: "생산 전 체크", icon: ClipboardCheck, active: true },
   { id: "overview", label: "Overview", sub: "대시보드 · 仪表盘", icon: BarChart2, active: true },
+  { id: "styles", label: "Style (Sample)", sub: "샘플 · 样品", icon: Shirt, active: true },
   { id: "mo", label: "MO View", sub: "생산진행 · 生产进度", icon: Package, active: true },
   { id: "shipment", label: "Shipment", sub: "출고현황 · 出货状况", icon: Truck, active: true },
 ]
@@ -338,7 +340,12 @@ export default function App() {
                   <ProcessPage G={G} />
                 </ErrorBoundary>
               )}
-              {tab !== "overview" && tab !== "mo" && tab !== "shipment" && tab !== "process" && activeTab && <ComingSoon G={G} label={activeTab.label} />}
+              {tab === "styles" && (
+                <ErrorBoundary>
+                  <StylesPage G={G} />
+                </ErrorBoundary>
+              )}
+              {tab !== "overview" && tab !== "mo" && tab !== "shipment" && tab !== "process" && tab !== "styles" && activeTab && <ComingSoon G={G} label={activeTab.label} />}
             </div>
           </main>
         </div>
