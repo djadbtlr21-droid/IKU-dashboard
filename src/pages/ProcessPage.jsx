@@ -1247,7 +1247,11 @@ export default function ProcessPage({ G }) {
       const m = monthOf(s); if (m) months[m] = (months[m] || 0) + 1
       const se = seasonOf(s); if (se) seasons[se] = (seasons[se] || 0) + 1
     })
-    const mk = (obj, type) => Object.keys(obj).sort().map(value => ({ type, value, label: value, count: obj[value] }))
+    // 월 탭은 한자 月 표기 ("6" → "6月"), 시즌 탭은 원문(FW26 등)
+    const mk = (obj, type) => Object.keys(obj).sort().map(value => ({
+      type, value, count: obj[value],
+      label: type === 'month' && /^\d+$/.test(value) ? `${value}月` : value,
+    }))
     return [...mk(months, 'month'), ...mk(seasons, 'season')]
   }, [unorderedStyles])
   // 미오더 카드 목록 (선택 탭 + 검색 적용)
@@ -1466,6 +1470,17 @@ export default function ProcessPage({ G }) {
         {/* 미오더 그룹 (Style) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 12px', background: G.dk ? 'rgba(210,137,113,0.07)' : 'rgba(138,62,46,0.05)', border: `1px solid ${G.hair}`, borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: G.bad, marginRight: 4 }}>미오더 · 未下单</span>
+          {/* 전체 全部 — 기본 선택(styleTab 없음) */}
+          {(() => {
+            const on = mode === 'unordered' && !styleTab
+            return (
+              <button onClick={() => { setMode('unordered'); setStyleTab(null) }} className="chip"
+                style={{ border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: on ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                전체 <span style={{ color: G.mu, fontWeight: 500 }}>全部</span>
+                <span className="num" style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: on ? G.primary : G.hair, color: on ? '#fff' : G.mu }}>{unorderedStyles.length}</span>
+              </button>
+            )
+          })()}
           {styleLoading ? (
             <span style={{ fontSize: 11, color: G.fa }}>불러오는 중 · 加载中…</span>
           ) : unorderedTabs.length === 0 ? (

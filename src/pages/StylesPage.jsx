@@ -1,105 +1,27 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Shirt, Search, RotateCcw, RefreshCw, X, Check, ChevronDown } from 'lucide-react'
+import { Shirt, Search, RotateCcw, RefreshCw, X, ChevronDown } from 'lucide-react'
 import { fetchStyleList } from '../api/client'
 import ZohoImage from '../components/ZohoImage'
+import {
+  F, pick, recId, imageField, styleImageUrl, styleStatusBadge,
+  isOrdered, fmtTime, monthLabel, seasonOf, hasSizeSpec, isInProgress,
+} from '../utils/styleFields'
 
 // ──────────────────────────────────────────────────────────
 // Style / Sample 管理 — All_Styles 리포트 목록
-//
-// 필드명은 Zoho 리포트마다 다를 수 있어 후보 배열로 방어적 매핑한다.
-// (실제 응답 키는 functions/api/style-list.js 의 ZOHO_DEBUG 로그로 확인 가능)
-// 페이지네이션: 50개씩 from_index 증가 후 누적. 검색/필터는 클라이언트 사이드.
+// 필드 매핑/헬퍼는 ../utils/styleFields 공유. 검색/필터는 클라이언트 사이드.
 //   ※ 스타일이 수백 개 이상으로 늘면 서버사이드 필터(criteria)로 전환 권장.
 // ──────────────────────────────────────────────────────────
 
-// Zoho 필드값 → 문자열 (string | {zc_display_value} | {display_value} | lookup)
-function fieldStr(v) {
-  if (v === null || v === undefined) return ''
-  if (Array.isArray(v)) return v.map(fieldStr).filter(Boolean).join(', ')
-  if (typeof v === 'object') return String(v.zc_display_value || v.display_value || v.value || '').trim()
-  return String(v).trim()
-}
-// 후보 키들 중 처음으로 값이 있는 것을 반환
-function pick(rec, keys) {
-  for (const k of keys) {
-    const s = fieldStr(rec?.[k])
-    if (s) return s
-  }
-  return ''
-}
-
-// 논리 필드 → 실제 후보 키 매핑
-const F = {
-  sku: ['Style_SKU', 'SKU', 'Style_Code', 'Style_No', 'style_sku'],
-  eng: ['Eng_Style_Name', 'English_Style_Name', 'Style_Name', 'Style_Name_EN', 'Name'],
-  chi: ['Chinese_Style_Name', 'Chi_Style_Name', 'CN_Style_Name', 'Chinese_Name', 'Style_Name_CN'],
-  brand: ['Business_Entity', 'Brand', 'Brand_Name', 'brand'],
-  season: ['Season', 'season'],
-  gender: ['Gender', 'Sex', 'gender'],
-  category: ['Category', 'Style_Category', 'Type', 'category'],
-  fabric: ['Fabric_Name', 'Material_Type', 'Fabric', 'Main_Fabric', 'Material', 'fabric'],
-  cost: ['Target_Cost', 'Estimated_Cost', 'Cost', 'Target_Price', 'target_cost'],
-  styleStatus: ['Style_Status', 'Status', 'Style_Stage', 'style_status'],
-  sampleStatus: ['Sample_Status', 'Sampling_Status', 'Sample_Stage', 'sample_status'],
-  orderStatus: ['Order_Status', 'Ordered', 'order_status'],
-  created: ['Created_Time', 'Added_Time', 'Create_Time', 'created_time'],
-  modified: ['Modified_Time', 'Updated_Time', 'Modified_time', 'modified_time'],
-}
-const IMAGE_FIELDS = ['Style_Image', 'Style_Photo', 'Image', 'Photo', 'Main_Image', 'Front_Image', 'Thumbnail']
-
-const recId = (r) => String(r?.ID || r?.id || '')
-
-function imageField(rec) {
-  for (const f of IMAGE_FIELDS) {
-    const v = rec?.[f]
-    if (v && (typeof v === 'string' ? v : (Array.isArray(v) ? v.length : true))) return f
-  }
-  return null
-}
-// 라이트박스용 프록시 URL (ZohoImage 의 filepath 규칙과 동일)
-function styleImageUrl(rec) {
-  const f = imageField(rec)
-  if (!f) return null
-  const v = rec[f]
-  const first = Array.isArray(v) ? v[0] : v
-  const path = typeof first === 'string' ? first : (first?.url || first?.filepath || first?.path)
-  return path ? `/api/zoho-image?filepath=${encodeURIComponent(path)}` : null
-}
-
-// ── 상태 배지 ──
-// In Progress 진행: warn(노랑계열) · Completed 완료: ok(초록) · On Hold 홀드: bad(빨강)
-// Not Started 미시작: mu(회색) · 기타: 회색
-function styleStatusBadge(G, raw) {
-  const s = String(raw || '').toLowerCase()
-  if (!s) return null
-  if (/hold|보류|홀드|暂停|挂起/.test(s)) return { color: G.bad, label: raw }
-  if (/complete|done|완료|完成|结束/.test(s)) return { color: G.ok, label: raw }
-  if (/progress|진행|进行|制作|开发|开发中/.test(s)) return { color: G.warn, label: raw }
-  if (/not.?start|미시작|未开始|待/.test(s)) return { color: G.mu, label: raw }
-  return { color: G.mu, label: raw }
-}
-
-function isOrdered(rec) {
-  const raw = pick(rec, F.orderStatus).toLowerCase()
-  if (!raw) return false
-  if (/未下单|not.?order|no\b|false|否/.test(raw)) return false
-  return /已下单|ordered|yes|true|是|下单/.test(raw)
-}
-
-function fmtTime(s) {
-  if (!s) return ''
-  const d = new Date(s)
-  if (isNaN(d.getTime())) return s
-  const p = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
-}
-
+// 10열 카드 배치 (좁은 화면에서 점진 축소) + In Progress 깜빡임
 const PAGE_CSS = `
-.sty-grid{display:grid;gap:16px;align-items:start;grid-template-columns:repeat(5,minmax(0,1fr))}
-@media(max-width:1500px){.sty-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
-@media(max-width:1150px){.sty-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:860px){.sty-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:560px){.sty-grid{grid-template-columns:repeat(1,minmax(0,1fr))}}
+.sty-grid{display:grid;gap:10px;align-items:start;grid-template-columns:repeat(10,minmax(0,1fr))}
+@media(max-width:1500px){.sty-grid{grid-template-columns:repeat(8,minmax(0,1fr))}}
+@media(max-width:1200px){.sty-grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media(max-width:900px){.sty-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:560px){.sty-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@keyframes styBlink{0%,100%{opacity:1}50%{opacity:.3}}
+.sty-blink{animation:styBlink 1.6s ease-in-out infinite}
 `
 
 // Zoho Creator v2.1(이 계정)에서 max_records 가 200 미만이면 HTTP 400(빈 결과)을
@@ -221,7 +143,6 @@ function StyleModal({ G, rec, onClose, onZoom }) {
 // ──────────────────────────────────────────────────────────
 function StyleCard({ G, rec, onOpen, onZoom }) {
   const sku = pick(rec, F.sku)
-  const eng = pick(rec, F.eng)
   const chi = pick(rec, F.chi)
   const brand = pick(rec, F.brand)
   const gender = pick(rec, F.gender)
@@ -229,14 +150,18 @@ function StyleCard({ G, rec, onOpen, onZoom }) {
   const fabric = pick(rec, F.fabric)
   const cost = pick(rec, F.cost)
   const sample = pick(rec, F.sampleStatus)
-  const sb = styleStatusBadge(G, pick(rec, F.styleStatus))
-  const ordered = isOrdered(rec)
+  const styleSt = pick(rec, F.styleStatus)
+  const sb = styleStatusBadge(G, styleSt)
   const imgUrl = styleImageUrl(rec)
-  const modified = pick(rec, F.modified) || pick(rec, F.created)
+  const inProgress = isInProgress(rec)   // 샘플 제작 중 → 빨강+깜빡임
+  const hasSize = hasSizeSpec(rec)
+  const mLabel = monthLabel(rec)         // "6月"
+  const season = seasonOf(rec)           // "FW26"
 
-  const line = (label, val) => val ? (
-    <div style={{ display: 'flex', gap: 6, fontSize: 11, lineHeight: 1.45 }}>
-      <span style={{ color: G.fa, flexShrink: 0 }}>{label}</span>
+  // 라벨 한/중 병행
+  const line = (kr, cn, val) => val ? (
+    <div style={{ display: 'flex', gap: 4, fontSize: 9.5, lineHeight: 1.4 }}>
+      <span style={{ color: G.fa, flexShrink: 0 }}>{kr} {cn}</span>
       <span style={{ color: G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val}</span>
     </div>
   ) : null
@@ -244,38 +169,41 @@ function StyleCard({ G, rec, onOpen, onZoom }) {
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', cursor: 'pointer' }}
       onClick={() => onOpen(rec)}>
-      {/* 이미지 */}
-      <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', background: G.cardAlt }}>
+      {/* 이미지 (높이 고정, object-fit cover) */}
+      <div style={{ position: 'relative', width: '100%', height: 150, background: G.cardAlt }}>
         <div style={{ width: '100%', height: '100%' }}
           onClick={(e) => { if (imgUrl) { e.stopPropagation(); onZoom(imgUrl) } }}>
-          <ZohoImage mo={rec} field={imageField(rec) || 'Style_Image'} G={G} alt={sku} placeholderText="No Image · 无图片" />
+          <ZohoImage mo={rec} field={imageField(rec) || 'Style_Image'} G={G} alt={sku} placeholderText="" iconSize={20} />
         </div>
-        {/* 상태 배지 (이미지 위) */}
-        <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-          {sb && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: sb.color, padding: '2px 8px', borderRadius: 999, boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }}>{sb.label}</span>}
-          {sample && <span style={{ fontSize: 9.5, fontWeight: 600, color: G.tx, background: 'rgba(255,255,255,0.88)', padding: '2px 7px', borderRadius: 999 }}>{sample}</span>}
+        {/* 상태 배지 (좌상단, 우선순위 1·2) */}
+        <div style={{ position: 'absolute', top: 5, left: 5, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start', maxWidth: '90%' }}>
+          {sb && <span className={inProgress ? 'sty-blink' : undefined} style={{ fontSize: 8, fontWeight: 700, color: '#fff', background: inProgress ? G.bad : sb.color, padding: '1px 5px', borderRadius: 999, boxShadow: '0 1px 4px rgba(0,0,0,0.25)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{sb.label}</span>}
+          {sample && <span className={inProgress ? 'sty-blink' : undefined} style={{ fontSize: 7.5, fontWeight: 600, color: inProgress ? '#fff' : G.tx, background: inProgress ? G.bad : 'rgba(255,255,255,0.9)', padding: '1px 5px', borderRadius: 999, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{sample}</span>}
+        </div>
+        {/* 월/시즌 (우상단) */}
+        <div style={{ position: 'absolute', top: 5, right: 5, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+          {mLabel && <span style={{ fontSize: 7.5, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,0.5)', padding: '1px 5px', borderRadius: 999 }}>{mLabel}</span>}
+          {season && <span style={{ fontSize: 7.5, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,0.5)', padding: '1px 5px', borderRadius: 999 }}>{season}</span>}
         </div>
       </div>
 
-      {/* 정보 */}
-      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
-        <div className="syne" style={{ fontSize: 13.5, fontWeight: 700, color: G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sku || '—'}</div>
-        {eng && <div style={{ fontSize: 11.5, color: G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{eng}</div>}
-        {chi && <div style={{ fontSize: 11, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chi}</div>}
-        <div style={{ height: 1, background: G.hair, margin: '5px 0' }} />
-        {line('品牌', brand)}
-        {line('性别', gender)}
-        {line('分类', category)}
-        {line('面料', fabric)}
-        {line('成本', cost)}
-        {/* 오더 상태 배지 */}
-        <div style={{ marginTop: 5 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, border: `1px solid ${ordered ? G.ok : G.border}`, color: ordered ? G.ok : G.mu, background: ordered ? (G.dk ? 'rgba(134,181,154,0.12)' : 'rgba(74,112,88,0.08)') : 'transparent' }}>
-            {ordered ? <Check size={11} /> : <X size={11} />}
-            {ordered ? 'Ordered 已下单' : 'Not Ordered 未下单'}
+      {/* 정보 (축소) */}
+      <div style={{ padding: 7, display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+        {/* SKU — 제작 중이면 빨강(깜빡임 없음) */}
+        <div className="syne" style={{ fontSize: 10.5, fontWeight: 700, color: inProgress ? G.bad : G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sku || '—'}</div>
+        {chi && <div style={{ fontSize: 9, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chi}</div>}
+        <div style={{ height: 1, background: G.hair, margin: '3px 0' }} />
+        {line('브랜드', '品牌', brand)}
+        {line('성별', '性别', gender)}
+        {line('분류', '分类', category)}
+        {line('원단', '面料', fabric)}
+        {line('원가', '成本', cost)}
+        {/* 사이즈 표기 유무 배지 */}
+        <div style={{ marginTop: 3 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 999, border: `1px solid ${hasSize ? G.ok : G.border}`, color: hasSize ? G.ok : G.mu }}>
+            {hasSize ? '✓ 사이즈 있음 有尺码' : '✗ 사이즈 없음 无尺码'}
           </span>
         </div>
-        {modified && <div style={{ fontSize: 9.5, color: G.fa, marginTop: 'auto', paddingTop: 6 }}>수정 · 更新: {fmtTime(modified)}</div>}
       </div>
     </div>
   )
@@ -423,12 +351,27 @@ export default function StylesPage({ G }) {
         <FilterSelect G={G} value={category} onChange={setCategory} ph="카테고리 · 分类" list={opts.category} />
         <FilterSelect G={G} value={season} onChange={setSeason} ph="시즌 · 季节" list={opts.season} />
         <FilterSelect G={G} value={styleStatus} onChange={setStyleStatus} ph="스타일 상태 · 样品状态" list={opts.styleStatus} />
-        <FilterSelect G={G} value={sampleStatus} onChange={setSampleStatus} ph="샘플 상태 · 打样状态" list={opts.sampleStatus} />
         {anyFilter && (
           <button onClick={resetFilters} className="btn-ghost" style={{ minHeight: 38, padding: '8px 12px', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 5 }}>
             <RotateCcw size={12} /> 초기화 · 重置
           </button>
         )}
+      </div>
+
+      {/* ③ 샘플 상태 필터 버튼 그룹 (Sample_Status 실제 값으로 동적 생성, 기본 전체) */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, marginRight: 2 }}>샘플 상태 · 打样状态</span>
+        {[''].concat(opts.sampleStatus).map(v => {
+          const on = sampleStatus === v
+          const cnt = v ? items.filter(r => pick(r, F.sampleStatus) === v).length : items.length
+          return (
+            <button key={v || 'all'} onClick={() => setSampleStatus(v)} className="chip"
+              style={{ border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: on ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5 }}>
+              {v || '전체 全部'}
+              <span className="num" style={{ fontSize: 9, padding: '1px 5px', borderRadius: 999, background: on ? G.primary : G.hair, color: on ? '#fff' : G.mu }}>{cnt}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* 결과 수 */}

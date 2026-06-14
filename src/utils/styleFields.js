@@ -90,6 +90,30 @@ export function monthOf(rec) {
   return raw
 }
 
+// 월 표기: 숫자면 "6月"처럼 한자 月 부착, 아니면 원문
+export function monthLabel(rec) {
+  const m = monthOf(rec)
+  if (!m) return ''
+  return /^\d+$/.test(m) ? `${m}月` : m
+}
+
+// 사이즈 스펙 보유 여부 — Spec_JSON / Size_Specs 에 s/m/l 수치가 있으면 true
+export function hasSizeSpec(rec) {
+  const probe = (k) => {
+    const v = rec?.[k]
+    if (!v) return false
+    const s = typeof v === 'string' ? v : JSON.stringify(v)
+    return /"(s|m|l|xl)":\s*"?\d/i.test(s)
+  }
+  return ['Top_Spec_JSON', 'Bottom_Spec_JSON', 'Top_Size_Specs', 'Bottom_Size_Specs'].some(probe)
+}
+
+// 샘플 제작 중 여부 (In Progress / Sampling / 진행 중 / 제작 중)
+export function isInProgress(rec) {
+  const t = `${pick(rec, F.sampleStatus)} ${pick(rec, F.styleStatus)}`.toLowerCase()
+  return /in.?progress|进行|sampling|제작\s*중|제작중/.test(t)
+}
+
 export function fmtTime(s) {
   if (!s) return ''
   const d = new Date(s)

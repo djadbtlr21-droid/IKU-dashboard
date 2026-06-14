@@ -68,10 +68,10 @@ export default function UnorderedStyleCard({ G, style, factory, note, onZoom, on
         {eng && <div style={{ fontSize: 11.5, color: G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{eng}</div>}
         {chi && <div style={{ fontSize: 11, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chi}</div>}
         <div style={{ height: 1, background: G.hair, margin: '5px 0' }} />
-        {infoLine('品牌', brand)}
-        {infoLine('分类', category)}
-        {infoLine('面料', fabric)}
-        {infoLine('成本', cost)}
+        {infoLine('브랜드 品牌', brand)}
+        {infoLine('분류 分类', category)}
+        {infoLine('원단 面料', fabric)}
+        {infoLine('원가 成本', cost)}
 
         {/* ①② 상태 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 6 }}>
