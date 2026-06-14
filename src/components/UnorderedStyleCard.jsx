@@ -33,6 +33,8 @@ export default function UnorderedStyleCard({ G, style, factory, note, onZoom, on
   const [confirmConvert, setConfirmConvert] = useState(false)
   // 삭제 확인
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // ③ 카드 수정 모드 (삭제 버튼은 수정 모드에서만 표시)
+  const [cardEdit, setCardEdit] = useState(false)
 
   const startFactory = () => { setDraftFactory(factory || ''); setEditFactory(true) }
   const saveFactory = () => { onSaveFactory(sku, draftFactory.trim()); setEditFactory(false) }
@@ -61,12 +63,18 @@ export default function UnorderedStyleCard({ G, style, factory, note, onZoom, on
           {sb && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: sb.color, padding: '2px 8px', borderRadius: 999, boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }}>{sb.label}</span>}
           {sampleSt && <span style={{ fontSize: 9.5, fontWeight: 600, color: G.tx, background: 'rgba(255,255,255,0.88)', padding: '2px 7px', borderRadius: 999 }}>{sampleSt}</span>}
         </div>
-        {/* ② 미오더 배지(한/중) + ③ 삭제 버튼 (우상단) */}
+        {/* ② 미오더 배지(한/중) + ③ 수정 토글 + (수정 모드 시) 삭제 버튼 (우상단) */}
         <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
           <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: G.bad, padding: '2px 7px', borderRadius: 999 }}>미오더 · 未下单</span>
-          <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }} title="삭제 · 删除"
+          {cardEdit && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }} title="삭제 · 删除"
+              style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: 'none', background: G.bad, color: '#fff' }}>
+              <Trash2 size={12} />
+            </button>
+          )}
+          <button type="button" onClick={(e) => { e.stopPropagation(); setCardEdit(v => !v) }} title={cardEdit ? '완료 完成' : '수정 修改'}
             style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: 'none', background: 'rgba(0,0,0,0.5)', color: '#fff' }}>
-            <Trash2 size={12} />
+            {cardEdit ? <X size={12} /> : <Pencil size={12} />}
           </button>
         </div>
       </div>

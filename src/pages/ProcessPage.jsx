@@ -17,6 +17,7 @@ import ZohoImage from '../components/ZohoImage'
 import { SkeletonCard } from '../components/SkeletonLoader'
 import HexiangFactoryWidget from '../components/HexiangFactoryWidget'
 import UnorderedStyleCard from '../components/UnorderedStyleCard'
+import MoDetailModal from '../components/MoDetailModal'
 
 // ──────────────────────────────────────────────────────────
 // Process checklist schema (한중 병기 / 中韩对照)
@@ -829,7 +830,7 @@ function SectionToggle({ G, collapsed, onToggle }) {
 // Process card (one order)
 // ──────────────────────────────────────────────────────────
 function ProcessCard({ G, mo, record, editable, onSaveItem, canMutate, onZoom,
-  collapsedFor, onToggleSection, printMode, checked, onToggleChecked, fabricKv = '', onSaveFabric, onDelete }) {
+  collapsedFor, onToggleSection, printMode, checked, onToggleChecked, fabricKv = '', onSaveFabric, onDelete, onOpenDetail }) {
   const [draftCells, setDraftCells] = useState(null)
   const [draftRemark, setDraftRemark] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)   // ③ 삭제 확인
@@ -901,8 +902,8 @@ function ProcessCard({ G, mo, record, editable, onSaveItem, canMutate, onZoom,
           <span style={{ fontSize: 9.5, color: G.mu, fontWeight: 600 }}>선택 选择</span>
         </label>
       )}
-      {/* ③ 삭제 버튼 (우상단) — 프린트 모드가 아닐 때 */}
-      {!printMode && (
+      {/* ③ 삭제 버튼 (우상단) — 수정 모드에서만 표시 */}
+      {editable && !printMode && (
         <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }} title="삭제 · 删除"
           style={{ position: 'absolute', top: 8, right: 8, zIndex: 5, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: `1px solid ${G.border}`, background: G.card, color: G.bad, boxShadow: G.cardShadow }}>
           <Trash2 size={13} />
@@ -937,13 +938,16 @@ function ProcessCard({ G, mo, record, editable, onSaveItem, canMutate, onZoom,
             </span>
           )}
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span className="num" style={{ fontSize: 13, fontWeight: 700, color: G.accent }}>{getMoNumber(mo)}</span>
-            <span style={{ fontSize: 9.5, fontWeight: 700, color: '#fff', background: badge.color, padding: '2px 7px', borderRadius: 999 }}>
+        {/* ⑤ 이미지 우측 텍스트 영역 클릭 → MO 상세 모달 */}
+        <div onClick={() => onOpenDetail && onOpenDetail()} title="상세 보기 · 查看详情"
+          style={{ flex: 1, minWidth: 0, cursor: onOpenDetail ? 'pointer' : 'default' }}>
+          {/* ⑥ 오더번호 + 상태 배지 1행 (오더번호 축소·말줄임, 배지 min-width 고정) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
+            <span className="num" style={{ fontSize: 12, fontWeight: 700, color: G.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: '1 1 auto', minWidth: 0 }}>{getMoNumber(mo)}</span>
+            <span style={{ fontSize: 9.5, fontWeight: 700, color: '#fff', background: badge.color, padding: '2px 7px', borderRadius: 999, flexShrink: 0, minWidth: 58, textAlign: 'center', whiteSpace: 'nowrap' }}>
               {badge.kr}{badge.cn ? ` · ${badge.cn}` : ''}
             </span>
-            {isShipped(mo) && <span style={{ fontSize: 9, color: G.ok, border: `1px solid ${G.ok}`, padding: '1px 6px', borderRadius: 999 }}>출고 已出货</span>}
+            {isShipped(mo) && <span style={{ fontSize: 9, color: G.ok, border: `1px solid ${G.ok}`, padding: '1px 6px', borderRadius: 999, flexShrink: 0, whiteSpace: 'nowrap' }}>출고 已出货</span>}
           </div>
           <div title={getMoSku(mo)} style={{ fontSize: 11, color: G.tx, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getMoSku(mo)}</div>
           {chiName && <div title={chiName} style={{ fontSize: 11, color: G.mu, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{chiName}</div>}
@@ -956,12 +960,7 @@ function ProcessCard({ G, mo, record, editable, onSaveItem, canMutate, onZoom,
               🧵 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayFabric || '-'}</span>
             </span>
           </div>
-          {/* 성분/중량 상세 (있을 때만) — 이미지 고정 높이가 이 줄까지 포함 */}
-          {fabric.has && (fabric.weight || fabric.composition) && (
-            <div style={{ fontSize: 10, color: G.fa, marginTop: 3 }}>
-              {[fabric.weight, fabric.composition].filter(Boolean).join(' · ')}
-            </div>
-          )}
+          {/* ⑤ 원단 성분 수치(중량·혼용률) 표시 제거 — 명칭 배지만 사용 */}
         </div>
         {editable && canMutate && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
@@ -1106,6 +1105,7 @@ export default function ProcessPage({ G }) {
   const [shaking, setShaking] = useState(false)
   const [toast, setToast] = useState(null)
   const [zoomSrc, setZoomSrc] = useState(null)  // image lightbox
+  const [selectedMo, setSelectedMo] = useState(null)  // ⑤ MO 상세 모달 { id, row }
   const editorRef = useRef(null)
   const fabricDiagRef = useRef(false)
 
@@ -1319,7 +1319,8 @@ export default function ProcessPage({ G }) {
       type, value, count: obj[value],
       label: type === 'month' && /^\d+$/.test(value) ? `${value}月` : value,
     }))
-    return [...mk(months, 'month'), ...mk(seasons, 'season')]
+    // ① 순서: 시즌 → 월별 (전체 버튼은 렌더에서 앞에 별도 배치)
+    return [...mk(seasons, 'season'), ...mk(months, 'month')]
   }, [unorderedStyles])
   // 미오더 카드 목록 (선택 탭 + 검색 적용)
   const visibleStyles = useMemo(() => {
@@ -1490,22 +1491,12 @@ export default function ProcessPage({ G }) {
             <div style={{ fontSize: 11, color: G.mu, marginTop: 1 }}>오더별 생산 전 공정 체크 · 订单产前工序确认</div>
           </div>
         </div>
+        {/* ④ 헤더 우측: 최근 수정 정보만 (수정·프린트 버튼은 카드 목록 위로 이동) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {proc.lastUpdated && (
             <div style={{ fontSize: 10.5, color: G.mu, textAlign: 'right' }}>
               최근 수정 · 最近修改<br /><span className="num" style={{ color: G.tx }}>{fmtTime(proc.lastUpdated)}</span>{proc.lastUpdatedBy ? ` · ${proc.lastUpdatedBy}` : ''}
             </div>
-          )}
-          <button onClick={onEditClick} className={editMode ? 'btn-primary' : 'btn-ghost'}
-            style={{ minHeight: 38, padding: '8px 16px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-            {editMode ? <><X size={14} /> 편집 종료 · 退出</> : <><Pencil size={14} /> 수정 · 修改</>}
-          </button>
-          {/* item ② — print button beside 수정; hidden while editing / 미오더 모드 */}
-          {!editMode && mode === 'ordered' && (
-            <button onClick={enterPrintMode} disabled={loading || procLoading || visible.length === 0} className="btn-ghost"
-              style={{ minHeight: 38, padding: '8px 16px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: (loading || procLoading || visible.length === 0) ? 0.5 : 1 }}>
-              🖨 프린트 打印
-            </button>
           )}
         </div>
       </div>
@@ -1629,9 +1620,21 @@ export default function ProcessPage({ G }) {
       {/* HEXIANG 工人情况 위젯 — 전체/HEXIANG 탭에서 표시, 외주공장 탭에서만 숨김 (DOM 유지) */}
       <HexiangFactoryWidget G={G} visible={category !== 'outsource'} />
 
-      {/* Result count */}
-      <div style={{ fontSize: 11, color: G.mu, marginBottom: 12 }}>
-        {loading ? '불러오는 중 · 加载中…' : `${visible.length}개 오더 · ${visible.length} 个订单`}
+      {/* ④ 카드 목록 위 우측: 수정·修改 + 프린트 打印 버튼 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 11, color: G.mu, marginRight: 'auto' }}>
+          {loading ? '불러오는 중 · 加载中…' : `${visible.length}개 오더 · ${visible.length} 个订单`}
+        </div>
+        <button onClick={onEditClick} className={editMode ? 'btn-primary' : 'btn-ghost'}
+          style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+          {editMode ? <><X size={14} /> 편집 종료 · 退出</> : <><Pencil size={14} /> 수정 · 修改</>}
+        </button>
+        {!editMode && (
+          <button onClick={enterPrintMode} disabled={loading || procLoading || visible.length === 0} className="btn-ghost"
+            style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: (loading || procLoading || visible.length === 0) ? 0.5 : 1 }}>
+            🖨 프린트 打印
+          </button>
+        )}
       </div>
 
       {/* Cards */}
@@ -1663,6 +1666,7 @@ export default function ProcessPage({ G }) {
               fabricKv={moFabric[itemNoOf(mo)] || ''}
               onSaveFabric={onSaveFabric}
               onDelete={handleDeleteMo}
+              onOpenDetail={() => setSelectedMo({ id: itemNoOf(mo), row: mo })}
             />
           ))}
         </div>
@@ -1737,6 +1741,8 @@ export default function ProcessPage({ G }) {
 
       {pwOpen && <PwModal G={G} onClose={() => setPwOpen(false)} onSuccess={onPwSuccess} />}
       {zoomSrc && <Lightbox src={zoomSrc} onClose={() => setZoomSrc(null)} />}
+      {/* ⑤ MO 상세 모달 (MO View 와 동일) */}
+      {selectedMo && <MoDetailModal G={G} mo={selectedMo.row} moId={selectedMo.id} onClose={() => setSelectedMo(null)} />}
       <Toast toast={toast} G={G} />
     </div>
   )

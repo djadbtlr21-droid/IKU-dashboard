@@ -167,16 +167,14 @@ function StyleCard({ G, rec, onOpen, onZoom }) {
   const approvalInfo = statusInfo(G, sampleSt) // 승인 상태 색/깜빡
   const skuRed = (sampleInfo?.blink || approvalInfo?.blink)   // 제작중이면 SKU 빨강
 
-  // 하단 상태 배지
-  const badge = (label, info, key) => label ? (
-    <span key={key} className={info?.blink ? 'sty-blink' : undefined}
-      style={{ display: 'inline-block', fontSize: 8.5, fontWeight: 700, padding: '2px 6px', borderRadius: 6, lineHeight: 1.3,
-        color: info?.color || G.mu, border: `1px solid ${info?.color || G.border}`, background: 'transparent' }}>
-      {label}
-    </span>
+  // ⑧ 항목명(한/중) : 값  — 항목명 뮤트, 값 기본. info 있으면 값 색/깜빡 적용
+  const row = (kr, cn, val, info) => val ? (
+    <div style={{ display: 'flex', gap: 4, fontSize: 9, lineHeight: 1.45 }}>
+      <span style={{ color: G.fa, flexShrink: 0 }}>{kr} {cn}:</span>
+      <span className={info?.blink ? 'sty-blink' : undefined}
+        style={{ color: info?.color || G.tx, fontWeight: info ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val}</span>
+    </div>
   ) : null
-
-  const meta = [brand, gender, category].filter(Boolean).join(' · ')
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', cursor: 'pointer' }}
@@ -187,28 +185,28 @@ function StyleCard({ G, rec, onOpen, onZoom }) {
         <ZohoImage mo={rec} field={imageField(rec) || 'Style_Image'} G={G} alt={sku} placeholderText="" iconSize={22} />
       </div>
 
-      {/* ② 텍스트 영역 (이미지 아래) */}
-      <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
-        {/* 1. SKU */}
+      {/* ② 텍스트 영역 (이미지 아래) — ⑧ 항목명 한/중 병행 */}
+      <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 2.5, flex: 1 }}>
+        {/* SKU */}
         <div className="syne" style={{ fontSize: 11, fontWeight: 700, color: skuRed ? G.bad : G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sku || '—'}</div>
-        {/* 2. 중문명 */}
-        {chi && <div style={{ fontSize: 9.5, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chi}</div>}
-        {/* 3. 브랜드·성별·분류 한줄 */}
-        {meta && <div style={{ fontSize: 9, color: G.fa, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta}</div>}
-        {/* 4. 원단 */}
-        {fabric && <div style={{ fontSize: 9, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><span style={{ color: G.fa }}>面料 </span>{fabric}</div>}
-        {/* 5. 사이즈 유무 (없음=빨강 깜빡) */}
-        <div style={{ marginTop: 2 }}>
-          <span className={hasSize ? undefined : 'sty-blink'}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 8.5, fontWeight: 700, padding: '1px 6px', borderRadius: 999, border: `1px solid ${hasSize ? G.ok : G.bad}`, color: hasSize ? G.ok : G.bad }}>
-            {hasSize ? '✓ 사이즈 있음 有尺码' : '✗ 사이즈 없음 无尺码'}
+        {row('스타일명', '款号', chi)}
+        {row('브랜드', '品牌', brand)}
+        {row('성별', '性别', gender)}
+        {row('분류', '分类', category)}
+        {row('원단', '面料', fabric)}
+        {/* 사이즈 — 없음이면 빨강+깜빡 */}
+        <div style={{ display: 'flex', gap: 4, fontSize: 9, lineHeight: 1.45 }}>
+          <span style={{ color: G.fa, flexShrink: 0 }}>사이즈 尺码:</span>
+          <span className={hasSize ? undefined : 'sty-blink'} style={{ color: hasSize ? G.ok : G.bad, fontWeight: 700 }}>
+            {hasSize ? '✓ 있음 有' : '✗ 없음 无尺码'}
           </span>
         </div>
-        {/* 6. 하단 상태 배지 영역 */}
-        <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {badge(styleSt, sampleInfo, 'st')}
-          {badge(sampleSt, approvalInfo, 'ap')}
-          {badge(ordered ? '오더완료 · 已下单' : '미오더 · 未下单', { color: ordered ? G.ok : G.bad, blink: false }, 'od')}
+        {row('샘플 상태', '打样状态', styleSt, sampleInfo)}
+        {row('승인 상태', '审批状态', sampleSt, approvalInfo)}
+        {/* 오더 여부 */}
+        <div style={{ display: 'flex', gap: 4, fontSize: 9, lineHeight: 1.45 }}>
+          <span style={{ color: G.fa, flexShrink: 0 }}>오더 여부 下单:</span>
+          <span style={{ color: ordered ? G.ok : G.bad, fontWeight: 700 }}>{ordered ? '오더완료 · 已下单' : '미오더 · 未下单'}</span>
         </div>
       </div>
     </div>
@@ -385,7 +383,7 @@ export default function StylesPage({ G }) {
 
       {/* ③ [1줄] 샘플 상태 · 打样状态 (Sample_Status 동적 생성, 기본 전체) */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, marginRight: 2, width: 96 }}>샘플 상태 · 打样状态</span>
+        <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap', flexShrink: 0 }}>샘플 상태 · 打样状态</span>
         {[''].concat(opts.sampleStatus).map(v => {
           const on = sampleStatus === v
           const cnt = v ? items.filter(r => pick(r, F.sampleStatus) === v).length : items.length
@@ -401,7 +399,7 @@ export default function StylesPage({ G }) {
 
       {/* ③ [2줄] 월별 · 月份 / 시즌 · 季节 (실제 값 동적 생성, 기본 전체) */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, marginRight: 2, width: 96 }}>월별·月份 / 시즌·季节</span>
+        <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap', flexShrink: 0 }}>월·月 / 시즌·季节</span>
         {(() => {
           const allOn = ms.type === 'all'
           return (

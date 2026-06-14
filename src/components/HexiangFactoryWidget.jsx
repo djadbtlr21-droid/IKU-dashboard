@@ -424,8 +424,8 @@ export default function HexiangFactoryWidget({ G, visible }) {
           <div style={{ fontSize: 14, fontWeight: 700, color: G.tx }}>
             🏭 HEXIANG 合祥 공인 현황 · 工人情况
           </div>
-          {/* ⑤ 총 투입 인원 (실시간 합산) */}
-          <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: G.mu, background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>
+          {/* ⑤ 총 투입 인원 (실시간 합산) — ② 크기 30% 확대 */}
+          <span style={{ marginLeft: 'auto', fontSize: 14.3, fontWeight: 600, color: G.mu, background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999, padding: '4px 13px', whiteSpace: 'nowrap' }}>
             총 <span className="num" style={{ color: G.accent, fontWeight: 700 }}>{totalWorkers}</span>명 투입 · 共{totalWorkers}名投入
           </span>
         </div>
