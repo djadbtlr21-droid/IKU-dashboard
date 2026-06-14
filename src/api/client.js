@@ -99,10 +99,10 @@ export async function fetchFactoryConfig() {
   return apiFetch('/api/factory-config')
 }
 
-export async function saveFactoryConfig(lines) {
+export async function saveFactoryConfig(lines, password) {
   return apiFetch('/api/factory-config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lines }),
+    body: JSON.stringify({ lines, password }),
   })
 }

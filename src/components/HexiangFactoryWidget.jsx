@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Minus, Plus, Users, CheckCircle2, AlertTriangle } from 'lucide-react'
-import { fetchFactoryConfig, saveFactoryConfig } from '../api/client'
+import { Minus, Plus, Users, CheckCircle2, AlertTriangle, Pencil, Save, X, Lock, ChevronDown, ChevronRight } from 'lucide-react'
+import { fetchFactoryConfig, saveFactoryConfig, verifyProcessPassword } from '../api/client'
 
 // ──────────────────────────────────────────────────────────
 // HEXIANG 合祥 工厂现场 — 공인(工人) 애니메이션 위젯
@@ -59,8 +59,8 @@ function SewingWorker({ idx, lineIdx }) {
   const bd = phase(idx, lineIdx, 1200)  // bob delay
   const td = phase(idx, lineIdx, 800)   // tilt delay
 
-  // 바늘 어셈블리: translateY 만 적용(애니메이션 origin 무관) → 같은 delay 동기화
-  const needleStyle = { animationDelay: nd }
+  // 바늘 그룹: 바늘 상단(31.4,38) 고정, 아래로만 translateY
+  const needleStyle = { animationDelay: nd, transformBox: 'view-box', transformOrigin: '31.4px 38px' }
   // tilt: rotate 이므로 회전 피벗을 viewBox 좌표(22,32)로 고정
   const tiltStyle = { animationDelay: td, transformBox: 'view-box', transformOrigin: '22px 32px' }
 
@@ -90,11 +90,17 @@ function SewingWorker({ idx, lineIdx }) {
       )}
       <line x1="15" y1="50" x2="29" y2="50" stroke="white" strokeWidth="0.7" strokeDasharray="2,2" opacity="0.4" />
 
-      {/* 3. 바늘 어셈블리 (수직 포스트만 — 오른쪽 ㄱ자 수평 암 없음) */}
-      <rect x="8" y="22" width="3" height="24" rx="1.5" fill="#4B5563" />
-      <rect className="hxw-needle" style={needleStyle} x="8.5" y="30" width="2" height="14" rx="1" fill="#374151" />
-      <rect className="hxw-needle" style={needleStyle} x="8" y="43" width="3" height="2" rx="0.5" fill="#111827" />
-      <circle className="hxw-needle" style={needleStyle} cx="9.5" cy="45" r="1.2" fill="white" opacity="0.35" />
+      {/* 3. 바늘 어셈블리 — 옷감 위에서 아래로 수직 찌르기 (왼쪽 수직 파이프 기둥 제거) */}
+      {/* 바늘암 수평봉 (옷감 위 공간, 사람 방향 아님) */}
+      <rect x="18" y="32" width="14" height="2.5" rx="1.2" fill="#4B5563" />
+      {/* 바늘암 수직 고정봉 (정적) */}
+      <rect x="30" y="32" width="2.5" height="6" rx="1" fill="#4B5563" />
+      {/* 바늘 본체 + 팁 + 스티치 도트 (하나의 g, 아래로만 이동) */}
+      <g className="hxw-needle" style={needleStyle}>
+        <rect x="30.5" y="38" width="1.8" height="10" rx="0.9" fill="#374151" />
+        <rect x="30" y="47" width="2.8" height="2" rx="0.5" fill="#111827" />
+        <circle cx="31.4" cy="50" r="1.3" fill="white" opacity="0.35" />
+      </g>
 
       {/* 4 + 5. 공인 (상체 + 머리) — 전체를 bob 으로 감쌈 */}
       <g className="hxw-bob" style={{ animationDelay: bd }}>
@@ -121,62 +127,172 @@ function SewingWorker({ idx, lineIdx }) {
 }
 
 // ──────────────────────────────────────────────────────────
-// 한 라인 (헤더 + 공인 그리드)
+// 비밀번호 모달 (라인별 수정 진입 게이트 — 서버사이드 검증, jera8888)
+// 디자인은 생산 전 체크 탭의 수정 모달과 통일.
 // ──────────────────────────────────────────────────────────
-function WorkerLine({ G, lineIdx, def, count, tasks, onCountChange, onTaskChange }) {
+function PwModal({ G, onClose, onSuccess }) {
+  const [pw, setPw] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 60)
+    const h = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', h)
+    return () => { clearTimeout(t); document.removeEventListener('keydown', h) }
+  }, [onClose])
+
+  const submit = async (e) => {
+    e?.preventDefault()
+    if (busy || !pw) return
+    setBusy(true); setErr('')
+    const result = await verifyProcessPassword(pw)
+    if (result.ok) {
+      onSuccess(pw)
+    } else {
+      setBusy(false)
+      setErr(result.message || '비밀번호가 틀렸습니다 · 密码错误')
+    }
+  }
+
+  return (
+    <div onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      style={{ position: 'fixed', inset: 0, background: G.overlayBg || 'rgba(0,0,0,0.45)', zIndex: 1500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <form onSubmit={submit} style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 12, padding: 22, width: '100%', maxWidth: 360, boxShadow: G.cardShadow || '0 12px 40px rgba(0,0,0,0.25)' }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: G.tx, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Lock size={15} /> 수정 인증 · 修改认证
+        </div>
+        <div style={{ fontSize: 11, color: G.mu, marginBottom: 16 }}>인원·비고를 수정하려면 비밀번호가 필요합니다 · 修改人数·备注需要密码</div>
+        <input ref={inputRef} type="password" value={pw} onChange={e => setPw(e.target.value)}
+          placeholder="비밀번호 · 密码" autoComplete="current-password"
+          style={{ width: '100%', padding: '10px 12px', fontSize: 14, border: `1px solid ${G.border}`, borderRadius: 8, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+        {err && <div style={{ marginTop: 8, fontSize: 11, color: G.bad }}>{err}</div>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 18, justifyContent: 'flex-end' }}>
+          <button type="button" onClick={onClose} className="btn-ghost" style={{ minHeight: 36, padding: '8px 14px', fontSize: 12 }}>취소 取消</button>
+          <button type="submit" disabled={busy || !pw} className="btn-primary" style={{ minHeight: 36, padding: '8px 14px', fontSize: 12, opacity: (busy || !pw) ? 0.55 : 1 }}>{busy ? '확인중 确认中…' : '확인 确认'}</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────────────────
+// 한 라인 (헤더 + 비고 + 공인 그리드)
+// 읽기 모드: 인원 텍스트 · 비고 텍스트 · 공정명 읽기전용 · "수정" 버튼
+// 편집 모드: 인원 ± · 비고 input · 공정명 input · "저장 / 취소"
+// ──────────────────────────────────────────────────────────
+function WorkerLine({ G, lineIdx, def, line, editing, onRequestEdit, onSave, onCancel }) {
+  const { count, tasks, remark } = line
+
+  // 편집용 draft — 이 컴포넌트는 editing 토글 시 key 변경으로 remount 되므로
+  // useState 초기값이 그때의 저장값으로 자동 초기화됨(효과 없이).
+  const [dCount, setDCount] = useState(count)
+  const [dTasks, setDTasks] = useState(tasks)
+  const [dRemark, setDRemark] = useState(remark || '')
+
   // fadein/fadeout 연출용 로컬 인덱스 추적
-  const [entering, setEntering] = useState(null)   // 막 추가된 인덱스
-  const [leaving, setLeaving] = useState(null)     // 사라지는 중인 인덱스
+  const [entering, setEntering] = useState(null)
+  const [leaving, setLeaving] = useState(null)
   const enterTimer = useRef(null)
   const leaveTimer = useRef(null)
 
   useEffect(() => () => { clearTimeout(enterTimer.current); clearTimeout(leaveTimer.current) }, [])
 
   const add = () => {
-    if (count >= 100 || leaving !== null) return
-    const newIdx = count
-    onCountChange(count + 1)          // 즉시 저장
+    if (!editing || dCount >= 100 || leaving !== null) return
+    const newIdx = dCount
+    setDCount(dCount + 1)
     setEntering(newIdx)
     clearTimeout(enterTimer.current)
     enterTimer.current = setTimeout(() => setEntering(null), 320)
   }
 
   const remove = () => {
-    if (count <= 0 || leaving !== null) return
-    const removeIdx = count - 1
-    setLeaving(removeIdx)             // fadeout 시작 (DOM 은 잠시 유지)
+    if (!editing || dCount <= 0 || leaving !== null) return
+    const removeIdx = dCount - 1
+    setLeaving(removeIdx)
     clearTimeout(leaveTimer.current)
     leaveTimer.current = setTimeout(() => {
       setLeaving(null)
-      onCountChange(count - 1)        // 0.2s 후 실제 제거 + 즉시 저장
+      setDCount(removeIdx)
+      setDTasks(prev => {
+        const t = {}
+        for (const [k, v] of Object.entries(prev)) if (Number(k) < removeIdx) t[k] = v
+        return t
+      })
     }, 200)
   }
 
-  // 렌더링 인덱스: leaving 중이면 그 셀을 한 번 더 보여줌
-  const total = leaving !== null ? Math.max(count, leaving + 1) : count
+  const onTask = (i, v) => {
+    setDTasks(prev => {
+      const t = { ...prev }
+      if (v) t[String(i)] = v; else delete t[String(i)]
+      return t
+    })
+  }
+
+  const save = () => {
+    const t = {}
+    for (const [k, v] of Object.entries(dTasks)) if (Number(k) < dCount) t[k] = v
+    onSave({ count: dCount, tasks: t, remark: dRemark.trim() })
+  }
+
+  const viewCount = editing ? dCount : count
+  const viewTasks = editing ? dTasks : tasks
+  const total = (editing && leaving !== null) ? Math.max(dCount, leaving + 1) : viewCount
   const cells = []
   for (let i = 0; i < total; i++) cells.push(i)
 
+  const stepBtnStyle = { width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: `1px solid ${G.border}`, background: 'transparent', color: G.mu }
+
   return (
     <div style={{ background: G.cardAlt, border: `0.5px solid ${G.hair}`, borderRadius: 10, padding: 12, minWidth: 0 }}>
-      {/* 헤더 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: G.tx }}>{def.kr}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {/* 헤더: 좌 제목 · 중앙 비고 · 우 컨트롤 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: G.tx, flexShrink: 0 }}>{def.kr}</span>
+
+        {/* ② 라인 비고 (헤더 중앙) */}
+        <div style={{ flex: '1 1 140px', minWidth: 120 }}>
+          {editing ? (
+            <input type="text" value={dRemark} maxLength={120}
+              onChange={e => setDRemark(e.target.value)}
+              placeholder="라인 비고 입력 · 输入备注"
+              style={{ width: '100%', boxSizing: 'border-box', padding: '4px 8px', fontSize: 11, border: `1px solid ${G.border}`, borderRadius: 6, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }} />
+          ) : (
+            remark ? (
+              <span style={{ fontSize: 11, color: G.tx }}>{remark}</span>
+            ) : (
+              <span style={{ fontSize: 11, color: G.fa }}>비고 없음 · 暂无备注</span>
+            )
+          )}
+        </div>
+
+        {/* 우측 컨트롤 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 600, color: G.accent, background: G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.14)', border: `1px solid ${G.hair}`, borderRadius: 999, padding: '2px 8px' }}>
-            <Users size={11} /> {count}명 작업 중 · {count}名工人
+            <Users size={11} /> {viewCount}명 작업 중 · {viewCount}名工人
           </span>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <button type="button" onClick={remove} aria-label="감소" title="감소 减少"
-              style={{ width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: `1px solid ${G.border}`, background: 'transparent', color: G.mu }}>
-              <Minus size={13} />
+          {editing ? (
+            <>
+              {/* ③ 인원 조절 (편집 모드에서만) */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <button type="button" onClick={remove} aria-label="감소" title="감소 减少" style={stepBtnStyle}><Minus size={13} /></button>
+                <span className="num" style={{ minWidth: 18, textAlign: 'center', fontSize: 13, fontWeight: 700, color: G.tx }}>{dCount}</span>
+                <button type="button" onClick={add} aria-label="증가" title="증가 增加" style={stepBtnStyle}><Plus size={13} /></button>
+              </div>
+              <button type="button" onClick={save} className="btn-primary" style={{ minHeight: 30, padding: '5px 11px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Save size={12} /> 저장 保存
+              </button>
+              <button type="button" onClick={onCancel} className="btn-ghost" style={{ minHeight: 30, padding: '5px 11px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <X size={12} /> 취소 取消
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={onRequestEdit} className="btn-ghost" style={{ minHeight: 30, padding: '5px 11px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Pencil size={12} /> 수정 修改
             </button>
-            <span className="num" style={{ minWidth: 18, textAlign: 'center', fontSize: 13, fontWeight: 700, color: G.tx }}>{count}</span>
-            <button type="button" onClick={add} aria-label="증가" title="증가 增加"
-              style={{ width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: `1px solid ${G.border}`, background: 'transparent', color: G.mu }}>
-              <Plus size={13} />
-            </button>
-          </div>
+          )}
         </div>
       </div>
 
@@ -190,10 +306,11 @@ function WorkerLine({ G, lineIdx, def, count, tasks, onCountChange, onTaskChange
             return (
               <div key={i} className={`hxw-cell ${cls}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                 <input
-                  type="text" maxLength={7} value={tasks[String(i)] || ''}
-                  onChange={e => onTaskChange(i, e.target.value)}
+                  type="text" maxLength={7} value={viewTasks[String(i)] || ''}
+                  onChange={e => onTask(i, e.target.value)}
+                  readOnly={!editing}
                   placeholder="공정명 工序"
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '3px 4px', fontSize: 9.5, textAlign: 'center', border: `1px solid ${G.border}`, borderRadius: 5, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '3px 4px', fontSize: 9.5, textAlign: 'center', border: `1px solid ${G.border}`, borderRadius: 5, background: editing ? G.bg : 'transparent', color: G.tx, outline: 'none', fontFamily: 'inherit', cursor: editing ? 'text' : 'default' }}
                 />
                 <SewingWorker idx={i} lineIdx={lineIdx} />
                 <span style={{ fontSize: 10, color: G.fa, fontWeight: 600 }}>#{i + 1}</span>
@@ -210,22 +327,36 @@ function WorkerLine({ G, lineIdx, def, count, tasks, onCountChange, onTaskChange
 // 위젯 본체
 // ──────────────────────────────────────────────────────────
 export default function HexiangFactoryWidget({ G, visible }) {
-  const [lines, setLines] = useState({ old: { count: 15, tasks: {} }, yoga: { count: 6, tasks: {} } })
+  const [lines, setLines] = useState({
+    old: { count: 15, tasks: {}, remark: '' },
+    yoga: { count: 6, tasks: {}, remark: '' },
+  })
   const [loaded, setLoaded] = useState(false)
   const [toast, setToast] = useState(null)   // { type:'ok'|'bad', msg }
 
-  const taskTimer = useRef(null)
-  const toastTimer = useRef(null)
-  const linesRef = useRef(lines)
-  useEffect(() => { linesRef.current = lines }, [lines])
+  // ③ 라인별 편집 상태 + 검증된 비밀번호
+  const [editing, setEditing] = useState({ old: false, yoga: false })
+  const [password, setPassword] = useState('')
+  const [pwModal, setPwModal] = useState(null)   // { lineId } | null
 
+  // ④ 접기/펴기 (localStorage 유지, 기본값 펼침)
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem('hexiang_widget_collapsed') === '1' } catch { return false }
+  })
+  const toggleCollapse = () => setCollapsed(c => {
+    const n = !c
+    try { localStorage.setItem('hexiang_widget_collapsed', n ? '1' : '0') } catch { /* ignore */ }
+    return n
+  })
+
+  const toastTimer = useRef(null)
   const showToast = useCallback((type, msg) => {
     setToast({ type, msg })
     clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), 1500)
   }, [])
 
-  // 초기 로드 — KV 값 (없으면 기본값 유지)
+  // 초기 로드 — KV 값 (없으면 기본값 유지). remark 없으면 빈 문자열 처리(호환).
   useEffect(() => {
     let alive = true
     fetchFactoryConfig()
@@ -233,8 +364,8 @@ export default function HexiangFactoryWidget({ G, visible }) {
         if (!alive) return
         if (d?.lines) {
           setLines({
-            old: { count: d.lines.old?.count ?? 15, tasks: d.lines.old?.tasks || {} },
-            yoga: { count: d.lines.yoga?.count ?? 6, tasks: d.lines.yoga?.tasks || {} },
+            old: { count: d.lines.old?.count ?? 15, tasks: d.lines.old?.tasks || {}, remark: d.lines.old?.remark || '' },
+            yoga: { count: d.lines.yoga?.count ?? 6, tasks: d.lines.yoga?.tasks || {}, remark: d.lines.yoga?.remark || '' },
           })
         }
       })
@@ -243,63 +374,67 @@ export default function HexiangFactoryWidget({ G, visible }) {
     return () => { alive = false }
   }, [])
 
-  useEffect(() => () => { clearTimeout(taskTimer.current); clearTimeout(toastTimer.current) }, [])
+  useEffect(() => () => { clearTimeout(toastTimer.current) }, [])
 
-  const persist = useCallback((next) => {
-    saveFactoryConfig(next)
+  // ③ 수정 버튼 → 비밀번호 모달
+  const requestEdit = (lineId) => setPwModal({ lineId })
+  const onPwSuccess = (pw) => {
+    setPassword(pw)
+    if (pwModal?.lineId) setEditing(e => ({ ...e, [pwModal.lineId]: true }))
+    setPwModal(null)
+  }
+
+  // 저장 → KV 기록 후 읽기 모드 복귀 (전체 lines + 비밀번호 전송)
+  const handleSaveLine = useCallback((lineId, draftLine) => {
+    const next = { ...lines, [lineId]: draftLine }
+    setLines(next)
+    setEditing(e => ({ ...e, [lineId]: false }))
+    saveFactoryConfig(next, password)
       .then(res => { if (res?.ok) showToast('ok', '저장됨 · 已保存'); else showToast('bad', '저장 실패 · 保存失败') })
       .catch(() => showToast('bad', '저장 실패 · 保存失败'))
-  }, [showToast])
+  }, [lines, password, showToast])
 
-  // 인원 변경 → 즉시 저장 (count 줄 때 범위 밖 공정명 정리)
-  const handleCount = useCallback((lineId, nextCount) => {
-    setLines(prev => {
-      const line = prev[lineId]
-      const tasks = {}
-      for (const [k, v] of Object.entries(line.tasks)) {
-        if (Number(k) < nextCount) tasks[k] = v
-      }
-      const next = { ...prev, [lineId]: { count: nextCount, tasks } }
-      persist(next)
-      return next
-    })
-  }, [persist])
-
-  // 공정명 변경 → 1초 디바운스 저장
-  const handleTask = useCallback((lineId, idx, value) => {
-    setLines(prev => {
-      const line = prev[lineId]
-      const tasks = { ...line.tasks }
-      if (value) tasks[String(idx)] = value
-      else delete tasks[String(idx)]
-      return { ...prev, [lineId]: { ...line, tasks } }
-    })
-    clearTimeout(taskTimer.current)
-    taskTimer.current = setTimeout(() => persist(linesRef.current), 1000)
-  }, [persist])
+  const handleCancel = (lineId) => setEditing(e => ({ ...e, [lineId]: false }))
 
   return (
     <div style={{ display: visible ? 'block' : 'none' }} aria-hidden={!visible}>
       <style>{WIDGET_CSS}</style>
       <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: G.tx, marginBottom: 12 }}>
-          🏭 HEXIANG 合祥 공장 현황 · 工厂现场
+        {/* 제목 행 — ④ 접기/펴기 토글 + ① 제목 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: collapsed ? 0 : 12 }}>
+          <button type="button" onClick={toggleCollapse} className="btn-ghost"
+            title={collapsed ? '펴기 展开' : '접기 收起'}
+            style={{ minHeight: 28, padding: '4px 9px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+            {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+            {collapsed ? '펴기 · 展开' : '접기 · 收起'}
+          </button>
+          <div style={{ fontSize: 14, fontWeight: 700, color: G.tx }}>
+            🏭 HEXIANG 合祥 공인 현황 · 工人情况
+          </div>
         </div>
-        <div className="hxw-body">
-          {LINES.map((def, li) => (
-            <WorkerLine
-              key={def.id} G={G} lineIdx={li} def={def}
-              count={lines[def.id].count}
-              tasks={lines[def.id].tasks}
-              onCountChange={(n) => handleCount(def.id, n)}
-              onTaskChange={(idx, v) => handleTask(def.id, idx, v)}
-            />
-          ))}
+
+        {/* 본문 — 접힘 시 height 0 트랜지션 */}
+        <div style={{ maxHeight: collapsed ? 0 : 3000, opacity: collapsed ? 0 : 1, overflow: 'hidden', transition: 'max-height 0.25s ease, opacity 0.25s ease' }}>
+          <div className="hxw-body">
+            {LINES.map((def, li) => (
+              <WorkerLine
+                key={`${def.id}-${editing[def.id] ? 'edit' : 'read'}`} G={G} lineIdx={li} def={def}
+                line={lines[def.id]}
+                editing={editing[def.id]}
+                onRequestEdit={() => requestEdit(def.id)}
+                onSave={(draft) => handleSaveLine(def.id, draft)}
+                onCancel={() => handleCancel(def.id)}
+              />
+            ))}
+          </div>
+          {!loaded && (
+            <div style={{ fontSize: 10.5, color: G.fa, marginTop: 8 }}>불러오는 중 · 加载中…</div>
+          )}
         </div>
-        {!loaded && (
-          <div style={{ fontSize: 10.5, color: G.fa, marginTop: 8 }}>불러오는 중 · 加载中…</div>
-        )}
       </div>
+
+      {/* ③ 비밀번호 모달 */}
+      {pwModal && <PwModal G={G} onClose={() => setPwModal(null)} onSuccess={onPwSuccess} />}
 
       {/* 조용한 토스트 */}
       {toast && (

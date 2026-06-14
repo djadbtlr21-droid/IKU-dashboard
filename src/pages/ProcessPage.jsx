@@ -1428,8 +1428,8 @@ export default function ProcessPage({ G }) {
         </div>
       )}
 
-      {/* HEXIANG 工厂现场 위젯 — HEXIANG 탭에서만 표시 (DOM 유지, display none) */}
-      <HexiangFactoryWidget G={G} visible={category === 'hexiang'} />
+      {/* HEXIANG 工人情况 위젯 — 전체/HEXIANG 탭에서 표시, 외주공장 탭에서만 숨김 (DOM 유지) */}
+      <HexiangFactoryWidget G={G} visible={category !== 'outsource'} />
 
       {/* Result count */}
       <div style={{ fontSize: 11, color: G.mu, marginBottom: 12 }}>

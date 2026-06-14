@@ -11,17 +11,39 @@
 // POST → { lines } → validated + stored. No password (public display config).
 // ─────────────────────────────────────────────────────────────
 
+import { safeEqualStr, trim } from './_auth.js'
 import { json, preflight } from './_resp.js'
 import { getKV } from './_kv.js'
 
 const CONFIG_KEY = 'factory:worker_config'
 const LINE_IDS = ['old', 'yoga']
 const MAX_COUNT = 100
-const MAX_TASK_LEN = 14   // server cap is lenient; UI limits visible input to 7
+const MAX_TASK_LEN = 14    // server cap is lenient; UI limits visible input to 7
+const MAX_REMARK = 500     // per-line 비고 / 备注
 
 const DEFAULTS = {
-  old: { count: 15, tasks: {} },
-  yoga: { count: 6, tasks: {} },
+  old: { count: 15, tasks: {}, remark: '' },
+  yoga: { count: 6, tasks: {}, remark: '' },
+}
+
+// ── edit-password (same source as process.js: PROCESS_PASSWORD env, default 'jera8888') ──
+function readEnvVar(env, name) {
+  if (env && env[name] != null) return env[name]
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env[name] != null) return process.env[name]
+  } catch { /* no process global */ }
+  return undefined
+}
+function resolveExpectedPassword(env) {
+  const trimmed = trim(readEnvVar(env, 'PROCESS_PASSWORD'))
+  if (typeof trimmed === 'string' && trimmed.length > 0) return { value: trimmed, source: 'env' }
+  return { value: 'jera8888', source: 'default' }
+}
+function checkPassword(env, password) {
+  const { value, source } = resolveExpectedPassword(env)
+  if (typeof password !== 'string' || password.length === 0) return { ok: false, reason: 'missing_password', source }
+  const ok = safeEqualStr(value, password) || safeEqualStr(value, password.trim())
+  return { ok, reason: ok ? null : 'invalid_password', source }
 }
 
 // Coerce arbitrary input into a safe { count, tasks } shape.
@@ -39,7 +61,8 @@ function sanitizeLine(raw, fallback) {
     const str = typeof v === 'string' ? v.slice(0, MAX_TASK_LEN) : ''
     if (str) tasks[String(idx)] = str
   }
-  return { count, tasks }
+  const remark = typeof src.remark === 'string' ? src.remark.slice(0, MAX_REMARK) : ''
+  return { count, tasks, remark }
 }
 
 function sanitizeLines(raw) {
@@ -79,13 +102,22 @@ export async function onRequest(context) {
     return json({ ok: false, error: 'Method Not Allowed' }, 405, { Allow: 'GET, POST, OPTIONS' })
   }
 
-  // ── POST — store config (public, no password) ──
+  // ── POST — store config (edit-password verified server-side) ──
   let body
   try {
     const raw = await request.text()
     body = raw ? JSON.parse(raw) : {}
   } catch {
     return json({ ok: false, error: 'invalid_json', message: '잘못된 요청 형식 · 请求格式错误' }, 400)
+  }
+
+  // password gate (same password as the 생산 전 체크 edit mode)
+  const pw = checkPassword(env, body?.password)
+  if (pw.reason === 'missing_password') {
+    return json({ ok: false, error: 'missing_password', message: '비밀번호를 입력하세요 · 请输入密码' }, 400)
+  }
+  if (!pw.ok) {
+    return json({ ok: false, error: 'invalid_password', message: '비밀번호가 틀렸습니다 · 密码错误', passwordSource: pw.source }, 401)
   }
 
   if (!kv) {
