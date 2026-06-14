@@ -7,11 +7,14 @@ import {
 import { fetchMoList } from '../api/client'
 import {
   fetchProcessData, verifyProcessPassword, saveProcessItem, saveProcessHidden,
+  fetchStyleList, fetchStyleMeta, saveStyleFactory, saveStyleNote, hideStyle,
 } from '../api/client'
 import { getMoNumber, getMoSku, getMoFactory, getMonthKey } from '../utils/moHelpers'
+import { pick, F as SF, isOrdered as styleIsOrdered, styleKey, seasonOf, monthOf } from '../utils/styleFields'
 import ZohoImage from '../components/ZohoImage'
 import { SkeletonCard } from '../components/SkeletonLoader'
 import HexiangFactoryWidget from '../components/HexiangFactoryWidget'
+import UnorderedStyleCard from '../components/UnorderedStyleCard'
 
 // ──────────────────────────────────────────────────────────
 // Process checklist schema (한중 병기 / 中韩对照)
@@ -858,7 +861,10 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
   const monthKey = getMonthKey(mo)
   const fabric = getFabricInfo(mo)
   const imgUrl = styleImageUrl(mo)
-  const fabricName = cells['fabric.fabricName']?.v || ''  // item ① free-text 원단명
+  const fabricName = cells['fabric.fabricName']?.v || ''  // item ① free-text 원단명 (user KV)
+  // 원단명: 사용자 KV 입력값 우선, 없으면 Zoho(All_MO) 원단명 자동 표시
+  const displayFabric = fabricName || fabric.name || ''
+  const totalQty = fieldStr(mo?.Plan_Total_Quantity)       // 총 수량 (Zoho)
 
   const handleSave = async () => {
     if (saving) return
@@ -910,6 +916,7 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
           <div style={{ fontSize: 10, color: G.fa, marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <span>🏭 {getMoFactory(mo)}</span>
             {monthKey && <span>📅 {monthKey}</span>}
+            {totalQty && <span>📦 {totalQty}</span>}
           </div>
           {/* item ① — fabric info line (hidden entirely when no data → no empty row) */}
           {fabric.has && (
@@ -948,10 +955,10 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
               <div style={{ fontSize: 11.5, fontWeight: 700, color: G.tx, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.2 }}>
                 <span><span style={{ color: G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: G.mu, fontWeight: 500 }}>{sec.cn}</span></span>
                 {!editable && <MemoBadge G={G} memo={memo} />}
-                {/* item ① — free-text 원단명 (read mode); item ③ centered in the row */}
-                {sec.id === 'fabric' && !editable && fabricName && (
-                  <span title={fabricName} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 500, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-                    🧵 {fabricName}
+                {/* item ① — 원단명 (read mode); Zoho 자동값/사용자 입력값 우선순위 적용 */}
+                {sec.id === 'fabric' && !editable && displayFabric && (
+                  <span title={displayFabric} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 500, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                    🧵 {displayFabric}
                   </span>
                 )}
                 {/* item ②/① — when collapsed, indicator + expand toggle live in the title row */}
@@ -1098,6 +1105,16 @@ export default function ProcessPage({ G }) {
   const [procFilter, setProcFilter] = useState('')
   const [showHidden, setShowHidden] = useState(false)
 
+  // 데이터 소스 모드: 'ordered'(오더완료/MO) | 'unordered'(미오더/Style)
+  const [mode, setMode] = useState('ordered')
+  const [styleTab, setStyleTab] = useState(null)   // { type:'month'|'season', value }
+
+  // 미오더(Style) 데이터 + 메타(공장/비고/숨김)
+  const [styleList, setStyleList] = useState([])
+  const [styleLoading, setStyleLoading] = useState(true)
+  const [styleErr, setStyleErr] = useState(null)
+  const [styleMeta, setStyleMeta] = useState({ factory: {}, note: {}, hidden: [] })
+
   const toastTimer = useRef(null)
   const showToast = useCallback((msg, type = 'ok') => {
     setToast({ msg, type })
@@ -1121,12 +1138,26 @@ export default function ProcessPage({ G }) {
       .finally(() => setProcLoading(false))
   }, [])
 
+  // 미오더 섹션: Style 목록 + 메타를 함께 로드.
+  // 넉넉히 200개 로드. 스타일이 수백 개 이상으로 늘면 서버사이드 criteria 필터 권장.
+  const loadStyles = useCallback(() => {
+    setStyleLoading(true); setStyleErr(null)
+    Promise.all([
+      fetchStyleList({ fromIndex: 1, maxRecords: 200 }),
+      fetchStyleMeta().catch(() => ({ factory: {}, note: {}, hidden: [] })),
+    ]).then(([list, meta]) => {
+      setStyleList(list?.data || list?.records || list?.result || [])
+      setStyleMeta({ factory: meta?.factory || {}, note: meta?.note || {}, hidden: meta?.hidden || [] })
+    }).catch(err => { console.error('[ProcessPage] styles', err); setStyleErr(err.message || String(err)) })
+      .finally(() => setStyleLoading(false))
+  }, [])
+
   useEffect(() => {
-    loadMo(); loadProc()
-    const h = () => { loadMo(); loadProc() }
+    loadMo(); loadProc(); loadStyles()
+    const h = () => { loadMo(); loadProc(); loadStyles() }
     window.addEventListener('iku:refresh', h)
     return () => window.removeEventListener('iku:refresh', h)
-  }, [loadMo, loadProc])
+  }, [loadMo, loadProc, loadStyles])
 
   // One-shot diagnostic: report which fabric fields (if any) are absent from the
   // MO data so a missing field is visible in the console (item ①).
@@ -1203,6 +1234,38 @@ export default function ProcessPage({ G }) {
     })
   }, [baseList, category, subFactory, factorySel, month, search, procFilterFn, proc.items])
 
+  // ── 미오더(Style) 파생값 ──
+  const styleHiddenSet = useMemo(() => new Set(styleMeta.hidden || []), [styleMeta.hidden])
+  const unorderedStyles = useMemo(
+    () => styleList.filter(s => !styleIsOrdered(s) && !styleHiddenSet.has(styleKey(s))),
+    [styleList, styleHiddenSet]
+  )
+  // 월별/시즌 탭 (Style 데이터에서 동적 추출 + 건수)
+  const unorderedTabs = useMemo(() => {
+    const months = {}, seasons = {}
+    unorderedStyles.forEach(s => {
+      const m = monthOf(s); if (m) months[m] = (months[m] || 0) + 1
+      const se = seasonOf(s); if (se) seasons[se] = (seasons[se] || 0) + 1
+    })
+    const mk = (obj, type) => Object.keys(obj).sort().map(value => ({ type, value, label: value, count: obj[value] }))
+    return [...mk(months, 'month'), ...mk(seasons, 'season')]
+  }, [unorderedStyles])
+  // 미오더 카드 목록 (선택 탭 + 검색 적용)
+  const visibleStyles = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return unorderedStyles.filter(st => {
+      if (styleTab) {
+        if (styleTab.type === 'month' && monthOf(st) !== styleTab.value) return false
+        if (styleTab.type === 'season' && seasonOf(st) !== styleTab.value) return false
+      }
+      if (q) {
+        const blob = `${pick(st, SF.sku)} ${pick(st, SF.eng)} ${pick(st, SF.chi)}`.toLowerCase()
+        if (!blob.includes(q)) return false
+      }
+      return true
+    })
+  }, [unorderedStyles, styleTab, search])
+
   // ── edit flow ──
   const onEditClick = () => {
     if (editMode) { setEditMode(false); setPassword(''); setEditorError(false) }
@@ -1263,6 +1326,26 @@ export default function ProcessPage({ G }) {
     setCategory('all'); setSubFactory(''); setSearch(''); setFactorySel([]); setMonth(''); setProcFilter('')
   }
 
+  // ── 미오더 메타 저장 (비밀번호 불필요) ──
+  const onSaveStyleFactory = useCallback((sku, value) => {
+    setStyleMeta(prev => ({ ...prev, factory: { ...prev.factory, [sku]: value } }))
+    saveStyleFactory(sku, value)
+      .then(r => showToast(r?.ok ? '저장됨 · 已保存' : '저장 실패 · 保存失败', r?.ok ? 'ok' : 'bad'))
+      .catch(() => showToast('저장 실패 · 保存失败', 'bad'))
+  }, [showToast])
+  const onSaveStyleNote = useCallback((sku, value) => {
+    setStyleMeta(prev => ({ ...prev, note: { ...prev.note, [sku]: value } }))
+    saveStyleNote(sku, value)
+      .then(r => showToast(r?.ok ? '저장됨 · 已保存' : '저장 실패 · 保存失败', r?.ok ? 'ok' : 'bad'))
+      .catch(() => showToast('저장 실패 · 保存失败', 'bad'))
+  }, [showToast])
+  const onConvertStyle = useCallback((sku) => {
+    setStyleMeta(prev => ({ ...prev, hidden: [...new Set([...(prev.hidden || []), sku])] }))
+    hideStyle(sku)
+      .then(r => showToast(r?.ok ? '오더 전환됨 · 已转为下单' : '실패 · 失败', r?.ok ? 'ok' : 'bad'))
+      .catch(() => showToast('실패 · 失败', 'bad'))
+  }, [showToast])
+
   // ── print (item ④) ──
   const enterPrintMode = useCallback(() => {
     setSelectedToPrint(new Set(visible.map(itemNoOf)))  // default: all selected
@@ -1299,9 +1382,9 @@ export default function ProcessPage({ G }) {
   const inputStyle = { padding: '8px 12px', borderRadius: 8, fontSize: 12, border: `1px solid ${G.border}`, background: G.card, color: G.tx, outline: 'none', fontFamily: 'inherit' }
 
   const CatTab = ({ id, kr, cn, count }) => {
-    const on = category === id
+    const on = mode === 'ordered' && category === id
     return (
-      <button onClick={() => { setCategory(id); if (id !== 'outsource') setSubFactory('') }} className="chip" style={{
+      <button onClick={() => { setMode('ordered'); setCategory(id); if (id !== 'outsource') setSubFactory('') }} className="chip" style={{
         border: `1px solid ${on ? G.primary : G.border}`,
         background: on ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent',
         color: on ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -1336,8 +1419,8 @@ export default function ProcessPage({ G }) {
             style={{ minHeight: 38, padding: '8px 16px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
             {editMode ? <><X size={14} /> 편집 종료 · 退出</> : <><Pencil size={14} /> 수정 · 修改</>}
           </button>
-          {/* item ② — print button beside 수정; hidden while editing */}
-          {!editMode && (
+          {/* item ② — print button beside 수정; hidden while editing / 미오더 모드 */}
+          {!editMode && mode === 'ordered' && (
             <button onClick={enterPrintMode} disabled={loading || procLoading || visible.length === 0} className="btn-ghost"
               style={{ minHeight: 38, padding: '8px 16px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: (loading || procLoading || visible.length === 0) ? 0.5 : 1 }}>
               🖨 프린트 打印
@@ -1370,13 +1453,39 @@ export default function ProcessPage({ G }) {
         </div>
       )}
 
-      {/* Category tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        <CatTab id="all" kr="전체" cn="全部" count={catCounts.all} />
-        <CatTab id="hexiang" kr="HEXIANG" cn="合祥" count={catCounts.hx} />
-        <CatTab id="outsource" kr="외주공장" cn="外发工厂" count={catCounts.out} />
+      {/* ── 탭 그룹: 오더완료 下单完成 / 미오더 未下单 ── */}
+      <div style={{ marginBottom: 14 }}>
+        {/* 오더완료 그룹 (기존 MO) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 12px', background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: '10px 10px 0 0' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: G.accent, marginRight: 4 }}>오더완료 · 下单完成</span>
+          <CatTab id="all" kr="전체" cn="全部" count={catCounts.all} />
+          <CatTab id="hexiang" kr="HEXIANG" cn="合祥" count={catCounts.hx} />
+          <CatTab id="outsource" kr="외주공장" cn="外发工厂" count={catCounts.out} />
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: G.mu }}>총 <b style={{ color: G.tx }}>{catCounts.all}</b>개 오더 · 共{catCounts.all}个订单</span>
+        </div>
+        {/* 미오더 그룹 (Style) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 12px', background: G.dk ? 'rgba(210,137,113,0.07)' : 'rgba(138,62,46,0.05)', border: `1px solid ${G.hair}`, borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: G.bad, marginRight: 4 }}>미오더 · 未下单</span>
+          {styleLoading ? (
+            <span style={{ fontSize: 11, color: G.fa }}>불러오는 중 · 加载中…</span>
+          ) : unorderedTabs.length === 0 ? (
+            <span style={{ fontSize: 11, color: G.fa }}>미오더 항목 없음 · 暂无未下单</span>
+          ) : unorderedTabs.map(t => {
+            const on = mode === 'unordered' && styleTab && styleTab.type === t.type && styleTab.value === t.value
+            return (
+              <button key={`${t.type}:${t.value}`} onClick={() => { setMode('unordered'); setStyleTab({ type: t.type, value: t.value }) }} className="chip"
+                style={{ border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: on ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {t.label}{t.type === 'season' && <span style={{ fontSize: 9, color: G.fa }}>시즌</span>}
+                <span className="num" style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: on ? G.primary : G.hair, color: on ? '#fff' : G.mu }}>{t.count}</span>
+              </button>
+            )
+          })}
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: G.mu }}>총 <b style={{ color: G.tx }}>{unorderedStyles.length}</b>개 스타일 · 共{unorderedStyles.length}个款式</span>
+        </div>
       </div>
 
+      {mode === 'ordered' ? (
+      <>
       {/* Outsource sub-factory chips */}
       {category === 'outsource' && outsourceFactories.length > 0 && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -1467,6 +1576,63 @@ export default function ProcessPage({ G }) {
             />
           ))}
         </div>
+      )}
+      </>
+      ) : (
+      <>
+        {/* ── 미오더 섹션 (Style) ── */}
+        {/* 검색 (SKU·영문명·중문명) — 월별/시즌은 위 탭이 필터 역할 */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ position: 'relative', flex: '1 1 220px', minWidth: 180 }}>
+            <Search size={13} style={{ position: 'absolute', top: 11, left: 10, color: G.mu, pointerEvents: 'none' }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="SKU·영문명·중문명 검색 / 搜索" style={{ ...inputStyle, width: '100%', paddingLeft: 30 }} />
+          </div>
+          {styleTab && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, padding: '3px 8px', borderRadius: 999, background: G.cardAlt, border: `1px solid ${G.hair}`, color: G.tx }}>
+              {styleTab.value}
+              <button onClick={() => setStyleTab(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: G.mu, display: 'flex', padding: 0 }}><X size={11} /></button>
+            </span>
+          )}
+        </div>
+
+        {/* 결과 수 */}
+        <div style={{ fontSize: 11, color: G.mu, marginBottom: 12 }}>
+          {styleLoading ? '불러오는 중 · 加载中…' : `${visibleStyles.length}개 스타일 · ${visibleStyles.length} 个款式`}
+        </div>
+
+        {styleLoading ? (
+          <div className="proc-grid">{[...Array(5)].map((_, i) => <SkeletonCard key={i} G={G} />)}</div>
+        ) : styleErr ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: G.mu }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: G.bad }}>데이터를 불러올 수 없습니다 · 无法加载数据</div>
+            <div style={{ fontSize: 11, color: G.fa, marginTop: 4, marginBottom: 14 }}>{styleErr}</div>
+            <button onClick={loadStyles} className="btn-primary" style={{ minHeight: 38, padding: '8px 18px', fontSize: 12 }}>재시도 · 重试</button>
+          </div>
+        ) : visibleStyles.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: G.mu }}>
+            <ClipboardCheck size={40} style={{ color: G.fa, marginBottom: 12 }} />
+            <div style={{ fontSize: 14, fontWeight: 600 }}>표시할 스타일이 없습니다 · 没有可显示的款式</div>
+            <div style={{ fontSize: 12, color: G.fa, marginTop: 4 }}>위 미오더 탭을 선택하거나 검색해 보세요 · 请选择未下单标签或搜索</div>
+          </div>
+        ) : (
+          <div className="proc-grid">
+            {visibleStyles.map(st => {
+              const sk = styleKey(st)
+              return (
+                <UnorderedStyleCard
+                  key={sk} G={G} style={st}
+                  factory={styleMeta.factory[sk] || ''}
+                  note={styleMeta.note[sk] || ''}
+                  onZoom={setZoomSrc}
+                  onSaveFactory={onSaveStyleFactory}
+                  onSaveNote={onSaveStyleNote}
+                  onConvert={onConvertStyle}
+                />
+              )
+            })}
+          </div>
+        )}
+      </>
       )}
 
       {/* print selection bottom bar */}

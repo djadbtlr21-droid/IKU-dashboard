@@ -32,6 +32,22 @@ export async function fetchStyleList({ fromIndex = 1, maxRecords = 50 } = {}) {
   return apiFetch(`/api/style-list?${qs}`)
 }
 
+// ── Style 미오더 메타 (오더 예정 공장 / 비고 / 숨김) — 비밀번호 불필요 ──
+export async function fetchStyleMeta() {
+  return apiFetch('/api/style-meta')
+}
+function postStyleMeta(payload) {
+  return apiFetch('/api/style-meta', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+export const saveStyleFactory = (sku, value) => postStyleMeta({ action: 'factory', sku, value })
+export const saveStyleNote = (sku, value) => postStyleMeta({ action: 'note', sku, value })
+export const hideStyle = (sku) => postStyleMeta({ action: 'hide', sku })
+export const unhideStyle = (sku) => postStyleMeta({ action: 'unhide', sku })
+
 export async function fetchShipments(params = {}) {
   const qs = new URLSearchParams()
   if (params.perPage) qs.set('max_records', params.perPage)
