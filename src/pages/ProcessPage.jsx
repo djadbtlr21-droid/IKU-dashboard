@@ -8,6 +8,7 @@ import { fetchMoList } from '../api/client'
 import {
   fetchProcessData, verifyProcessPassword, saveProcessItem, saveProcessHidden,
   fetchStyleList, fetchStyleMeta, saveStyleFactory, saveStyleNote, hideStyle,
+  fetchMoFabric, saveMoFabric,
 } from '../api/client'
 import { getMoNumber, getMoSku, getMoFactory, getMonthKey } from '../utils/moHelpers'
 import { pick, F as SF, isOrdered as styleIsOrdered, styleKey, seasonOf, monthOf } from '../utils/styleFields'
@@ -827,9 +828,10 @@ function SectionToggle({ G, collapsed, onToggle }) {
 // Process card (one order)
 // ──────────────────────────────────────────────────────────
 function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHidden, canMutate, onZoom,
-  collapsedFor, onToggleSection, printMode, checked, onToggleChecked }) {
+  collapsedFor, onToggleSection, printMode, checked, onToggleChecked, fabricKv = '', onSaveFabric }) {
   const [draftCells, setDraftCells] = useState(null)
   const [draftRemark, setDraftRemark] = useState(null)
+  const [draftFabric, setDraftFabric] = useState(null)   // ⑥ 원단명 오버라이드 draft
   const [saving, setSaving] = useState(false)
 
   const savedCells = record?.cells || {}
@@ -841,10 +843,10 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
 
   const cells = draftCells ?? savedCells
   const remark = draftRemark ?? savedRemark
-  const dirty = draftCells !== null || draftRemark !== null
+  const dirty = draftCells !== null || draftRemark !== null || draftFabric !== null
 
   useEffect(() => {
-    if (!editable) { setDraftCells(null); setDraftRemark(null) }
+    if (!editable) { setDraftCells(null); setDraftRemark(null); setDraftFabric(null) }
   }, [editable])
 
   const setCell = useCallback((cellKey, val) => {
@@ -861,9 +863,13 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
   const monthKey = getMonthKey(mo)
   const fabric = getFabricInfo(mo)
   const imgUrl = styleImageUrl(mo)
-  const fabricName = cells['fabric.fabricName']?.v || ''  // item ① free-text 원단명 (user KV)
-  // 원단명: 사용자 KV 입력값 우선, 없으면 Zoho(All_MO) 원단명 자동 표시
-  const displayFabric = fabricName || fabric.name || ''
+  const legacyFabricName = cells['fabric.fabricName']?.v || ''  // 구버전 process-cell 원단명(폴백)
+  // Zoho 원단값: Material_Type(이미 "원단명 / 성분" 형식) 우선, 없으면 Fabric_Name
+  const zohoFabric = fabric.name || fieldStr(mo?.Fabric_Name) || ''
+  // ⑥ 표시 우선순위: KV 오버라이드 > (구버전 입력) > Zoho 자동값
+  const savedFabric = fabricKv || legacyFabricName || zohoFabric
+  const fabricInput = draftFabric ?? savedFabric         // 편집 input 값
+  const displayFabric = savedFabric                       // 읽기 표시 값
   const totalQty = fieldStr(mo?.Plan_Total_Quantity)       // 총 수량 (Zoho)
 
   const handleSave = async () => {
@@ -874,8 +880,12 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
       if (val && (val.v || val.d || val.h)) cleaned[k] = val
     }
     const ok = await onSaveItem(itemNoOf(mo), cleaned, remark)
+    // ⑥ 원단명 오버라이드도 함께 저장 (KV key: fabric:{MO_ID})
+    if (draftFabric !== null && onSaveFabric) {
+      try { await onSaveFabric(itemNoOf(mo), draftFabric.trim()) } catch { /* ignore */ }
+    }
     setSaving(false)
-    if (ok) { setDraftCells(null); setDraftRemark(null) }
+    if (ok) { setDraftCells(null); setDraftRemark(null); setDraftFabric(null) }
   }
 
   // overflow visible so the date-picker popover isn't clipped by the card
@@ -894,9 +904,9 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
         <div
           onClick={() => { if (imgUrl && onZoom) onZoom(imgUrl) }}
           title={imgUrl ? '클릭하여 확대 · 点击放大' : ''}
-          style={{ width: 72, height: 96, alignSelf: 'flex-start', borderRadius: 8, background: G.cardAlt, overflow: 'hidden', flexShrink: 0, border: `1px solid ${G.hair}`, position: 'relative', cursor: imgUrl ? 'zoom-in' : 'default' }}
+          style={{ width: 110, height: 150, alignSelf: 'flex-start', borderRadius: 8, background: G.cardAlt, overflow: 'hidden', flexShrink: 0, border: `1px solid ${G.hair}`, position: 'relative', cursor: imgUrl ? 'zoom-in' : 'default' }}
         >
-          <ZohoImage mo={mo} field="Style_Image" G={G} iconSize={18} placeholderText="" />
+          <ZohoImage mo={mo} field="Style_Image" G={G} iconSize={22} placeholderText="" />
           {imgUrl && (
             <span style={{ position: 'absolute', bottom: 2, right: 2, width: 16, height: 16, borderRadius: 4, background: 'rgba(0,0,0,0.55)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <ZoomIn size={10} />
@@ -913,16 +923,19 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
           </div>
           <div title={getMoSku(mo)} style={{ fontSize: 11, color: G.tx, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getMoSku(mo)}</div>
           {chiName && <div title={chiName} style={{ fontSize: 11, color: G.mu, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{chiName}</div>}
-          <div style={{ fontSize: 10, color: G.fa, marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {/* ⑤ 수량(件) + 우측 노란 네모 원단명 */}
+          <div style={{ fontSize: 10, color: G.fa, marginTop: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span>🏭 {getMoFactory(mo)}</span>
             {monthKey && <span>📅 {monthKey}</span>}
-            {totalQty && <span>📦 {totalQty}</span>}
+            {totalQty && <span className="num" style={{ fontWeight: 600, color: G.mu }}>📦 {totalQty}件</span>}
+            <span title={displayFabric || '-'} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, maxWidth: '100%', fontSize: 9.5, fontWeight: 600, color: G.dk ? '#E8C898' : '#8A6D2E', background: G.dk ? 'rgba(232,200,152,0.14)' : 'rgba(252,211,77,0.28)', border: `1px solid ${G.dk ? 'rgba(232,200,152,0.4)' : 'rgba(201,168,110,0.5)'}`, borderRadius: 6, padding: '1px 7px' }}>
+              🧵 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayFabric || '-'}</span>
+            </span>
           </div>
-          {/* item ① — fabric info line (hidden entirely when no data → no empty row) */}
-          {fabric.has && (
-            <div title={fabric.summary} style={{ fontSize: 10, color: G.mu, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, maxWidth: '100%' }}>
-              <span style={{ flexShrink: 0 }}>🧵</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fabric.summary}</span>
+          {/* 성분/중량 상세 (있을 때만) — 이미지 고정 높이가 이 줄까지 포함 */}
+          {fabric.has && (fabric.weight || fabric.composition) && (
+            <div style={{ fontSize: 10, color: G.fa, marginTop: 3 }}>
+              {[fabric.weight, fabric.composition].filter(Boolean).join(' · ')}
             </div>
           )}
         </div>
@@ -955,11 +968,17 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
               <div style={{ fontSize: 11.5, fontWeight: 700, color: G.tx, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.2 }}>
                 <span><span style={{ color: G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: G.mu, fontWeight: 500 }}>{sec.cn}</span></span>
                 {!editable && <MemoBadge G={G} memo={memo} />}
-                {/* item ① — 원단명 (read mode); Zoho 자동값/사용자 입력값 우선순위 적용 */}
+                {/* ⑥ 원단명/성분 (read): Zoho 자동값 + KV 오버라이드 우선 — 제목 우측 */}
                 {sec.id === 'fabric' && !editable && displayFabric && (
                   <span title={displayFabric} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 500, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                     🧵 {displayFabric}
                   </span>
+                )}
+                {/* ⑥ 원단명/성분 (edit): 제목 바로 우측 input, 저장 시 KV(fabric:{`{MO_ID}`}) */}
+                {sec.id === 'fabric' && editable && (
+                  <input value={fabricInput} onChange={e => setDraftFabric(e.target.value)}
+                    placeholder="원단명 / 성분 · 面料/成分"
+                    style={{ flex: 1, minWidth: 0, marginLeft: 4, padding: '4px 8px', borderRadius: 6, fontSize: 11.5, fontWeight: 500, border: `1px solid ${G.border}`, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }} />
                 )}
                 {/* item ②/① — when collapsed, indicator + expand toggle live in the title row */}
                 {isCollapsed && (
@@ -973,14 +992,7 @@ function ProcessCard({ G, mo, record, editable, isHidden, onSaveItem, onToggleHi
               <div style={{ display: 'grid', gridTemplateRows: isCollapsed ? '0fr' : '1fr', transition: 'grid-template-rows .25s ease' }}>
               <div style={{ overflow: 'hidden', minHeight: 0 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: editable ? 8 : 4, paddingLeft: 4 }}>
-                {/* item ① — free-text 원단명 input (edit mode, ④ section only) */}
-                {editable && sec.id === 'fabric' && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '104px 1fr', gap: 8, alignItems: 'center' }}>
-                    <div style={{ fontSize: 12.1, color: G.mu, lineHeight: 1.3 }}>원단명<br /><span style={{ color: G.fa, fontSize: 11 }}>面料名称</span></div>
-                    <input value={fabricName} onChange={e => setCell('fabric.fabricName', { v: e.target.value })} placeholder="원단명 입력 · 面料名称输入"
-                      style={{ padding: '6px 8px', borderRadius: 6, fontSize: 12, border: `1px solid ${G.border}`, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
-                  </div>
-                )}
+                {/* ⑥ 원단명/성분 편집은 섹션 제목 우측 input 으로 이동(상단) */}
                 {sec.fields.map(f => {
                   const cellKey = `${sec.id}.${f.key}`
                   const cell = cells[cellKey]
@@ -1115,6 +1127,9 @@ export default function ProcessPage({ G }) {
   const [styleErr, setStyleErr] = useState(null)
   const [styleMeta, setStyleMeta] = useState({ factory: {}, note: {}, hidden: [] })
 
+  // ⑥ MO 원단명 오버라이드 (key fabric:{MO_ID}) — KV값 우선
+  const [moFabric, setMoFabric] = useState({})
+
   const toastTimer = useRef(null)
   const showToast = useCallback((msg, type = 'ok') => {
     setToast({ msg, type })
@@ -1138,6 +1153,13 @@ export default function ProcessPage({ G }) {
       .finally(() => setProcLoading(false))
   }, [])
 
+  // ⑥ MO 원단명 오버라이드 로드 (key fabric:{MO_ID})
+  const loadMoFabric = useCallback(() => {
+    fetchMoFabric()
+      .then(d => setMoFabric(d?.fabric || {}))
+      .catch(err => console.error('[ProcessPage] mo-fabric', err))
+  }, [])
+
   // 미오더 섹션: Style 목록 + 메타를 함께 로드.
   // 넉넉히 200개 로드. 스타일이 수백 개 이상으로 늘면 서버사이드 criteria 필터 권장.
   const loadStyles = useCallback(() => {
@@ -1153,11 +1175,11 @@ export default function ProcessPage({ G }) {
   }, [])
 
   useEffect(() => {
-    loadMo(); loadProc(); loadStyles()
-    const h = () => { loadMo(); loadProc(); loadStyles() }
+    loadMo(); loadProc(); loadStyles(); loadMoFabric()
+    const h = () => { loadMo(); loadProc(); loadStyles(); loadMoFabric() }
     window.addEventListener('iku:refresh', h)
     return () => window.removeEventListener('iku:refresh', h)
-  }, [loadMo, loadProc, loadStyles])
+  }, [loadMo, loadProc, loadStyles, loadMoFabric])
 
   // One-shot diagnostic: report which fabric fields (if any) are absent from the
   // MO data so a missing field is visible in the console (item ①).
@@ -1349,6 +1371,16 @@ export default function ProcessPage({ G }) {
       .then(r => showToast(r?.ok ? '오더 전환됨 · 已转为下单' : '실패 · 失败', r?.ok ? 'ok' : 'bad'))
       .catch(() => showToast('실패 · 失败', 'bad'))
   }, [showToast])
+
+  // ⑥ 원단명 오버라이드 저장 (key fabric:{MO_ID}) — 카드 저장 시 호출
+  const onSaveFabric = useCallback((id, value) => {
+    setMoFabric(prev => {
+      const next = { ...prev }
+      if (value) next[id] = value; else delete next[id]
+      return next
+    })
+    return saveMoFabric(id, value).catch(() => { /* 토스트는 카드 저장에서 처리 */ })
+  }, [])
 
   // ── print (item ④) ──
   const enterPrintMode = useCallback(() => {
@@ -1588,6 +1620,8 @@ export default function ProcessPage({ G }) {
               printMode={printMode}
               checked={selectedToPrint.has(itemNoOf(mo))}
               onToggleChecked={() => togglePrintChecked(itemNoOf(mo))}
+              fabricKv={moFabric[itemNoOf(mo)] || ''}
+              onSaveFabric={onSaveFabric}
             />
           ))}
         </div>

@@ -120,6 +120,18 @@ export async function saveProcessHidden({ password, editorName, hidden }) {
   })
 }
 
+// ── MO 원단명 오버라이드 (key: fabric:{MO_ID}, public, no password) ──
+export async function fetchMoFabric() {
+  return apiFetch('/api/mo-fabric')
+}
+export async function saveMoFabric(id, value) {
+  return apiFetch('/api/mo-fabric', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, value }),
+  })
+}
+
 // ── HEXIANG 工厂现场 (worker-line config — public, no password) ──
 export async function fetchFactoryConfig() {
   return apiFetch('/api/factory-config')
