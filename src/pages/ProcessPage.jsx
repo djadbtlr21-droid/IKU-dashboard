@@ -320,9 +320,13 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
   }
 
   const body = mos.map(cardHTML).join('')
+  return buildPrintShell({ titleText: '产前确认 · 생산 전 체크', body, stamp })
+}
 
+// 공통 프린트 셸 (A4 2열 카드 레이아웃 + 페이지네이션) — 오더완료/미오더 공용
+function buildPrintShell({ titleText, body, stamp }) {
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8" />
-<title>产前确认 · 생산 전 체크</title>
+<title>${escapeHtml(titleText)}</title>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; }
@@ -402,6 +406,7 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
   <div id="sheets"></div>
   <script>
   var STAMP = ${JSON.stringify(stamp)};
+  var TITLE = ${JSON.stringify(titleText)};
   (function () {
     var measure = document.getElementById('measure');
     var sheetsEl = document.getElementById('sheets');
@@ -424,7 +429,7 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
         var inner = document.createElement('div'); inner.className = 'sheet-inner';
         if (isFirst) {
           var h = document.createElement('div'); h.className = 'sheet-head';
-          h.innerHTML = '<h1>产前确认 · 생산 전 체크</h1><div class="stamp">출력일시 打印时间: ' + STAMP + '</div>';
+          h.innerHTML = '<h1>' + TITLE + '</h1><div class="stamp">출력일시 打印时间: ' + STAMP + '</div>';
           inner.appendChild(h);
         }
         var bodyEl = document.createElement('div'); bodyEl.className = 'sheet-body';
@@ -483,6 +488,59 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
   })();
   </script>
 </body></html>`
+}
+
+// 미오더(Style) 프린트 — 오더완료와 동일한 A4 카드 레이아웃(공통 셸) 재사용
+function buildStylePrintHTML({ styles, meta, origin, now }) {
+  const stamp = (() => {
+    const p = (n) => String(n).padStart(2, '0')
+    return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}`
+  })()
+  // 중간/진행 상태 = 빨강 정적, 승인/활성 = 초록, 그외 기본 (깜빡임 없음)
+  const colorOf = (val) => {
+    const s = String(val || '').toLowerCase()
+    if (/in.?progress|进行|sampling|제작\s*중|제작중|진행/.test(s)) return '#C53030'
+    if (/approved|승인|已批准|active|활성|启用|complete|完成/.test(s)) return '#2F855A'
+    return '#1A1714'
+  }
+  const cardHTML = (st) => {
+    const key = styleKey(st)
+    const sku = pick(st, SF.sku) || key
+    const chi = pick(st, SF.chi)
+    const brand = pick(st, SF.brand)
+    const fabric = pick(st, SF.fabric)
+    const styleSt = pick(st, SF.styleStatus)    // 샘플 상태 打样状态
+    const sampleSt = pick(st, SF.sampleStatus)  // 승인 상태 审批状态
+    const factory = (meta.factory && meta.factory[key]) || ''
+    const note = (meta.note && meta.note[key]) || ''
+    const v = st?.Style_Image
+    const first = Array.isArray(v) ? v[0] : v
+    const path = typeof first === 'string' ? first : (first?.url || first?.filepath || first?.path)
+    const imgSrc = path ? `${origin}/api/zoho-image?filepath=${encodeURIComponent(path)}` : ''
+    const header = `
+      <div class="card-head">
+        ${imgSrc ? `<img class="thumb" src="${escapeHtml(imgSrc)}" alt="" />` : '<div class="thumb"></div>'}
+        <div class="head-info">
+          <div class="mo-line">
+            <span class="mono mo-no">${escapeHtml(sku)}</span>
+            <span class="badge" style="background:#A14E3A">미오더 未下单</span>
+          </div>
+          ${chi ? `<div class="sku">${escapeHtml(chi)}</div>` : ''}
+          ${brand ? `<div class="meta">🏷 브랜드 品牌: ${escapeHtml(brand)}</div>` : ''}
+          ${fabric ? `<div class="meta">🧵 원단 面料: ${escapeHtml(fabric)}</div>` : ''}
+        </div>
+      </div>`
+    const row = (kr, cn, val, color) => `<tr><td class="lbl">${escapeHtml(kr)}<br><span class="cn">${escapeHtml(cn)}</span></td><td class="val"${color ? ` style="color:${color};font-weight:600"` : ''}>${val ? escapeHtml(val) : '<span class="empty">— 미입력 未填写</span>'}</td></tr>`
+    const sec = `<div class="sec"><div class="sec-title"><span class="ttl">상태 정보 <span class="cn">状态信息</span></span></div><table class="grid">
+      ${row('샘플 상태', '打样状态', styleSt, colorOf(styleSt))}
+      ${row('승인 상태', '审批状态', sampleSt, colorOf(sampleSt))}
+      ${row('오더예정공장', '预计下单工厂', factory)}
+    </table></div>`
+    const remarkHTML = `<div class="sec"><div class="sec-title"><span class="ttl">비고 <span class="cn">备注</span></span></div><div class="remark">${note ? escapeHtml(note) : '—'}</div></div>`
+    return `<section class="card">${header}${sec}${remarkHTML}</section>`
+  }
+  const body = styles.map(cardHTML).join('')
+  return buildPrintShell({ titleText: '产前确认 · 생산 전 체크 — 미오더 未下单', body, stamp })
 }
 
 // CSS injected once for this page (shake / blink / 5-col grid).
@@ -1462,23 +1520,13 @@ export default function ProcessPage({ G }) {
       .catch(() => showToast('실패 · 失败', 'bad'))
   }, [showToast])
 
-  // 미오더 프린트 — 현재 표시 중인 스타일을 간단한 표로 인쇄
+  // 미오더 프린트 — 오더완료와 동일한 A4 카드 레이아웃으로 출력
   const doStylePrint = useCallback(() => {
     if (!visibleStyles.length) { showToast('표시할 스타일이 없습니다 · 无款式', 'bad'); return }
     let win
     try { win = window.open('', '_blank') } catch { win = null }
     if (!win) { showToast('팝업이 차단되었습니다 · 弹窗被拦截', 'bad'); return }
-    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    const rows = visibleStyles.map(st => {
-      const sk = styleKey(st)
-      return `<tr><td>${esc(pick(st, SF.sku) || sk)}</td><td>${esc(pick(st, SF.chi))}</td><td>${esc(pick(st, SF.brand))}</td><td>${esc(pick(st, SF.category))}</td><td>${esc(pick(st, SF.fabric))}</td><td>${esc(pick(st, SF.styleStatus))}</td><td>${esc(pick(st, SF.sampleStatus))}</td><td>${esc(styleMeta.factory[sk] || '')}</td><td>${esc(styleMeta.note[sk] || '')}</td></tr>`
-    }).join('')
-    const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>미오더 · 未下单</title>
-<style>body{font-family:'Noto Sans KR','Noto Sans SC',sans-serif;padding:20px;color:#1a1714}h1{font-size:16px;color:#9A7228}table{width:100%;border-collapse:collapse;font-size:11px;margin-top:10px}th,td{border:1px solid #ddd;padding:5px 7px;text-align:left}th{background:#FBF9F4}@media print{.np{display:none}}</style></head>
-<body><div class="np" style="text-align:right"><button onclick="window.print()">인쇄 打印</button></div>
-<h1>미오더 · 未下单 (${visibleStyles.length})</h1>
-<table><thead><tr><th>SKU</th><th>款号</th><th>品牌</th><th>分类</th><th>面料</th><th>打样状态</th><th>审批状态</th><th>预计下单工厂</th><th>备注</th></tr></thead><tbody>${rows}</tbody></table>
-</body></html>`
+    const html = buildStylePrintHTML({ styles: visibleStyles, meta: styleMeta, origin: window.location.origin, now: new Date() })
     win.document.open(); win.document.write(html); win.document.close()
   }, [visibleStyles, styleMeta, showToast])
 
