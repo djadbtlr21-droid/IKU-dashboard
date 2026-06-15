@@ -777,11 +777,11 @@ function CellEditor({ G, field, cell, editable, allowStock, onChange }) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap', padding: h ? '3px 6px' : 0, background: h ? hlBg : 'transparent', borderRadius: 6, textAlign: 'center' }}>
         {empty ? (
-          <span style={{ fontSize: 11.55, color: G.fa }}>—</span>
+          <span style={{ fontSize: 12.7, color: G.fa }}>—</span>
         ) : (
           <>
-            {v && <span className={midRead ? 'iku-blink' : undefined} style={{ fontSize: 11.55, fontWeight: 600, color: done ? G.ok : (midRead ? G.bad : G.tx), padding: '2px 8px', background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999 }}>{done ? '✅ ' : ''}{statusLabel(v)}</span>}
-            {d && <span className="num" style={{ fontSize: 11.55, color: G.accent, fontWeight: 600 }}>{d}</span>}
+            {v && <span className={midRead ? 'iku-blink' : undefined} style={{ fontSize: 12.7, fontWeight: 600, color: done ? G.ok : (midRead ? G.bad : G.tx), padding: '2px 8px', background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999 }}>{done ? '✅ ' : ''}{statusLabel(v)}</span>}
+            {d && <span className="num" style={{ fontSize: 12.7, color: G.accent, fontWeight: 600 }}>{d}</span>}
           </>
         )}
         {h && <AlertTriangle size={11} style={{ color: G.warn }} />}
@@ -947,7 +947,6 @@ function ProcessCard({ G, mo, record, editable, onZoom,
       .filter(v => v && !DONE_VALUES.has(v))
     warnList.push(`${sec.kr} ${mids.map(statusLabel).join('/')}`.trim())
   }
-  const warnText = warnList.length ? '⚠ ' + warnList.join(' · ') : ''
   const allDone = !warnList.length && SECTIONS.every(sec => sectionStatus(sec, cells) === 'ok')
 
   // overflow visible so the date-picker popover isn't clipped by the card
@@ -1006,41 +1005,45 @@ function ProcessCard({ G, mo, record, editable, onZoom,
                   <Trash2 size={13} />
                 </button>
               </div>
-              <div className="num" title={getMoNumber(mo)} style={{ fontSize: 12, fontWeight: 700, color: G.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 4 }}>{getMoNumber(mo)}</div>
+              <div className="num" title={getMoNumber(mo)} style={{ fontSize: 13.2, fontWeight: 700, color: G.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 4 }}>{getMoNumber(mo)}</div>
             </>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
-              <span className="num" style={{ fontSize: 12, fontWeight: 700, color: G.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: '1 1 auto', minWidth: 0 }}>{getMoNumber(mo)}</span>
+              <span className="num" style={{ fontSize: 13.2, fontWeight: 700, color: G.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: '1 1 auto', minWidth: 0 }}>{getMoNumber(mo)}</span>
               <span style={{ fontSize: 9.5, fontWeight: 700, color: '#fff', background: badge.color, padding: '2px 7px', borderRadius: 999, flexShrink: 0, minWidth: 58, textAlign: 'center', whiteSpace: 'nowrap' }}>
                 {badge.kr}{badge.cn ? ` · ${badge.cn}` : ''}
               </span>
               {isShipped(mo) && <span style={{ fontSize: 9, color: G.ok, border: `1px solid ${G.ok}`, padding: '1px 6px', borderRadius: 999, flexShrink: 0, whiteSpace: 'nowrap' }}>출고 已出货</span>}
             </div>
           )}
-          <div title={getMoSku(mo)} style={{ fontSize: 11, color: G.tx, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getMoSku(mo)}</div>
-          {chiName && <div title={chiName} style={{ fontSize: 11, color: G.mu, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{chiName}</div>}
+          <div title={getMoSku(mo)} style={{ fontSize: 12.1, color: G.tx, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getMoSku(mo)}</div>
+          {chiName && <div title={chiName} style={{ fontSize: 12.1, color: G.mu, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{chiName}</div>}
           {/* 🏭 공장 · 📅 월 */}
-          <div style={{ fontSize: 10, color: G.fa, marginTop: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 11, color: G.fa, marginTop: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span>🏭 {getMoFactory(mo)}</span>
             {monthKey && <span>📅 {monthKey}</span>}
           </div>
           {/* ① 수량 + 원단 1줄 (말줄임, 2줄 금지, hover tooltip) */}
           {(totalQty || displayFabric) && (
             <div title={[totalQty ? `${totalQty}件` : '', displayFabric].filter(Boolean).join(' · ')}
-              style={{ fontSize: 10, color: G.mu, fontWeight: 600, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              style={{ fontSize: 11, color: G.mu, fontWeight: 600, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {totalQty && <span className="num">📦 {totalQty}件</span>}
               {totalQty && displayFabric && <span style={{ color: G.fa }}> · </span>}
               {displayFabric && <span>🧵 {displayFabric}</span>}
             </div>
           )}
-          {/* ② 경고 항목 요약 (빨강 깜빡) / 전체 완료 (초록 정적) */}
-          {warnText ? (
-            <div className="iku-blink" title={warnText}
-              style={{ fontSize: 10, fontWeight: 700, color: G.bad, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {warnText}
+          {/* ② 경고 항목 요약 — 각 경고를 독립 행(세로 병렬)으로 표시 (빨강 깜빡) / 전체 완료 (초록 정적) */}
+          {warnList.length ? (
+            <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              {warnList.map((w, i) => (
+                <div key={i} className="iku-blink" title={`⚠ ${w}`}
+                  style={{ fontSize: 11, fontWeight: 700, color: G.bad, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  ⚠ {w}
+                </div>
+              ))}
             </div>
           ) : allDone ? (
-            <div style={{ fontSize: 10, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               ✅ 전체 완료 · 全部完成
             </div>
           ) : null}
@@ -1059,12 +1062,12 @@ function ProcessCard({ G, mo, record, editable, onZoom,
             <div key={sec.id} style={{ paddingBottom: 20, borderBottom: `1px solid ${G.hair}` }}>
               {/* section title (number scales with it); flexWrap so right-side
                   items drop below instead of overlapping on narrow cards */}
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: G.tx, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.2 }}>
+              <div style={{ fontSize: 12.65, fontWeight: 700, color: G.tx, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.2 }}>
                 <span><span style={{ color: G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: G.mu, fontWeight: 500 }}>{sec.cn}</span></span>
                 {!editable && <MemoBadge G={G} memo={memo} />}
                 {/* ⑥ 원단명/성분 (read): Zoho 자동값 + KV 오버라이드 우선 — 제목 우측 */}
                 {sec.id === 'fabric' && !editable && displayFabric && (
-                  <span title={displayFabric} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 500, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                  <span title={displayFabric} style={{ flex: 1, textAlign: 'center', fontSize: 13.2, fontWeight: 500, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                     🧵 {displayFabric}
                   </span>
                 )}
@@ -1094,11 +1097,11 @@ function ProcessCard({ G, mo, record, editable, onZoom,
                   const labelColor = st === 'done' ? G.ok : (st === 'mid' ? G.bad : G.mu)
                   return (
                     <div key={cellKey} style={{ display: 'grid', gridTemplateColumns: '104px 1fr', gap: 8, alignItems: editable ? 'start' : 'center' }}>
-                      <div style={{ fontSize: 12.7, paddingTop: editable ? 7 : 0, lineHeight: 1.3 }}>
+                      <div style={{ fontSize: 13.97, paddingTop: editable ? 7 : 0, lineHeight: 1.3 }}>
                         {/* label kr/cn (done = green, no ✅; mid = red blink) */}
                         <span className={st === 'mid' ? 'iku-blink' : undefined} style={{ color: labelColor, fontWeight: st === 'none' ? 400 : 600 }}>
                           {f.kr}<br />
-                          <span style={{ color: st === 'none' ? G.fa : labelColor, fontSize: 11.55 }}>{f.cn}</span>
+                          <span style={{ color: st === 'none' ? G.fa : labelColor, fontSize: 12.7 }}>{f.cn}</span>
                         </span>
                       </div>
                       <CellEditor G={G} field={f} cell={cell} editable={editable} allowStock={allowStock} onChange={(val) => setCell(cellKey, val)} />
@@ -1128,7 +1131,7 @@ function ProcessCard({ G, mo, record, editable, onZoom,
 
         {/* ⑨ card-wide 비고 */}
         <div>
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: G.tx, marginBottom: 8, lineHeight: 1.2 }}>
+          <div style={{ fontSize: 12.65, fontWeight: 700, color: G.tx, marginBottom: 8, lineHeight: 1.2 }}>
             <span style={{ color: G.accent, marginRight: 5 }}>⑨</span>전체 비고 <span style={{ color: G.mu, fontWeight: 500 }}>整体备注</span>
           </div>
           {editable ? (
@@ -1136,7 +1139,7 @@ function ProcessCard({ G, mo, record, editable, onZoom,
               placeholder="자유 메모 · 自由备注"
               style={{ width: '100%', padding: '8px 10px', fontSize: 12, border: `1px solid ${G.border}`, borderRadius: 8, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
           ) : (
-            <div style={{ fontSize: 12, color: remark ? G.tx : G.fa, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{remark || '—'}</div>
+            <div style={{ fontSize: 13.2, color: remark ? G.tx : G.fa, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{remark || '—'}</div>
           )}
         </div>
 
@@ -1630,30 +1633,6 @@ export default function ProcessPage({ G }) {
         </div>
       </div>
 
-      {/* Edit bar */}
-      {editMode && (
-        <div className="card" style={{ padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', borderColor: G.primary }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: G.accent, display: 'flex', alignItems: 'center', gap: 6, paddingTop: 6 }}><Pencil size={13} /> 편집 모드 · 编辑模式</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 11, color: G.mu }}>수정자 · 修改人 <span style={{ color: G.bad }}>*</span></span>
-              <input
-                ref={editorRef}
-                value={editorName}
-                onChange={e => { setEditorName(e.target.value); if (editorError) setEditorError(false) }}
-                onAnimationEnd={() => setShaking(false)}
-                placeholder="이름 · 姓名"
-                style={{ ...inputStyle, padding: '6px 10px', minWidth: 150, border: `1px solid ${editorError ? G.bad : G.border}`, animation: shaking ? 'ikuShake .4s ease' : undefined }}
-              />
-            </div>
-            {editorError && (
-              <span style={{ fontSize: 10.5, color: G.bad, fontWeight: 600 }}>수정자 이름을 입력하세요 · 请输入修改人姓名</span>
-            )}
-          </div>
-          <span style={{ fontSize: 10.5, color: G.fa, paddingTop: 6 }}>저장하려면 수정자 이름이 필요합니다 · 保存需填写修改人</span>
-        </div>
-      )}
-
       {/* ── 탭 그룹: 오더완료 下单完成 / 미오더 未下单 ── */}
       <div style={{ marginBottom: 14 }}>
         {/* 오더완료 그룹 (기존 MO) */}
@@ -1756,6 +1735,15 @@ export default function ProcessPage({ G }) {
         </div>
         {editMode ? (
           <>
+            {/* ③ 수정자 입력칸 — 일괄저장 버튼 왼쪽 (상단 편집바에서 이동) */}
+            <input
+              ref={editorRef}
+              value={editorName}
+              onChange={e => { setEditorName(e.target.value); if (editorError) setEditorError(false) }}
+              onAnimationEnd={() => setShaking(false)}
+              placeholder="수정자 이름 · 修改人姓名"
+              style={{ ...inputStyle, minHeight: 36, padding: '7px 12px', width: 170, border: `1px solid ${editorError ? G.bad : G.border}`, animation: shaking ? 'ikuShake .4s ease' : undefined }}
+            />
             <button onClick={batchSaveOrders} disabled={orderSaving} className="btn-primary"
               style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: orderSaving ? 0.6 : 1 }}>
               {orderSaving ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={14} />} 일괄저장 批量保存
