@@ -913,7 +913,8 @@ function SectionToggle({ G, collapsed, onToggle }) {
 function FilterRow({ G, label, children }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '7px 0' }}>
-      <span style={{ width: 60, flexShrink: 0, fontSize: 11, fontWeight: 600, color: G.mu }}>{label}</span>
+      <span style={{ width: 120, flexShrink: 0, fontSize: 11, fontWeight: 600, color: G.mu }}>{label}</span>
+      <span style={{ width: 1, height: 20, background: G.hair, flexShrink: 0, marginRight: 4 }} />
       {children}
     </div>
   )

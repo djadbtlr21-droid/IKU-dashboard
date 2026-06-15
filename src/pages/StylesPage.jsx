@@ -45,6 +45,78 @@ function FilterSelect({ G, value, onChange, ph, list }) {
 }
 
 // ──────────────────────────────────────────────────────────
+// 그룹 정의 (순서 고정: 오더완료 → 샘플 완료 → 샘플 제작 중) + 색상 팔레트
+// ──────────────────────────────────────────────────────────
+const STY_GROUPS = [
+  { key: 'ordered',  headKr: '오더완료',     headCn: '已下单', badgeKr: '오더완료', badgeCn: '已下单', line: '#97C459', badgeBg: '#EAF3DE', text: '#3B6D11', cardBorder: '#C0DD97' },
+  { key: 'done',     headKr: '샘플 완료',     headCn: '已完成', badgeKr: '샘플 완료', badgeCn: '已完成', line: '#378ADD', badgeBg: '#E6F1FB', text: '#185FA5', cardBorder: '#B5D4F4' },
+  { key: 'progress', headKr: '샘플 제작 중',  headCn: '打样中', badgeKr: '제작 중',  badgeCn: '打样中', line: '#EF9F27', badgeBg: '#FAEEDA', text: '#854F0B', cardBorder: '#FAC775' },
+]
+const STY_GROUP_MAP = Object.fromEntries(STY_GROUPS.map(g => [g.key, g]))
+
+// 샘플 상태 분류: 'done'(승인/완료) | 'progress'(제작중/진행) | 'other'
+function sampleStatusClass(val) {
+  const s = String(val || '').toLowerCase()
+  if (/approved|승인|已批准|complete|完成|完了|已完成|done|확정|통과|批准/.test(s)) return 'done'
+  if (/in.?progress|进行|sampling|제작\s*중|제작중|진행|打样中|打样|开发/.test(s)) return 'progress'
+  return 'other'
+}
+// 레코드의 분류 그룹 키 (오더완료 우선)
+function groupKeyOf(rec, ordered, pickFn, sampleKeys) {
+  if (ordered) return 'ordered'
+  return sampleStatusClass(pickFn(rec, sampleKeys)) === 'done' ? 'done' : 'progress'
+}
+
+// 칩 색조 팔레트 (활성 시 색상, 비활성 시 기본)
+function chipTone(G, tone) {
+  const gold = { bg: G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)', border: G.primary, color: G.accent }
+  switch (tone) {
+    case 'orange': return { bg: '#FAEEDA', border: '#EF9F27', color: '#854F0B' }
+    case 'blue':   return { bg: '#E6F1FB', border: '#378ADD', color: '#185FA5' }
+    case 'green':  return { bg: '#EAF3DE', border: '#97C459', color: '#3B6D11' }
+    case 'red':    return { bg: '#FCEBEB', border: '#E24B4A', color: '#A32D2D' }
+    default:       return gold
+  }
+}
+
+// B안 필터 칩 — 활성 시 tone 색상, 비활성 시 기본
+function FilterChip({ G, on, tone, label, count, onClick }) {
+  const c = on ? chipTone(G, tone) : { bg: 'transparent', border: G.border, color: G.mu }
+  return (
+    <button onClick={onClick} className="chip"
+      style={{ border: `1px solid ${c.border}`, background: c.bg, color: c.color, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5 }}>
+      {label}
+      <span className="num" style={{ fontSize: 9, padding: '1px 5px', borderRadius: 999, background: on ? c.border : G.hair, color: on ? '#fff' : G.mu }}>{count}</span>
+    </button>
+  )
+}
+
+// B안 필터 행 — 라벨 고정폭(120px) + 세로 구분선 → 모든 행의 칩 시작 x좌표 통일
+function PanelRow({ G, label, divider, children }) {
+  return (
+    <>
+      {divider && <div style={{ height: 1, background: G.hair }} />}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 0' }}>
+        <span style={{ width: 120, flexShrink: 0, fontSize: 11, fontWeight: 600, color: G.mu }}>{label}</span>
+        <span style={{ width: 1, height: 20, background: G.hair, flexShrink: 0, marginRight: 4 }} />
+        {children}
+      </div>
+    </>
+  )
+}
+
+// 그룹 헤더 — 좌: 배지 / 중: 가로선 / 우: 개수
+function GroupHeader({ g, count }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0 10px' }}>
+      <span style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, color: g.text, background: g.badgeBg, border: `1px solid ${g.line}`, padding: '3px 12px', borderRadius: 999 }}>{g.headKr} · {g.headCn}</span>
+      <div style={{ flex: 1, height: 1, background: g.line, opacity: 0.5 }} />
+      <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, color: g.text }}>{count}개 · {count}个</span>
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────────────────
 // 이미지 라이트박스 (MO View 패턴 재사용)
 // ──────────────────────────────────────────────────────────
 function Lightbox({ src, onClose }) {
@@ -76,7 +148,7 @@ function Lightbox({ src, onClose }) {
 // ──────────────────────────────────────────────────────────
 // 스타일 카드
 // ──────────────────────────────────────────────────────────
-function StyleCard({ G, rec, ordered, onOpen, onZoom }) {
+function StyleCard({ G, rec, group, onOpen, onZoom }) {
   const sku = pick(rec, F.sku)
   const chi = pick(rec, F.chi)
   const brand = pick(rec, F.brand)
@@ -85,7 +157,7 @@ function StyleCard({ G, rec, ordered, onOpen, onZoom }) {
   const fabric = pick(rec, F.fabric)
   const sampleSt = pick(rec, F.sampleStatus)   // 승인 상태 (Approved / In Progress …)
   const styleSt = pick(rec, F.styleStatus)     // 샘플 상태 (Sampling / Active …)
-  // ordered: MO 데이터의 SKU 집합과 대조한 결과(부모에서 전달) · 已下单 = 초록, 未下单 = 빨강
+  // group: 분류 그룹(오더완료/샘플완료/샘플제작중) — 카드 테두리색·하단 배지색 결정
   const imgUrl = styleImageUrl(rec)
 
   const sampleInfo = statusInfo(G, styleSt)    // 샘플 상태 색/깜빡
@@ -109,7 +181,7 @@ function StyleCard({ G, rec, ordered, onOpen, onZoom }) {
   )
 
   return (
-    <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', cursor: 'pointer' }}
+    <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', cursor: 'pointer', border: `1px solid ${group.cardBorder}` }}
       onClick={() => onOpen(rec)}>
       {/* 이미지 — 오버레이 없음, 고정 높이, cover, 클릭 시 라이트박스 */}
       <div style={{ width: '100%', height: 185, background: G.cardAlt }}
@@ -130,9 +202,9 @@ function StyleCard({ G, rec, ordered, onOpen, onZoom }) {
         {/* 5~6. 샘플/승인 상태 (2줄) */}
         {statusBlock('샘플 상태', '打样状态', styleSt, sampleInfo)}
         {statusBlock('승인 상태', '审批状态', sampleSt, approvalInfo)}
-        {/* 9. 미오더/오더완료 배지 (중앙) */}
+        {/* 9. 그룹 배지 (중앙) — 오더완료 已下单 / 샘플 완료 已完成 / 제작 중 打样中 */}
         <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', justifyContent: 'center' }}>
-          <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: ordered ? G.ok : G.bad, padding: '2px 10px', borderRadius: 999 }}>{ordered ? '오더완료 · 已下单' : '미오더 · 未下单'}</span>
+          <span style={{ fontSize: 9, fontWeight: 700, color: group.text, background: group.badgeBg, border: `1px solid ${group.line}`, padding: '2px 10px', borderRadius: 999 }}>{group.badgeKr} · {group.badgeCn}</span>
         </div>
       </div>
     </div>
@@ -171,7 +243,8 @@ export default function StylesPage({ G }) {
   const [brand, setBrand] = useState('')
   const [category, setCategory] = useState('')
   const [styleStatus, setStyleStatus] = useState('')
-  const [sampleStatus, setSampleStatus] = useState('')
+  // ① 샘플 상태 필터 · 打样状态: 'all' | 'progress'(제작중) | 'done'(완료)
+  const [sampleFilter, setSampleFilter] = useState('all')
   // ② 오더 여부 필터 · 下单状态: 'all' | 'ordered' | 'unordered'
   const [orderFilter, setOrderFilter] = useState('all')
   // ③ 월별/시즌 버튼 필터: { type:'all'|'month'|'season', value }
@@ -259,6 +332,13 @@ export default function StylesPage({ G }) {
     return { all: items.length, ordered, unordered: items.length - ordered }
   }, [items, isOrderedBySku])
 
+  // ① 샘플 상태 필터 카운트 (전체/제작중/완료)
+  const sampleCounts = useMemo(() => {
+    let progress = 0, done = 0
+    items.forEach(r => { const c = sampleStatusClass(pick(r, F.sampleStatus)); if (c === 'done') done++; else progress++ })
+    return { all: items.length, progress, done }
+  }, [items])
+
   // ③ 월/시즌 버튼 목록 (실제 데이터 기준 + 카운트)
   const msButtons = useMemo(() => {
     const months = {}, seasons = {}
@@ -284,7 +364,12 @@ export default function StylesPage({ G }) {
       if (brand && pick(r, F.brand) !== brand) return false
       if (category && pick(r, F.category) !== category) return false
       if (styleStatus && pick(r, F.styleStatus) !== styleStatus) return false
-      if (sampleStatus && pick(r, F.sampleStatus) !== sampleStatus) return false
+      // ① 샘플 상태 필터 (제작중/완료 — 클래스 기준, AND)
+      if (sampleFilter !== 'all') {
+        const c = sampleStatusClass(pick(r, F.sampleStatus))
+        if (sampleFilter === 'done' && c !== 'done') return false
+        if (sampleFilter === 'progress' && c === 'done') return false
+      }
       // ② 오더 여부 필터 (샘플 상태 등과 AND 조합)
       if (orderFilter === 'ordered' && !isOrderedBySku(r)) return false
       if (orderFilter === 'unordered' && isOrderedBySku(r)) return false
@@ -296,10 +381,17 @@ export default function StylesPage({ G }) {
       return true
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, search, brand, category, styleStatus, sampleStatus, orderFilter, moSkuSet, ms])
+  }, [items, search, brand, category, styleStatus, sampleFilter, orderFilter, moSkuSet, ms])
 
-  const resetFilters = () => { setSearch(''); setBrand(''); setCategory(''); setStyleStatus(''); setSampleStatus(''); setOrderFilter('all'); setMs({ type: 'all', value: '' }) }
-  const anyFilter = search || brand || category || styleStatus || sampleStatus || orderFilter !== 'all' || ms.type !== 'all'
+  // 분류 그룹별 카드 묶음 (순서 고정: 오더완료 → 샘플 완료 → 샘플 제작 중)
+  const grouped = useMemo(() => {
+    const g = { ordered: [], done: [], progress: [] }
+    visible.forEach(r => { g[groupKeyOf(r, isOrderedBySku(r), pick, F.sampleStatus)].push(r) })
+    return g
+  }, [visible, isOrderedBySku])
+
+  const resetFilters = () => { setSearch(''); setBrand(''); setCategory(''); setStyleStatus(''); setSampleFilter('all'); setOrderFilter('all'); setMs({ type: 'all', value: '' }) }
+  const anyFilter = search || brand || category || styleStatus || sampleFilter !== 'all' || orderFilter !== 'all' || ms.type !== 'all'
 
   const inputStyle = { padding: '8px 12px', borderRadius: 8, fontSize: 12, border: `1px solid ${G.border}`, background: G.card, color: G.tx, outline: 'none', fontFamily: 'inherit' }
 
@@ -340,64 +432,31 @@ export default function StylesPage({ G }) {
         )}
       </div>
 
-      {/* ③ [1줄] 샘플 상태 · 打样状态 (Sample_Status 동적 생성, 기본 전체) */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap', flexShrink: 0 }}>샘플 상태 · 打样状态</span>
-        {[''].concat(opts.sampleStatus).map(v => {
-          const on = sampleStatus === v
-          const cnt = v ? items.filter(r => pick(r, F.sampleStatus) === v).length : items.length
-          return (
-            <button key={v || 'all'} onClick={() => setSampleStatus(v)} className="chip"
-              style={{ border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: on ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5 }}>
-              {v || '전체 全部'}
-              <span className="num" style={{ fontSize: 9, padding: '1px 5px', borderRadius: 999, background: on ? G.primary : G.hair, color: on ? '#fff' : G.mu }}>{cnt}</span>
-            </button>
-          )
-        })}
-      </div>
+      {/* B안 통합 필터 패널 — 3행, 라벨 고정폭 + 세로 구분선으로 칩 시작 위치 통일 */}
+      <div style={{ border: `1px solid ${G.border}`, borderRadius: 12, padding: '4px 16px', marginBottom: 14, background: G.card }}>
+        {/* 행 1 — 샘플 상태 打样状态 */}
+        <PanelRow G={G} label="샘플 상태 · 打样状态">
+          <FilterChip G={G} on={sampleFilter === 'all'} tone="gold" onClick={() => setSampleFilter('all')} label="전체 全部" count={sampleCounts.all} />
+          <FilterChip G={G} on={sampleFilter === 'progress'} tone="orange" onClick={() => setSampleFilter('progress')} label="샘플 제작 중 打样中" count={sampleCounts.progress} />
+          <FilterChip G={G} on={sampleFilter === 'done'} tone="blue" onClick={() => setSampleFilter('done')} label="샘플 완료 已完成" count={sampleCounts.done} />
+        </PanelRow>
 
-      {/* ② [신규] 오더 여부 · 下单状态 (MO SKU 대조, 샘플 상태와 AND, 기본 전체) */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap', flexShrink: 0 }}>오더 여부 · 下单状态</span>
-        {[
-          { v: 'all', label: '전체 全部', cnt: orderCounts.all },
-          { v: 'ordered', label: '오더완료 已下单', cnt: orderCounts.ordered },
-          { v: 'unordered', label: '미오더 未下单', cnt: orderCounts.unordered },
-        ].map(o => {
-          const on = orderFilter === o.v
-          return (
-            <button key={o.v} onClick={() => setOrderFilter(o.v)} className="chip"
-              style={{ border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: on ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5 }}>
-              {o.label}
-              <span className="num" style={{ fontSize: 9, padding: '1px 5px', borderRadius: 999, background: on ? G.primary : G.hair, color: on ? '#fff' : G.mu }}>{o.cnt}</span>
-            </button>
-          )
-        })}
-      </div>
+        {/* 행 2 — 오더 여부 下单状态 */}
+        <PanelRow G={G} label="오더 여부 · 下单状态" divider>
+          <FilterChip G={G} on={orderFilter === 'all'} tone="gold" onClick={() => setOrderFilter('all')} label="전체 全部" count={orderCounts.all} />
+          <FilterChip G={G} on={orderFilter === 'ordered'} tone="green" onClick={() => setOrderFilter('ordered')} label="오더완료 已下单" count={orderCounts.ordered} />
+          <FilterChip G={G} on={orderFilter === 'unordered'} tone="red" onClick={() => setOrderFilter('unordered')} label="미오더 未下单" count={orderCounts.unordered} />
+        </PanelRow>
 
-      {/* ③ [2줄] 월별 · 月份 / 시즌 · 季节 (실제 값 동적 생성, 기본 전체) */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap', flexShrink: 0 }}>월·月 / 시즌·季节</span>
-        {(() => {
-          const allOn = ms.type === 'all'
-          return (
-            <button onClick={() => setMs({ type: 'all', value: '' })} className="chip"
-              style={{ border: `1px solid ${allOn ? G.primary : G.border}`, background: allOn ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: allOn ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5 }}>
-              전체 全部
-              <span className="num" style={{ fontSize: 9, padding: '1px 5px', borderRadius: 999, background: allOn ? G.primary : G.hair, color: allOn ? '#fff' : G.mu }}>{items.length}</span>
-            </button>
-          )
-        })()}
-        {msButtons.map(b => {
-          const on = ms.type === b.type && ms.value === b.value
-          return (
-            <button key={`${b.type}:${b.value}`} onClick={() => setMs({ type: b.type, value: b.value })} className="chip"
-              style={{ border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: on ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5 }}>
-              {b.label}
-              <span className="num" style={{ fontSize: 9, padding: '1px 5px', borderRadius: 999, background: on ? G.primary : G.hair, color: on ? '#fff' : G.mu }}>{b.count}</span>
-            </button>
-          )
-        })}
+        {/* 행 3 — 월·시즌 月份·季节 */}
+        <PanelRow G={G} label="월·시즌 · 月份·季节" divider>
+          <FilterChip G={G} on={ms.type === 'all'} tone="gold" onClick={() => setMs({ type: 'all', value: '' })} label="전체 全部" count={items.length} />
+          {msButtons.map(b => (
+            <FilterChip key={`${b.type}:${b.value}`} G={G}
+              on={ms.type === b.type && ms.value === b.value} tone="gold"
+              onClick={() => setMs({ type: b.type, value: b.value })} label={b.label} count={b.count} />
+          ))}
+        </PanelRow>
       </div>
 
       {/* 결과 수 */}
@@ -424,9 +483,19 @@ export default function StylesPage({ G }) {
         </div>
       ) : (
         <>
-          <div className="sty-grid">
-            {visible.map(r => <StyleCard key={recId(r)} G={G} rec={r} ordered={isOrderedBySku(r)} onOpen={setSelected} onZoom={setZoomSrc} />)}
-          </div>
+          {/* 그룹 분리 배치 (순서: 오더완료 → 샘플 완료 → 샘플 제작 중, 빈 그룹은 헤더 숨김) */}
+          {STY_GROUPS.map(g => {
+            const list = grouped[g.key]
+            if (!list.length) return null
+            return (
+              <div key={g.key}>
+                <GroupHeader g={g} count={list.length} />
+                <div className="sty-grid">
+                  {list.map(r => <StyleCard key={recId(r)} G={G} rec={r} group={g} onOpen={setSelected} onZoom={setZoomSrc} />)}
+                </div>
+              </div>
+            )
+          })}
           {/* 더 불러오기 (서버 페이지네이션). 필터 적용 중에는 전체 로드를 권장하는 안내 */}
           {hasMore && !anyFilter && (
             <div style={{ textAlign: 'center', marginTop: 20 }}>
