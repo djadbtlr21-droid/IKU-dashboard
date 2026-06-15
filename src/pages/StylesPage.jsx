@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Shirt, Search, RotateCcw, RefreshCw, X, ChevronDown } from 'lucide-react'
-import { fetchStyleList } from '../api/client'
+import { fetchStyleList, fetchMoList } from '../api/client'
 import ZohoImage from '../components/ZohoImage'
 import StyleDetailModal from '../components/StyleDetailModal'
 import {
   F, pick, recId, imageField, styleImageUrl,
-  isOrdered, monthOf, monthLabel, seasonOf, statusInfo,
+  monthOf, monthLabel, seasonOf, statusInfo,
 } from '../utils/styleFields'
+import { getMoSku } from '../utils/moHelpers'
 
 // ──────────────────────────────────────────────────────────
 // Style / Sample 管理 — All_Styles 리포트 목록
@@ -75,7 +76,7 @@ function Lightbox({ src, onClose }) {
 // ──────────────────────────────────────────────────────────
 // 스타일 카드
 // ──────────────────────────────────────────────────────────
-function StyleCard({ G, rec, onOpen, onZoom }) {
+function StyleCard({ G, rec, ordered, onOpen, onZoom }) {
   const sku = pick(rec, F.sku)
   const chi = pick(rec, F.chi)
   const brand = pick(rec, F.brand)
@@ -84,7 +85,7 @@ function StyleCard({ G, rec, onOpen, onZoom }) {
   const fabric = pick(rec, F.fabric)
   const sampleSt = pick(rec, F.sampleStatus)   // 승인 상태 (Approved / In Progress …)
   const styleSt = pick(rec, F.styleStatus)     // 샘플 상태 (Sampling / Active …)
-  const ordered = isOrdered(rec)
+  // ordered: MO 데이터의 SKU 집합과 대조한 결과(부모에서 전달) · 已下单 = 초록, 未下单 = 빨강
   const imgUrl = styleImageUrl(rec)
 
   const sampleInfo = statusInfo(G, styleSt)    // 샘플 상태 색/깜빡
@@ -158,6 +159,7 @@ function StyleSkeleton() {
 // ──────────────────────────────────────────────────────────
 export default function StylesPage({ G }) {
   const [items, setItems] = useState([])
+  const [moList, setMoList] = useState([])         // 오더완료 여부 대조용 MO 목록
   const [loading, setLoading] = useState(true)     // 초기 로딩
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
@@ -170,6 +172,8 @@ export default function StylesPage({ G }) {
   const [category, setCategory] = useState('')
   const [styleStatus, setStyleStatus] = useState('')
   const [sampleStatus, setSampleStatus] = useState('')
+  // ② 오더 여부 필터 · 下单状态: 'all' | 'ordered' | 'unordered'
+  const [orderFilter, setOrderFilter] = useState('all')
   // ③ 월별/시즌 버튼 필터: { type:'all'|'month'|'season', value }
   const [ms, setMs] = useState({ type: 'all', value: '' })
 
@@ -193,14 +197,21 @@ export default function StylesPage({ G }) {
       .finally(() => setLoading(false))
   }, [])
 
+  // ① 오더완료 여부 대조용 MO 목록 로드 (기존 mo-list 재사용, 200개 고정)
+  const loadMo = useCallback(() => {
+    fetchMoList({ perPage: 200 })
+      .then(d => setMoList(d?.data || d?.records || d?.result || []))
+      .catch(err => console.error('[StylesPage] mo', err))
+  }, [])
+
   useEffect(() => {
     // 마운트 시 1회 초기 로드 + 전역 새로고침 이벤트 구독 (의도된 패턴)
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadInitial()
-    const h = () => loadInitial()
+    loadInitial(); loadMo()
+    const h = () => { loadInitial(); loadMo() }
     window.addEventListener('iku:refresh', h)
     return () => window.removeEventListener('iku:refresh', h)
-  }, [loadInitial])
+  }, [loadInitial, loadMo])
 
   const loadMore = useCallback(() => {
     if (loadingMore || !cursorRef.current) return
@@ -228,6 +239,26 @@ export default function StylesPage({ G }) {
     }
   }, [items])
 
+  // ① 오더완료 MO 의 SKU 집합 (대소문자 무시·trim) — Style SKU 대조용
+  const moSkuSet = useMemo(() => {
+    const s = new Set()
+    moList.forEach(m => { const sku = getMoSku(m); if (sku && sku !== '—') s.add(sku.trim().toLowerCase()) })
+    return s
+  }, [moList])
+
+  // Style 레코드가 MO 에 오더되어 있는지 (SKU 대조)
+  const isOrderedBySku = useCallback((r) => {
+    const sku = pick(r, F.sku).trim().toLowerCase()
+    return !!sku && moSkuSet.has(sku)
+  }, [moSkuSet])
+
+  // ② 오더 여부 필터 카운트 (전체/오더완료/미오더)
+  const orderCounts = useMemo(() => {
+    let ordered = 0
+    items.forEach(r => { if (isOrderedBySku(r)) ordered++ })
+    return { all: items.length, ordered, unordered: items.length - ordered }
+  }, [items, isOrderedBySku])
+
   // ③ 월/시즌 버튼 목록 (실제 데이터 기준 + 카운트)
   const msButtons = useMemo(() => {
     const months = {}, seasons = {}
@@ -254,6 +285,9 @@ export default function StylesPage({ G }) {
       if (category && pick(r, F.category) !== category) return false
       if (styleStatus && pick(r, F.styleStatus) !== styleStatus) return false
       if (sampleStatus && pick(r, F.sampleStatus) !== sampleStatus) return false
+      // ② 오더 여부 필터 (샘플 상태 등과 AND 조합)
+      if (orderFilter === 'ordered' && !isOrderedBySku(r)) return false
+      if (orderFilter === 'unordered' && isOrderedBySku(r)) return false
       if (ms.type !== 'all' && !msMatch(r)) return false
       if (s) {
         const blob = `${pick(r, F.sku)} ${pick(r, F.eng)} ${pick(r, F.chi)}`.toLowerCase()
@@ -262,10 +296,10 @@ export default function StylesPage({ G }) {
       return true
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, search, brand, category, styleStatus, sampleStatus, ms])
+  }, [items, search, brand, category, styleStatus, sampleStatus, orderFilter, moSkuSet, ms])
 
-  const resetFilters = () => { setSearch(''); setBrand(''); setCategory(''); setStyleStatus(''); setSampleStatus(''); setMs({ type: 'all', value: '' }) }
-  const anyFilter = search || brand || category || styleStatus || sampleStatus || ms.type !== 'all'
+  const resetFilters = () => { setSearch(''); setBrand(''); setCategory(''); setStyleStatus(''); setSampleStatus(''); setOrderFilter('all'); setMs({ type: 'all', value: '' }) }
+  const anyFilter = search || brand || category || styleStatus || sampleStatus || orderFilter !== 'all' || ms.type !== 'all'
 
   const inputStyle = { padding: '8px 12px', borderRadius: 8, fontSize: 12, border: `1px solid ${G.border}`, background: G.card, color: G.tx, outline: 'none', fontFamily: 'inherit' }
 
@@ -322,6 +356,25 @@ export default function StylesPage({ G }) {
         })}
       </div>
 
+      {/* ② [신규] 오더 여부 · 下单状态 (MO SKU 대조, 샘플 상태와 AND, 기본 전체) */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap', flexShrink: 0 }}>오더 여부 · 下单状态</span>
+        {[
+          { v: 'all', label: '전체 全部', cnt: orderCounts.all },
+          { v: 'ordered', label: '오더완료 已下单', cnt: orderCounts.ordered },
+          { v: 'unordered', label: '미오더 未下单', cnt: orderCounts.unordered },
+        ].map(o => {
+          const on = orderFilter === o.v
+          return (
+            <button key={o.v} onClick={() => setOrderFilter(o.v)} className="chip"
+              style={{ border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: on ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5 }}>
+              {o.label}
+              <span className="num" style={{ fontSize: 9, padding: '1px 5px', borderRadius: 999, background: on ? G.primary : G.hair, color: on ? '#fff' : G.mu }}>{o.cnt}</span>
+            </button>
+          )
+        })}
+      </div>
+
       {/* ③ [2줄] 월별 · 月份 / 시즌 · 季节 (실제 값 동적 생성, 기본 전체) */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, marginRight: 2, whiteSpace: 'nowrap', flexShrink: 0 }}>월·月 / 시즌·季节</span>
@@ -372,7 +425,7 @@ export default function StylesPage({ G }) {
       ) : (
         <>
           <div className="sty-grid">
-            {visible.map(r => <StyleCard key={recId(r)} G={G} rec={r} onOpen={setSelected} onZoom={setZoomSrc} />)}
+            {visible.map(r => <StyleCard key={recId(r)} G={G} rec={r} ordered={isOrderedBySku(r)} onOpen={setSelected} onZoom={setZoomSrc} />)}
           </div>
           {/* 더 불러오기 (서버 페이지네이션). 필터 적용 중에는 전체 로드를 권장하는 안내 */}
           {hasMore && !anyFilter && (
