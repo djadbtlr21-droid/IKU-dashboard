@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   ClipboardCheck, Search, Lock, Save, X,
   AlertTriangle, Pencil, CheckCircle2, Calendar,
-  ChevronLeft, ChevronRight, MessageSquare, ZoomIn, ChevronUp, ChevronDown, Trash2,
+  ChevronLeft, ChevronRight, MessageSquare, ZoomIn, ChevronUp, ChevronDown, Trash2, RefreshCw,
 } from 'lucide-react'
 import { fetchMoList } from '../api/client'
 import {
@@ -175,11 +175,12 @@ function fieldStr(v) {
 // 원단 정보 (원단이름 / 중량 / 성분) — reuses the same All_MO fields the MO
 // detail view reads: Material_Type, Fabric_Weight, blended(혼방/성분).
 function getFabricInfo(mo) {
-  const name = fieldStr(mo?.Material_Type)
+  // 원단 이름(한/중 명칭) = Fabric_Name · 원단 성분(영문/혼용) = Material_Type
+  const name = fieldStr(mo?.Fabric_Name)
+  const composition = fieldStr(mo?.Material_Type)
   let weight = fieldStr(mo?.Fabric_Weight)
   if (weight && /^\d+(\.\d+)?$/.test(weight)) weight = `${weight}g`
-  const composition = fieldStr(mo?.blended)
-  const parts = [name, weight, composition].filter(Boolean)
+  const parts = [name, composition, weight].filter(Boolean)
   return { name, weight, composition, summary: parts.join(' · '), has: parts.length > 0 }
 }
 
@@ -840,37 +841,28 @@ function SectionToggle({ G, collapsed, onToggle }) {
 // ──────────────────────────────────────────────────────────
 // Process card (one order)
 // ──────────────────────────────────────────────────────────
-function ProcessCard({ G, mo, record, editable, onSaveItem, canMutate, onZoom,
-  collapsedFor, onToggleSection, printMode, checked, onToggleChecked, fabricKv = '', onSaveFabric, onDelete, onOpenDetail }) {
-  const [draftCells, setDraftCells] = useState(null)
-  const [draftRemark, setDraftRemark] = useState(null)
+function ProcessCard({ G, mo, record, editable, onZoom,
+  collapsedFor, onToggleSection, printMode, checked, onToggleChecked, fabricKv = '', onDelete, onOpenDetail, draft, onDraft }) {
   const [confirmDelete, setConfirmDelete] = useState(false)   // ③ 삭제 확인
-  const [draftFabric, setDraftFabric] = useState(null)   // ⑥ 원단명 오버라이드 draft
-  const [saving, setSaving] = useState(false)
+  const itemNo = itemNoOf(mo)
 
   const savedCells = record?.cells || {}
   const savedRemark = record?.remark || ''
 
-  // Collapse state is owned by the parent (item ②, all collapsed by default) so
-  // the print feature (item ④) can read which sections are expanded.
+  // Collapse state is owned by the parent so the print feature can read it.
   const toggleSection = onToggleSection
 
-  const cells = draftCells ?? savedCells
-  const remark = draftRemark ?? savedRemark
-  const dirty = draftCells !== null || draftRemark !== null || draftFabric !== null
+  // ① 컨트롤드: 편집값은 부모 draft 로 일원화(카드 자체 저장 없음, 일괄저장)
+  const cells = (draft && draft.cells) ? draft.cells : savedCells
+  const remark = (draft && draft.remark !== undefined) ? draft.remark : savedRemark
 
-  useEffect(() => {
-    if (!editable) { setDraftCells(null); setDraftRemark(null); setDraftFabric(null) }
-  }, [editable])
-
-  const setCell = useCallback((cellKey, val) => {
-    setDraftCells(prev => {
-      const base = prev ?? savedCells
-      const next = { ...base, [cellKey]: val }
-      if (!val || (!val.v && !val.d && !val.h)) delete next[cellKey]
-      return next
-    })
-  }, [savedCells])
+  const setCell = (cellKey, val) => {
+    const base = (draft && draft.cells) ? draft.cells : savedCells
+    const next = { ...base, [cellKey]: val }
+    if (!val || (!val.v && !val.d && !val.h)) delete next[cellKey]
+    onDraft(itemNo, { cells: next })
+  }
+  const setRemark = (val) => onDraft(itemNo, { remark: val })
 
   const badge = procStatusBadge(mo, G)
   const chiName = typeof mo.Chi_Style_Name === 'string' ? mo.Chi_Style_Name : (mo.Chi_Style_Name?.zc_display_value || '')
@@ -878,29 +870,14 @@ function ProcessCard({ G, mo, record, editable, onSaveItem, canMutate, onZoom,
   const fabric = getFabricInfo(mo)
   const imgUrl = styleImageUrl(mo)
   const legacyFabricName = cells['fabric.fabricName']?.v || ''  // 구버전 process-cell 원단명(폴백)
-  // Zoho 원단값: Material_Type(이미 "원단명 / 성분" 형식) 우선, 없으면 Fabric_Name
-  const zohoFabric = fabric.name || fieldStr(mo?.Fabric_Name) || ''
-  // ⑥ 표시 우선순위: KV 오버라이드 > (구버전 입력) > Zoho 자동값
+  // ③ 원단 "이름" = Fabric_Name 만 사용 (성분 Material_Type 로 fallback 절대 금지)
+  const zohoFabric = fabric.name || ''
+  // 표시 우선순위: KV 사용자입력 > 구버전 입력 > Zoho 원단 이름 (성분 아님)
   const savedFabric = fabricKv || legacyFabricName || zohoFabric
-  const fabricInput = draftFabric ?? savedFabric         // 편집 input 값
+  const fabricInput = (draft && draft.fabric !== undefined) ? draft.fabric : savedFabric
   const displayFabric = savedFabric                       // 읽기 표시 값
+  const setFabric = (val) => onDraft(itemNo, { fabric: val })
   const totalQty = fieldStr(mo?.Plan_Total_Quantity)       // 총 수량 (Zoho)
-
-  const handleSave = async () => {
-    if (saving) return
-    setSaving(true)
-    const cleaned = {}
-    for (const [k, val] of Object.entries(cells)) {
-      if (val && (val.v || val.d || val.h)) cleaned[k] = val
-    }
-    const ok = await onSaveItem(itemNoOf(mo), cleaned, remark)
-    // ⑥ 원단명 오버라이드도 함께 저장 (KV key: fabric:{MO_ID})
-    if (draftFabric !== null && onSaveFabric) {
-      try { await onSaveFabric(itemNoOf(mo), draftFabric.trim()) } catch { /* ignore */ }
-    }
-    setSaving(false)
-    if (ok) { setDraftCells(null); setDraftRemark(null); setDraftFabric(null) }
-  }
 
   // overflow visible so the date-picker popover isn't clipped by the card
   return (
@@ -912,13 +889,6 @@ function ProcessCard({ G, mo, record, editable, onSaveItem, canMutate, onZoom,
           <input type="checkbox" checked={!!checked} onChange={onToggleChecked} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: G.primary }} />
           <span style={{ fontSize: 9.5, color: G.mu, fontWeight: 600 }}>선택 选择</span>
         </label>
-      )}
-      {/* ③ 삭제 버튼 (우상단) — 수정 모드에서만 표시 */}
-      {editable && !printMode && (
-        <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }} title="삭제 · 删除"
-          style={{ position: 'absolute', top: 8, right: 8, zIndex: 5, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: `1px solid ${G.border}`, background: G.card, color: G.bad, boxShadow: G.cardShadow }}>
-          <Trash2 size={13} />
-        </button>
       )}
       {/* ③ 삭제 확인 모달 */}
       {confirmDelete && (
@@ -949,17 +919,33 @@ function ProcessCard({ G, mo, record, editable, onSaveItem, canMutate, onZoom,
             </span>
           )}
         </div>
-        {/* ⑤ 이미지 우측 텍스트 영역 클릭 → MO 상세 모달 */}
-        <div onClick={() => onOpenDetail && onOpenDetail()} title="상세 보기 · 查看详情"
-          style={{ flex: 1, minWidth: 0, cursor: onOpenDetail ? 'pointer' : 'default' }}>
-          {/* ⑥ 오더번호 + 상태 배지 1행 (오더번호 축소·말줄임, 배지 min-width 고정) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
-            <span className="num" style={{ fontSize: 12, fontWeight: 700, color: G.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: '1 1 auto', minWidth: 0 }}>{getMoNumber(mo)}</span>
-            <span style={{ fontSize: 9.5, fontWeight: 700, color: '#fff', background: badge.color, padding: '2px 7px', borderRadius: 999, flexShrink: 0, minWidth: 58, textAlign: 'center', whiteSpace: 'nowrap' }}>
-              {badge.kr}{badge.cn ? ` · ${badge.cn}` : ''}
-            </span>
-            {isShipped(mo) && <span style={{ fontSize: 9, color: G.ok, border: `1px solid ${G.ok}`, padding: '1px 6px', borderRadius: 999, flexShrink: 0, whiteSpace: 'nowrap' }}>출고 已出货</span>}
-          </div>
+        {/* ⑤ 이미지 우측 텍스트 영역 클릭 → MO 상세 모달 (수정 모드에선 모달 비활성) */}
+        <div onClick={() => { if (!editable && onOpenDetail) onOpenDetail() }} title={!editable ? '상세 보기 · 查看详情' : ''}
+          style={{ flex: 1, minWidth: 0, cursor: (!editable && onOpenDetail) ? 'pointer' : 'default' }}>
+          {/* ② 수정 모드: 1행 상태배지(좌)+휴지통(우), 2행 오더번호 — absolute 미사용(flex) */}
+          {editable ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: '#fff', background: badge.color, padding: '2px 7px', borderRadius: 999, minWidth: 58, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                  {badge.kr}{badge.cn ? ` · ${badge.cn}` : ''}
+                </span>
+                {isShipped(mo) && <span style={{ fontSize: 9, color: G.ok, border: `1px solid ${G.ok}`, padding: '1px 6px', borderRadius: 999, whiteSpace: 'nowrap' }}>출고 已出货</span>}
+                <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }} title="삭제 · 删除"
+                  style={{ marginLeft: 'auto', flexShrink: 0, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: `1px solid ${G.border}`, background: G.card, color: G.bad }}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
+              <div className="num" title={getMoNumber(mo)} style={{ fontSize: 12, fontWeight: 700, color: G.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 4 }}>{getMoNumber(mo)}</div>
+            </>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
+              <span className="num" style={{ fontSize: 12, fontWeight: 700, color: G.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: '1 1 auto', minWidth: 0 }}>{getMoNumber(mo)}</span>
+              <span style={{ fontSize: 9.5, fontWeight: 700, color: '#fff', background: badge.color, padding: '2px 7px', borderRadius: 999, flexShrink: 0, minWidth: 58, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                {badge.kr}{badge.cn ? ` · ${badge.cn}` : ''}
+              </span>
+              {isShipped(mo) && <span style={{ fontSize: 9, color: G.ok, border: `1px solid ${G.ok}`, padding: '1px 6px', borderRadius: 999, flexShrink: 0, whiteSpace: 'nowrap' }}>출고 已出货</span>}
+            </div>
+          )}
           <div title={getMoSku(mo)} style={{ fontSize: 11, color: G.tx, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getMoSku(mo)}</div>
           {chiName && <div title={chiName} style={{ fontSize: 11, color: G.mu, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{chiName}</div>}
           {/* ⑤ 수량(件) + 우측 노란 네모 원단명 */}
@@ -972,15 +958,8 @@ function ProcessCard({ G, mo, record, editable, onSaveItem, canMutate, onZoom,
             </span>
           </div>
           {/* ⑤ 원단 성분 수치(중량·혼용률) 표시 제거 — 명칭 배지만 사용 */}
+          {/* ① 카드 내부 저장 버튼 제거 — 일괄저장으로 일원화 */}
         </div>
-        {editable && canMutate && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-            <button onClick={handleSave} disabled={saving || !dirty} className="btn-primary"
-              style={{ minHeight: 32, padding: '6px 10px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 5, opacity: (saving || !dirty) ? 0.5 : 1 }}>
-              <Save size={13} /> {saving ? '저장중 保存中' : '저장 保存'}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Checklist — item ⑥: roomier spacing + 1px divider between sections */}
@@ -1006,8 +985,8 @@ function ProcessCard({ G, mo, record, editable, onSaveItem, canMutate, onZoom,
                 )}
                 {/* ⑥ 원단명/성분 (edit): 제목 바로 우측 input, 저장 시 KV(fabric:{`{MO_ID}`}) */}
                 {sec.id === 'fabric' && editable && (
-                  <input value={fabricInput} onChange={e => setDraftFabric(e.target.value)}
-                    placeholder="원단명 / 성분 · 面料/成分"
+                  <input value={fabricInput} onChange={e => setFabric(e.target.value)}
+                    placeholder="원단 이름 · 面料名称"
                     style={{ flex: 1, minWidth: 0, marginLeft: 4, padding: '4px 8px', borderRadius: 6, fontSize: 11.5, fontWeight: 500, border: `1px solid ${G.border}`, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }} />
                 )}
                 {/* item ②/① — when collapsed, indicator + expand toggle live in the title row */}
@@ -1068,7 +1047,7 @@ function ProcessCard({ G, mo, record, editable, onSaveItem, canMutate, onZoom,
             <span style={{ color: G.accent, marginRight: 5 }}>⑨</span>전체 비고 <span style={{ color: G.mu, fontWeight: 500 }}>整体备注</span>
           </div>
           {editable ? (
-            <textarea value={remark} onChange={e => setDraftRemark(e.target.value)} rows={2}
+            <textarea value={remark} onChange={e => setRemark(e.target.value)} rows={2}
               placeholder="자유 메모 · 自由备注"
               style={{ width: '100%', padding: '8px 10px', fontSize: 12, border: `1px solid ${G.border}`, borderRadius: 8, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
           ) : (
@@ -1111,6 +1090,12 @@ export default function ProcessPage({ G }) {
   const [editMode, setEditMode] = useState(false)
   const [pwOpen, setPwOpen] = useState(false)
   const [password, setPassword] = useState('')
+  // ① 오더완료 일괄저장: 변경 draft { [itemNo]: { cells?, remark?, fabric? } } + 상태
+  const [orderDrafts, setOrderDrafts] = useState({})
+  const [orderSaving, setOrderSaving] = useState(false)
+  const [orderExitConfirm, setOrderExitConfirm] = useState(false)
+  const [styleSaving, setStyleSaving] = useState(false)
+  const [styleExitConfirm, setStyleExitConfirm] = useState(false)
   const [editorName, setEditorName] = useState('')
   const [editorError, setEditorError] = useState(false)
   const [shaking, setShaking] = useState(false)
@@ -1356,13 +1341,18 @@ export default function ProcessPage({ G }) {
 
   // ── edit flow ──
   const onEditClick = () => {
-    if (editMode) { setEditMode(false); setPassword(''); setEditorError(false) }
-    else setPwOpen(true)
+    if (editMode) return   // 편집 종료는 별도 버튼(편집 종료 退出编辑)에서 처리
+    setPwOpen(true)
   }
   const onPwSuccess = (pw) => {
-    setPassword(pw); setPwOpen(false); setEditMode(true)
+    setPassword(pw); setPwOpen(false); setEditMode(true); setOrderDrafts({})
     showToast('편집 모드 · 编辑模式', 'ok')
   }
+  const onOrderDraft = useCallback((itemNo, partial) => {
+    setOrderDrafts(d => ({ ...d, [itemNo]: { ...d[itemNo], ...partial } }))
+  }, [])
+  const orderDirty = Object.keys(orderDrafts).length > 0
+  const exitOrderEdit = () => { setEditMode(false); setOrderDrafts({}); setOrderExitConfirm(false); setPassword(''); setEditorError(false) }
 
   // item ② — inline warning + shake + scroll + focus when editor name missing
   const requireEditor = useCallback(() => {
@@ -1377,22 +1367,37 @@ export default function ProcessPage({ G }) {
     return true
   }, [editorName])
 
-  const handleSaveItem = useCallback(async (itemNo, cells, remark) => {
-    if (!requireEditor()) return false
+  // ① 오더완료 일괄저장 — 변경된 모든 카드(공정/비고/원단명) 한꺼번에 KV 저장, 편집모드 유지
+  const batchSaveOrders = useCallback(async () => {
+    if (!requireEditor()) return
+    setOrderSaving(true)
+    let ok = true
     try {
-      const res = await saveProcessItem({ password, editorName: editorName.trim(), itemNo, cells, remark })
-      if (res?.ok) {
-        setProc(p => ({ ...p, items: { ...p.items, [itemNo]: res.record }, lastUpdated: res.record.lastUpdated, lastUpdatedBy: res.record.lastUpdatedBy }))
-        showToast('저장 완료 · 保存成功', 'ok')
-        return true
+      for (const [itemNo, d] of Object.entries(orderDrafts)) {
+        const rec = proc.items[itemNo] || {}
+        if (d.cells !== undefined || d.remark !== undefined) {
+          const cellsSrc = d.cells !== undefined ? d.cells : (rec.cells || {})
+          const cleaned = {}
+          for (const [k, val] of Object.entries(cellsSrc)) if (val && (val.v || val.d || val.h)) cleaned[k] = val
+          const remarkVal = d.remark !== undefined ? d.remark : (rec.remark || '')
+          try {
+            const res = await saveProcessItem({ password, editorName: editorName.trim(), itemNo, cells: cleaned, remark: remarkVal })
+            if (res?.ok) setProc(p => ({ ...p, items: { ...p.items, [itemNo]: res.record }, lastUpdated: res.record.lastUpdated, lastUpdatedBy: res.record.lastUpdatedBy }))
+            else ok = false
+          } catch { ok = false }
+        }
+        if (d.fabric !== undefined) {
+          const v = d.fabric.trim()
+          setMoFabric(prev => { const n = { ...prev }; if (v) n[itemNo] = v; else delete n[itemNo]; return n })
+          try { const r = await saveMoFabric(itemNo, v); if (!r?.ok) ok = false } catch { ok = false }
+        }
       }
-      showToast(res?.message || '저장 실패 · 保存失败', 'bad')
-      return false
-    } catch (err) {
-      showToast(err?.data?.message || '저장 실패 · 保存失败', 'bad')
-      return false
-    }
-  }, [password, editorName, requireEditor, showToast])
+    } catch { ok = false }
+    setOrderSaving(false)
+    if (ok) { setOrderDrafts({}); showToast('일괄저장 완료 · 批量保存成功', 'ok') }   // 편집 모드 유지
+    else showToast('저장 실패 · 保存失败, 다시 시도해주세요', 'bad')
+    return ok
+  }, [orderDrafts, proc.items, password, editorName, requireEditor, showToast])
 
   // ③ 삭제 (오더완료 MO) — 비밀번호 불필요, 복원 없음. Zoho 변경 없음.
   const handleDeleteMo = useCallback((id) => {
@@ -1421,8 +1426,10 @@ export default function ProcessPage({ G }) {
   const onChangeStyleNote = useCallback((sku, value) => {
     setStyleDrafts(prev => ({ ...prev, [sku]: { ...prev[sku], note: value } }))
   }, [])
-  const cancelStyleEdit = useCallback(() => { setStyleEditMode(false); setStyleDrafts({}) }, [])
-  const saveStyleEdit = useCallback(() => {
+  const styleDirty = Object.keys(styleDrafts).length > 0
+  const exitStyleEdit = () => { setStyleEditMode(false); setStyleDrafts({}); setStyleExitConfirm(false) }
+  // ① 미오더 일괄저장 — 편집모드 유지, 스피너
+  const saveStyleEdit = useCallback(async () => {
     const drafts = styleDrafts
     const tasks = []
     const nextFactory = { ...styleMeta.factory }
@@ -1436,11 +1443,17 @@ export default function ProcessPage({ G }) {
       }
     }
     setStyleMeta(prev => ({ ...prev, factory: nextFactory, note: nextNote }))
-    setStyleEditMode(false); setStyleDrafts({})
-    if (!tasks.length) { showToast('변경 없음 · 无更改', 'ok'); return }
-    Promise.all(tasks)
-      .then(rs => showToast(rs.every(r => r?.ok) ? '저장됨 · 已保存' : '일부 저장 실패 · 部分保存失败', rs.every(r => r?.ok) ? 'ok' : 'bad'))
-      .catch(() => showToast('저장 실패 · 保存失败', 'bad'))
+    if (!tasks.length) { setStyleDrafts({}); showToast('변경 없음 · 无更改', 'ok'); return true }
+    setStyleSaving(true)
+    try {
+      const rs = await Promise.all(tasks)
+      const ok = rs.every(r => r?.ok)
+      setStyleSaving(false); setStyleDrafts({})   // 편집 모드 유지
+      showToast(ok ? '일괄저장 완료 · 批量保存成功' : '저장 실패 · 保存失败, 다시 시도해주세요', ok ? 'ok' : 'bad')
+      return ok
+    } catch {
+      setStyleSaving(false); showToast('저장 실패 · 保存失败, 다시 시도해주세요', 'bad'); return false
+    }
   }, [styleDrafts, styleMeta, showToast])
   const onConvertStyle = useCallback((sku) => {
     setStyleMeta(prev => ({ ...prev, hidden: [...new Set([...(prev.hidden || []), sku])] }))
@@ -1468,16 +1481,6 @@ export default function ProcessPage({ G }) {
 </body></html>`
     win.document.open(); win.document.write(html); win.document.close()
   }, [visibleStyles, styleMeta, showToast])
-
-  // ⑥ 원단명 오버라이드 저장 (key fabric:{MO_ID}) — 카드 저장 시 호출
-  const onSaveFabric = useCallback((id, value) => {
-    setMoFabric(prev => {
-      const next = { ...prev }
-      if (value) next[id] = value; else delete next[id]
-      return next
-    })
-    return saveMoFabric(id, value).catch(() => { /* 토스트는 카드 저장에서 처리 */ })
-  }, [])
 
   // ── print (item ④) ──
   const enterPrintMode = useCallback(() => {
@@ -1671,20 +1674,33 @@ export default function ProcessPage({ G }) {
       {/* HEXIANG 工人情况 위젯 — 전체/HEXIANG 탭에서 표시, 외주공장 탭에서만 숨김 (DOM 유지) */}
       <HexiangFactoryWidget G={G} visible={category !== 'outsource'} />
 
-      {/* ④ 카드 목록 위 우측: 수정·修改 + 프린트 打印 버튼 */}
+      {/* ① 카드 목록 위 우측: 수정 / (수정 모드) 일괄저장 + 편집 종료 + 프린트 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ fontSize: 11, color: G.mu, marginRight: 'auto' }}>
           {loading ? '불러오는 중 · 加载中…' : `${visible.length}개 오더 · ${visible.length} 个订单`}
         </div>
-        <button onClick={onEditClick} className={editMode ? 'btn-primary' : 'btn-ghost'}
-          style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-          {editMode ? <><X size={14} /> 편집 종료 · 退出</> : <><Pencil size={14} /> 수정 · 修改</>}
-        </button>
-        {!editMode && (
-          <button onClick={enterPrintMode} disabled={loading || procLoading || visible.length === 0} className="btn-ghost"
-            style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: (loading || procLoading || visible.length === 0) ? 0.5 : 1 }}>
-            🖨 프린트 打印
-          </button>
+        {editMode ? (
+          <>
+            <button onClick={batchSaveOrders} disabled={orderSaving} className="btn-primary"
+              style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: orderSaving ? 0.6 : 1 }}>
+              {orderSaving ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={14} />} 일괄저장 批量保存
+            </button>
+            <button onClick={() => { if (orderDirty) setOrderExitConfirm(true); else exitOrderEdit() }} className="btn-ghost"
+              style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <X size={14} /> 편집 종료 退出编辑
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={onEditClick} disabled={styleEditMode} title={styleEditMode ? '미오더 수정 중 · 未下单编辑中' : ''} className="btn-ghost"
+              style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: styleEditMode ? 0.5 : 1 }}>
+              <Pencil size={14} /> 수정 修改
+            </button>
+            <button onClick={enterPrintMode} disabled={loading || procLoading || visible.length === 0} className="btn-ghost"
+              style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: (loading || procLoading || visible.length === 0) ? 0.5 : 1 }}>
+              🖨 프린트 打印
+            </button>
+          </>
         )}
       </div>
 
@@ -1706,8 +1722,6 @@ export default function ProcessPage({ G }) {
               key={itemNoOf(mo)} G={G} mo={mo}
               record={proc.items[itemNoOf(mo)]}
               editable={editMode}
-              canMutate={editMode}
-              onSaveItem={handleSaveItem}
               onZoom={setZoomSrc}
               collapsedFor={(secId) => sectionCollapsed(itemNoOf(mo), secId)}
               onToggleSection={(secId) => toggleCardSection(itemNoOf(mo), secId)}
@@ -1715,7 +1729,8 @@ export default function ProcessPage({ G }) {
               checked={selectedToPrint.has(itemNoOf(mo))}
               onToggleChecked={() => togglePrintChecked(itemNoOf(mo))}
               fabricKv={moFabric[itemNoOf(mo)] || ''}
-              onSaveFabric={onSaveFabric}
+              draft={orderDrafts[itemNoOf(mo)]}
+              onDraft={onOrderDraft}
               onDelete={handleDeleteMo}
               onOpenDetail={() => setSelectedMo({ id: itemNoOf(mo), row: mo })}
             />
@@ -1747,16 +1762,16 @@ export default function ProcessPage({ G }) {
           </div>
           {styleEditMode ? (
             <>
-              <button onClick={saveStyleEdit} className="btn-primary" style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Save size={14} /> 저장 · 保存
+              <button onClick={saveStyleEdit} disabled={styleSaving} className="btn-primary" style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: styleSaving ? 0.6 : 1 }}>
+                {styleSaving ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={14} />} 일괄저장 批量保存
               </button>
-              <button onClick={cancelStyleEdit} className="btn-ghost" style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <X size={14} /> 취소 · 取消
+              <button onClick={() => { if (styleDirty) setStyleExitConfirm(true); else exitStyleEdit() }} className="btn-ghost" style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <X size={14} /> 편집 종료 退出编辑
               </button>
             </>
           ) : (
-            <button onClick={() => { setStyleDrafts({}); setStyleEditMode(true) }} className="btn-ghost" style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Pencil size={14} /> 수정 · 修改
+            <button onClick={() => { setStyleDrafts({}); setStyleEditMode(true) }} disabled={editMode} title={editMode ? '오더완료 수정 중 · 下单完成编辑中' : ''} className="btn-ghost" style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: editMode ? 0.5 : 1 }}>
+              <Pencil size={14} /> 수정 修改
             </button>
           )}
           {!styleEditMode && (
@@ -1822,6 +1837,37 @@ export default function ProcessPage({ G }) {
       {selectedMo && <MoDetailModal G={G} mo={selectedMo.row} moId={selectedMo.id} onClose={() => setSelectedMo(null)} />}
       {/* ⑥ 미오더 Style 상세 모달 (Style 탭과 동일 컴포넌트) */}
       {selectedStyle && <StyleDetailModal G={G} rec={selectedStyle} onClose={() => setSelectedStyle(null)} onZoom={setZoomSrc} />}
+
+      {/* ① 편집 종료 — 미저장 변경 확인 모달 (오더완료) */}
+      {orderExitConfirm && (
+        <div onClick={e => { if (e.target === e.currentTarget) setOrderExitConfirm(false) }}
+          style={{ position: 'fixed', inset: 0, background: G.overlayBg, zIndex: 2600, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 12, padding: 20, boxShadow: G.cardShadow, maxWidth: 360, textAlign: 'center' }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: G.tx, marginBottom: 6 }}>저장하지 않은 변경사항이 있습니다. 종료하시겠습니까?</div>
+            <div style={{ fontSize: 11.5, color: G.mu, marginBottom: 16 }}>有未保存的更改，确认退出？</div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button onClick={async () => { const ok = await batchSaveOrders(); if (ok) exitOrderEdit() }} className="btn-primary" style={{ minHeight: 34, padding: '7px 12px', fontSize: 11.5 }}>일괄저장 후 종료 · 保存并退出</button>
+              <button onClick={exitOrderEdit} className="btn-ghost" style={{ minHeight: 34, padding: '7px 12px', fontSize: 11.5, color: G.bad, borderColor: G.bad }}>저장 없이 종료 · 直接退出</button>
+              <button onClick={() => setOrderExitConfirm(false)} className="btn-ghost" style={{ minHeight: 34, padding: '7px 12px', fontSize: 11.5 }}>취소 · 取消</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ① 편집 종료 — 미저장 변경 확인 모달 (미오더) */}
+      {styleExitConfirm && (
+        <div onClick={e => { if (e.target === e.currentTarget) setStyleExitConfirm(false) }}
+          style={{ position: 'fixed', inset: 0, background: G.overlayBg, zIndex: 2600, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 12, padding: 20, boxShadow: G.cardShadow, maxWidth: 360, textAlign: 'center' }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: G.tx, marginBottom: 6 }}>저장하지 않은 변경사항이 있습니다. 종료하시겠습니까?</div>
+            <div style={{ fontSize: 11.5, color: G.mu, marginBottom: 16 }}>有未保存的更改，确认退出？</div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button onClick={async () => { const ok = await saveStyleEdit(); if (ok) exitStyleEdit() }} className="btn-primary" style={{ minHeight: 34, padding: '7px 12px', fontSize: 11.5 }}>일괄저장 후 종료 · 保存并退出</button>
+              <button onClick={exitStyleEdit} className="btn-ghost" style={{ minHeight: 34, padding: '7px 12px', fontSize: 11.5, color: G.bad, borderColor: G.bad }}>저장 없이 종료 · 直接退出</button>
+              <button onClick={() => setStyleExitConfirm(false)} className="btn-ghost" style={{ minHeight: 34, padding: '7px 12px', fontSize: 11.5 }}>취소 · 取消</button>
+            </div>
+          </div>
+        </div>
+      )}
       <Toast toast={toast} G={G} />
     </div>
   )

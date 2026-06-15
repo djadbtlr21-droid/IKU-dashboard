@@ -1031,7 +1031,12 @@ export default function MoDetailModal({ G, mo, moId, moRow, onClose }) {
             <div style={{ marginBottom: 22 }}>
               <SectionTitle G={T} icon={<Layers size={14} style={{ color: T.accent }} />} label="원단 정보 · 面料信息 · Material" />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-                <Field G={T} label="원단 종류 / 面料种类" value={safe(src.Material_Type)} />
+                {/* ④ 원단 面料: [이름] · [성분] (이름 없으면 성분만, 둘 다 없으면 미표시) */}
+                {[safe(src.Fabric_Name), safe(src.Material_Type)].filter(v => v && v !== '—').length > 0 && (
+                  <Field G={T} label="원단 / 面料" value={[safe(src.Fabric_Name), safe(src.Material_Type)].filter(v => v && v !== '—').join(' · ')} />
+                )}
+                <Field G={T} label="원단 이름 / 面料名称" value={safe(src.Fabric_Name)} />
+                <Field G={T} label="원단 성분 / 面料成分" value={safe(src.Material_Type)} />
                 <Field G={T} label="혼방 % / 混纺 %" value={safe(src.blended)} />
                 <Field G={T} label="원단 중량 / 面料克重" value={safe(src.Fabric_Weight)} />
                 <Field G={T} label="안감 / 里料类型" value={safe(src.Lining_Type)} />
