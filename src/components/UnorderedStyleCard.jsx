@@ -12,11 +12,12 @@ import {
 // ──────────────────────────────────────────────────────────
 export default function UnorderedStyleCard({
   G, style, factory, note, editMode, draftFactory, draftNote,
-  onChangeFactory, onChangeNote, onConvert, onDelete, onZoom,
+  onChangeFactory, onChangeNote, onConvert, onDelete, onZoom, onOpenDetail,
 }) {
   const sku = styleKey(style)
   const chi = pick(style, F.chi)
   const brand = pick(style, F.brand)
+  const gender = pick(style, F.gender)
   const category = pick(style, F.category)
   const fabric = pick(style, F.fabric)
   const styleSt = pick(style, F.styleStatus)    // 샘플 상태 (打样状态)
@@ -30,14 +31,16 @@ export default function UnorderedStyleCard({
 
   const inputStyle = { width: '100%', boxSizing: 'border-box', padding: '4px 6px', fontSize: 10, border: `1px solid ${G.border}`, borderRadius: 5, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }
 
-  // ⑤ 항목명(한/중): 값 — 상태값 색/깜빡 적용
-  const statusRow = (kr, cn, val, info) => (
-    <div style={{ display: 'flex', gap: 4, fontSize: 9.5, lineHeight: 1.45 }}>
-      <span style={{ color: G.fa, flexShrink: 0 }}>{kr} {cn}:</span>
-      <span className={info?.blink ? 'mio-blink' : undefined}
-        style={{ color: info?.color || G.tx, fontWeight: info ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val || '—'}</span>
+  // ③ 상태: 라벨(뮤트) + 값(2줄, 말줄임 없음, 상태색/깜빡)
+  const statusBlock = (kr, cn, val, info) => (
+    <div style={{ marginTop: 2 }}>
+      <div style={{ fontSize: 9, color: G.fa }}>{kr} {cn}</div>
+      <div className={info?.blink ? 'mio-blink' : undefined}
+        style={{ fontSize: 9.5, color: info?.color || G.tx, fontWeight: info ? 700 : 500, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35 }}>{val || '미정 未定'}</div>
     </div>
   )
+  const meta = [brand && `브랜드 品牌 ${brand}`, gender && `성별 性别 ${gender}`, category && `분류 分类 ${category}`].filter(Boolean).join(' · ')
+  const stop = (e) => e.stopPropagation()
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'visible', display: 'flex', flexDirection: 'column', position: 'relative' }}>
@@ -47,54 +50,55 @@ export default function UnorderedStyleCard({
         <ZohoImage mo={style} field={imageField(style) || 'Style_Image'} G={G} alt={sku} placeholderText="" iconSize={22} />
       </div>
 
-      {/* ④ 텍스트 영역 */}
-      <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 2.5, flex: 1 }}>
+      {/* ④ 텍스트 영역 — ⑥ 읽기 모드 클릭 시 Style 상세 모달 */}
+      <div onClick={() => { if (!editMode && onOpenDetail) onOpenDetail(style) }}
+        style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 2.5, flex: 1, cursor: (!editMode && onOpenDetail) ? 'pointer' : 'default' }}>
         {/* 1. SKU (+ 수정 모드 시 삭제 버튼) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span className="syne" style={{ fontSize: 11, fontWeight: 700, color: G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{pick(style, F.sku) || sku}</span>
           {editMode && (
-            <button type="button" onClick={() => setConfirmDelete(true)} title="삭제 · 删除"
+            <button type="button" onClick={(e) => { stop(e); setConfirmDelete(true) }} title="삭제 · 删除"
               style={{ flexShrink: 0, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: `1px solid ${G.bad}`, background: 'transparent', color: G.bad }}>
               <Trash2 size={12} />
             </button>
           )}
         </div>
-        {/* 2. 중문 스타일명 */}
-        {chi && <div style={{ fontSize: 9.5, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chi}</div>}
-        {/* 3. 브랜드 品牌 · 분류 分类 */}
-        {(brand || category) && (
-          <div style={{ fontSize: 9, color: G.fa, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {[brand && `品牌 ${brand}`, category && `分类 ${category}`].filter(Boolean).join(' · ')}
-          </div>
-        )}
-        {/* 4. 원단 面料 */}
-        {fabric && <div style={{ fontSize: 9, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><span style={{ color: G.fa }}>面料 </span>{fabric}</div>}
-        {/* 5. 샘플 상태 · 6. 승인 상태 */}
-        {statusRow('샘플 상태', '打样状态', styleSt, sInfo)}
-        {statusRow('승인 상태', '审批状态', sampleSt, aInfo)}
-        {/* 7. 미오더 */}
-        <div style={{ fontSize: 9, fontWeight: 700, color: G.bad }}>미오더 · 未下单</div>
-        {/* 8. 오더예정공장 */}
+        {/* ② 아이템명 货号 */}
+        <div style={{ fontSize: 9.5, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ color: G.fa }}>아이템명 货号: </span>{chi || '미정 未定'}
+        </div>
+        {/* ① 브랜드 品牌 · 성별 性别 · 분류 分类 */}
+        {meta && <div style={{ fontSize: 9, color: G.fa, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta}</div>}
+        {/* 원단 面料 */}
+        {fabric && <div style={{ fontSize: 9, color: G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><span style={{ color: G.fa }}>원단 面料: </span>{fabric}</div>}
+        {/* ③ 샘플 상태 · 승인 상태 (2줄) */}
+        {statusBlock('샘플 상태', '打样状态', styleSt, sInfo)}
+        {statusBlock('승인 상태', '审批状态', sampleSt, aInfo)}
+        {/* 8. 오더예정공장 预计下单工厂 */}
         <div style={{ marginTop: 2 }}>
-          <div style={{ fontSize: 9, color: G.fa }}>预计下单工厂 · 오더예정공장</div>
+          <div style={{ fontSize: 9, color: G.fa }}>오더예정공장 预计下单工厂</div>
           {editMode ? (
-            <input value={draftFactory ?? (factory || '')} maxLength={60} onChange={e => onChangeFactory(sku, e.target.value)} placeholder="공장명 · 工厂名" style={inputStyle} />
+            <input value={draftFactory ?? (factory || '')} maxLength={60} onClick={stop} onChange={e => onChangeFactory(sku, e.target.value)} placeholder="공장명 工厂名" style={inputStyle} />
           ) : (
-            <div style={{ fontSize: 10, color: factory ? G.tx : G.fa, fontWeight: factory ? 600 : 400 }}>{factory || '미정 · 未定'}</div>
+            <div style={{ fontSize: 10, color: factory ? G.tx : G.fa, fontWeight: factory ? 600 : 400 }}>{factory || '미정 未定'}</div>
           )}
         </div>
-        {/* 9. 비고 */}
+        {/* 9. 비고 备注 */}
         <div style={{ marginTop: 2 }}>
-          <div style={{ fontSize: 9, color: G.fa }}>备注 · 비고</div>
+          <div style={{ fontSize: 9, color: G.fa }}>비고 备注</div>
           {editMode ? (
-            <textarea value={draftNote ?? (note || '')} maxLength={300} rows={2} onChange={e => onChangeNote(sku, e.target.value)} placeholder="비고 · 输入备注" style={{ ...inputStyle, resize: 'vertical' }} />
+            <textarea value={draftNote ?? (note || '')} maxLength={300} rows={2} onClick={stop} onChange={e => onChangeNote(sku, e.target.value)} placeholder="비고 输入备注" style={{ ...inputStyle, resize: 'vertical' }} />
           ) : (
-            <div style={{ fontSize: 10, color: note ? G.tx : G.fa, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{note || '—'}</div>
+            <div style={{ fontSize: 10, color: note ? G.tx : G.fa, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{note || '미정 未定'}</div>
           )}
         </div>
-        {/* 10. 오더 전환 (하단 고정) */}
-        <button type="button" onClick={() => setConfirmConvert(true)} className="btn-ghost"
-          style={{ marginTop: 'auto', minHeight: 30, padding: '6px 8px', fontSize: 10.5, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+        {/* ④ 미오더 배지 — 오더 전환 버튼 바로 위, 중앙 정렬 */}
+        <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', justifyContent: 'center' }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: G.bad, padding: '2px 10px', borderRadius: 999 }}>미오더 · 未下单</span>
+        </div>
+        {/* ⑤ 오더 전환 버튼 — 1줄, 100% 폭 */}
+        <button type="button" onClick={(e) => { stop(e); setConfirmConvert(true) }} className="btn-ghost"
+          style={{ marginTop: 4, width: '100%', minHeight: 30, padding: '6px 4px', fontSize: 10, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
           <Check size={12} /> 오더 전환 · 转为已下单
         </button>
       </div>

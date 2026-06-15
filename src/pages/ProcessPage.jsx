@@ -18,6 +18,7 @@ import { SkeletonCard } from '../components/SkeletonLoader'
 import HexiangFactoryWidget from '../components/HexiangFactoryWidget'
 import UnorderedStyleCard from '../components/UnorderedStyleCard'
 import MoDetailModal from '../components/MoDetailModal'
+import StyleDetailModal from '../components/StyleDetailModal'
 
 // ──────────────────────────────────────────────────────────
 // Process checklist schema (한중 병기 / 中韩对照)
@@ -1115,7 +1116,8 @@ export default function ProcessPage({ G }) {
   const [shaking, setShaking] = useState(false)
   const [toast, setToast] = useState(null)
   const [zoomSrc, setZoomSrc] = useState(null)  // image lightbox
-  const [selectedMo, setSelectedMo] = useState(null)  // ⑤ MO 상세 모달 { id, row }
+  const [selectedMo, setSelectedMo] = useState(null)  // MO 상세 모달 { id, row }
+  const [selectedStyle, setSelectedStyle] = useState(null)  // 미오더 Style 상세 모달
   const editorRef = useRef(null)
   const fabricDiagRef = useRef(false)
 
@@ -1796,6 +1798,7 @@ export default function ProcessPage({ G }) {
                   onZoom={setZoomSrc}
                   onConvert={onConvertStyle}
                   onDelete={handleDeleteStyle}
+                  onOpenDetail={(st) => setSelectedStyle(st)}
                 />
               )
             })}
@@ -1815,8 +1818,10 @@ export default function ProcessPage({ G }) {
 
       {pwOpen && <PwModal G={G} onClose={() => setPwOpen(false)} onSuccess={onPwSuccess} />}
       {zoomSrc && <Lightbox src={zoomSrc} onClose={() => setZoomSrc(null)} />}
-      {/* ⑤ MO 상세 모달 (MO View 와 동일) */}
+      {/* MO 상세 모달 (MO View 와 동일) */}
       {selectedMo && <MoDetailModal G={G} mo={selectedMo.row} moId={selectedMo.id} onClose={() => setSelectedMo(null)} />}
+      {/* ⑥ 미오더 Style 상세 모달 (Style 탭과 동일 컴포넌트) */}
+      {selectedStyle && <StyleDetailModal G={G} rec={selectedStyle} onClose={() => setSelectedStyle(null)} onZoom={setZoomSrc} />}
       <Toast toast={toast} G={G} />
     </div>
   )
