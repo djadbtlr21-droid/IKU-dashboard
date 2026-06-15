@@ -95,15 +95,15 @@ function StyleCard({ G, rec, onOpen, onZoom }) {
   const row = (kr, cn, val) => (
     <div style={{ fontSize: 9.5, lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
       <span style={{ color: G.fa }}>{kr} {cn}: </span>
-      <span style={{ color: val ? G.tx : G.fa, fontWeight: val ? 600 : 400 }}>{val || '미정 未定'}</span>
+      <span style={{ color: val ? G.tx : G.fa, fontWeight: val ? 600 : 400 }}>{val || ''}</span>
     </div>
   )
-  // 상태: 라벨 줄 + 값 줄(② 1줄 nowrap+ellipsis+tooltip, 상태색/깜빡)
+  // 상태: 라벨 줄 + 값 줄(② 1줄 nowrap+ellipsis+tooltip, 상태색/깜빡, 빈값 빈칸)
   const statusBlock = (kr, cn, val, info) => (
     <div style={{ marginTop: 2 }}>
       <div style={{ fontSize: 9, color: G.fa }}>{kr} {cn}</div>
       <div className={info?.blink ? 'sty-blink' : undefined} title={val || ''}
-        style={{ fontSize: 9.2, color: info?.color || G.tx, fontWeight: info ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35 }}>{val || '미정 未定'}</div>
+        style={{ fontSize: 9.2, color: info?.color || G.tx, fontWeight: info ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35 }}>{val || ''}</div>
     </div>
   )
 

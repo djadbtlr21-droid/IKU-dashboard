@@ -31,19 +31,19 @@ export default function UnorderedStyleCard({
 
   const inputStyle = { width: '100%', boxSizing: 'border-box', padding: '4px 6px', fontSize: 10, border: `1px solid ${G.border}`, borderRadius: 5, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }
 
-  // 상태: 라벨(뮤트) 줄 + 값 줄(② 1줄 고정 nowrap+ellipsis+tooltip, 상태색/깜빡)
+  // 상태: 라벨(뮤트) 줄 + 값 줄(② 1줄 고정 nowrap+ellipsis+tooltip, 상태색/깜빡) — 폰트 +3%
   const statusBlock = (kr, cn, val, info) => (
     <div style={{ marginTop: 2 }}>
-      <div style={{ fontSize: 9, color: G.fa }}>{kr} {cn}</div>
+      <div style={{ fontSize: 9.3, color: G.fa }}>{kr} {cn}</div>
       <div className={info?.blink ? 'mio-blink' : undefined} title={val || ''}
-        style={{ fontSize: 9.2, color: info?.color || G.tx, fontWeight: info ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35 }}>{val || '미정 未定'}</div>
+        style={{ fontSize: 9.5, color: info?.color || G.tx, fontWeight: info ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35 }}>{val || ''}</div>
     </div>
   )
-  // ③ 항목명(뮤트) : 값(기본) — Style 탭 카드와 동일 패턴
+  // ③ 항목명(뮤트) : 값(기본) — Style 탭 카드와 동일 패턴 (폰트 +3%, 빈값 빈칸)
   const row = (kr, cn, val) => (
-    <div style={{ fontSize: 9.5, lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+    <div style={{ fontSize: 9.8, lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
       <span style={{ color: G.fa }}>{kr} {cn}: </span>
-      <span style={{ color: val ? G.tx : G.fa, fontWeight: val ? 600 : 400 }}>{val || '미정 未定'}</span>
+      <span style={{ color: val ? G.tx : G.fa, fontWeight: val ? 600 : 400 }}>{val || ''}</span>
     </div>
   )
   const stop = (e) => e.stopPropagation()
@@ -69,8 +69,8 @@ export default function UnorderedStyleCard({
             </button>
           )}
         </div>
-        {/* ② 아이템명 货号 · ③ 항목명 뮤트 / 값 기본 */}
-        {row('아이템명', '货号', chi || '미정 未定')}
+        {/* ② 아이템명 货号 · ③ 항목명 뮤트 / 값 기본 (빈값 빈칸) */}
+        {row('아이템명', '货号', chi)}
         {row('브랜드', '品牌', brand)}
         {row('성별', '性别', gender)}
         {row('분류', '分类', category)}
@@ -80,29 +80,29 @@ export default function UnorderedStyleCard({
         {statusBlock('승인 상태', '审批状态', sampleSt, aInfo)}
         {/* 8. 오더예정공장 预计下单工厂 */}
         <div style={{ marginTop: 2 }}>
-          <div style={{ fontSize: 9, color: G.fa }}>오더예정공장 预计下单工厂</div>
+          <div style={{ fontSize: 9.3, color: G.fa }}>오더예정공장 预计下单工厂</div>
           {editMode ? (
             <input value={draftFactory ?? (factory || '')} maxLength={60} onClick={stop} onChange={e => onChangeFactory(sku, e.target.value)} placeholder="공장명 工厂名" style={inputStyle} />
           ) : (
-            <div style={{ fontSize: 10, color: factory ? G.tx : G.fa, fontWeight: factory ? 600 : 400 }}>{factory || '미정 未定'}</div>
+            <div style={{ fontSize: 10.3, color: G.tx, fontWeight: factory ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={factory || ''}>{factory || ''}</div>
           )}
         </div>
-        {/* 9. 비고 备注 */}
+        {/* 9. 비고 备注 (빈값 빈칸) */}
         <div style={{ marginTop: 2 }}>
-          <div style={{ fontSize: 9, color: G.fa }}>비고 备注</div>
+          <div style={{ fontSize: 9.3, color: G.fa }}>비고 备注</div>
           {editMode ? (
             <textarea value={draftNote ?? (note || '')} maxLength={300} rows={2} onClick={stop} onChange={e => onChangeNote(sku, e.target.value)} placeholder="비고 输入备注" style={{ ...inputStyle, resize: 'vertical' }} />
           ) : (
-            <div style={{ fontSize: 10, color: note ? G.tx : G.fa, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{note || '미정 未定'}</div>
+            <div style={{ fontSize: 10.3, color: G.tx, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={note || ''}>{note || ''}</div>
           )}
         </div>
-        {/* ④ 미오더 배지 — 오더 전환 버튼 바로 위, 중앙 정렬 */}
+        {/* ④ 미오더 배지 — 오더 전환 버튼 바로 위, 중앙 정렬 (폰트 +3%) */}
         <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', justifyContent: 'center' }}>
-          <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: G.bad, padding: '2px 10px', borderRadius: 999 }}>미오더 · 未下单</span>
+          <span style={{ fontSize: 9.3, fontWeight: 700, color: '#fff', background: G.bad, padding: '2px 10px', borderRadius: 999 }}>미오더 · 未下单</span>
         </div>
-        {/* ⑤ 오더 전환 버튼 — 1줄, 100% 폭 */}
+        {/* ⑤ 오더 전환 버튼 — 1줄, 100% 폭 (폰트 +3%) */}
         <button type="button" onClick={(e) => { stop(e); setConfirmConvert(true) }} className="btn-ghost"
-          style={{ marginTop: 4, width: '100%', minHeight: 30, padding: '6px 4px', fontSize: 10, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+          style={{ marginTop: 4, width: '100%', minHeight: 30, padding: '6px 4px', fontSize: 10.3, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
           <Check size={12} /> 오더 전환 · 转为已下单
         </button>
       </div>
