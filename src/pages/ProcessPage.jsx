@@ -1877,8 +1877,15 @@ export default function ProcessPage({ G }) {
       {showUnordered && (
       <>
         {/* ── 미오더 섹션 (Style) ── */}
+        {/* ① 전체 모드: 오더완료 ↔ 미오더 간격 80px + 40px 지점 구분선, ② 제목 2배 확대 + 빨간 배지 */}
         {gubun === 'all' && (
-          <div style={{ fontSize: 12, fontWeight: 700, color: G.bad, margin: '8px 0 10px' }}>미오더 · 未下单</div>
+          <div style={{ marginTop: 80, position: 'relative' }}>
+            <div style={{ position: 'absolute', top: -40, left: 0, right: 0, height: 1, background: G.hair }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, color: '#A32D2D', background: '#FCEBEB', border: '1px solid #E24B4A', padding: '3px 12px', borderRadius: 999 }}>미오더 未下单</span>
+              <span style={{ fontSize: 24, fontWeight: 500, color: G.tx }}>미오더 · 未下单</span>
+            </div>
+          </div>
         )}
         {/* 검색 (SKU·영문명·중문명) — 월별/시즌은 위 탭이 필터 역할 */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
