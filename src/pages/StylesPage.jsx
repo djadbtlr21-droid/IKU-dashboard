@@ -101,7 +101,7 @@ function StyleCard({ G, rec, onOpen, onZoom }) {
   // 상태: 라벨 줄 + 값 줄(② 1줄 nowrap+ellipsis+tooltip, 상태색/깜빡, 빈값 빈칸)
   const statusBlock = (kr, cn, val, info) => (
     <div style={{ marginTop: 2 }}>
-      <div style={{ fontSize: 9, color: G.fa }}>{kr} {cn}</div>
+      <div style={{ fontSize: 9, color: G.fa, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{kr} {cn}</div>
       <div className={info?.blink ? 'sty-blink' : undefined} title={val || ''}
         style={{ fontSize: 9.2, color: info?.color || G.tx, fontWeight: info ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35 }}>{val || ''}</div>
     </div>

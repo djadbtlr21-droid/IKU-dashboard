@@ -34,7 +34,7 @@ export default function UnorderedStyleCard({
   // 상태: 라벨(뮤트) 줄 + 값 줄(② 1줄 고정 nowrap+ellipsis+tooltip, 상태색/깜빡) — 폰트 +3%
   const statusBlock = (kr, cn, val, info) => (
     <div style={{ marginTop: 2 }}>
-      <div style={{ fontSize: 9.3, color: G.fa }}>{kr} {cn}</div>
+      <div style={{ fontSize: 9.3, color: G.fa, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{kr} {cn}</div>
       <div className={info?.blink ? 'mio-blink' : undefined} title={val || ''}
         style={{ fontSize: 9.5, color: info?.color || G.tx, fontWeight: info ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35 }}>{val || ''}</div>
     </div>
@@ -80,7 +80,7 @@ export default function UnorderedStyleCard({
         {statusBlock('승인 상태', '审批状态', sampleSt, aInfo)}
         {/* 8. 오더예정공장 预计下单工厂 */}
         <div style={{ marginTop: 2 }}>
-          <div style={{ fontSize: 9.3, color: G.fa }}>오더예정공장 预计下单工厂</div>
+          <div style={{ fontSize: 9.3, color: G.fa, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>오더예정공장 预计下单工厂</div>
           {editMode ? (
             <input value={draftFactory ?? (factory || '')} maxLength={60} onClick={stop} onChange={e => onChangeFactory(sku, e.target.value)} placeholder="공장명 工厂名" style={inputStyle} />
           ) : (
@@ -89,7 +89,7 @@ export default function UnorderedStyleCard({
         </div>
         {/* 9. 비고 备注 (빈값 빈칸) */}
         <div style={{ marginTop: 2 }}>
-          <div style={{ fontSize: 9.3, color: G.fa }}>비고 备注</div>
+          <div style={{ fontSize: 9.3, color: G.fa, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>비고 备注</div>
           {editMode ? (
             <textarea value={draftNote ?? (note || '')} maxLength={300} rows={2} onClick={stop} onChange={e => onChangeNote(sku, e.target.value)} placeholder="비고 输入备注" style={{ ...inputStyle, resize: 'vertical' }} />
           ) : (
