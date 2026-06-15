@@ -60,6 +60,10 @@ const ALL_STATUS = [...STATUS_OPTIONS, ...PRODUCTION_STATUSES, ...PRICE_STATUSES
 // Values treated as "완료" → ✅ + no blink (item ⑧/⑨).
 const DONE_VALUES = new Set(['完成', '已入库', '生产完成', '报价完成'])
 
+// ⑧생산 이하 섹션 — 생산 돌입 자체가 产前确认(생산 전 체크)의 임무 완수이므로,
+// 어떤 상태(裁剪中/裁缝中/包装中/生产完成)를 선택하든 완료(✅·초록, 깜빡임 없음)로 간주한다.
+const ALWAYS_DONE_SECTIONS = new Set(['production'])
+
 // Raw-material sections that may use the 입고완료 已入库 chip (item ③).
 const RAW_SECTIONS = new Set(['fabric', 'sub_material', 'label', 'wash_label'])
 
@@ -129,11 +133,13 @@ function statusLabel(v) {
   return o ? `${o.ko} ${o.cn}` : v
 }
 // 'done' (✅) · 'mid' (red blink) · 'none'
-function chipStatus(cell) {
+// secId 가 ALWAYS_DONE_SECTIONS 면 값이 선택된 즉시 'done' (생산 돌입 = 완료).
+function chipStatus(cell, secId) {
   const v = cell?.v || ''
+  if (!v) return 'none'
+  if (ALWAYS_DONE_SECTIONS.has(secId)) return 'done'
   if (DONE_VALUES.has(v)) return 'done'
-  if (v) return 'mid'
-  return 'none'
+  return 'mid'
 }
 
 // Section aggregate status (chip fields only — dates/text excluded).
@@ -144,6 +150,7 @@ function sectionStatus(sec, cells) {
   const chips = sec.fields.filter(f => f.type === 'chip')
   const selected = chips.filter(f => cells[`${sec.id}.${f.key}`]?.v)
   if (!selected.length) return 'none'
+  if (ALWAYS_DONE_SECTIONS.has(sec.id)) return 'ok'   // ⑧생산: 어떤 상태든 완료
   const anyMid = selected.some(f => !DONE_VALUES.has(cells[`${sec.id}.${f.key}`]?.v))
   return anyMid ? 'warn' : 'ok'
 }
@@ -300,11 +307,14 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
         } else if (f.type === 'text') {
           valHTML = cv ? escapeHtml(cv) : '<span class="empty">— 미입력 未填写</span>'
         } else {
-          const done = DONE_VALUES.has(cv)
+          // ⑧생산 이하 섹션은 어떤 값이든 완료(✅) 처리 (화면과 동일)
+          const aDone = ALWAYS_DONE_SECTIONS.has(sec.id)
+          const done = DONE_VALUES.has(cv) || (aDone && !!cv)
           if (!cv) valHTML = '<span class="empty">— 미선택 未选择</span>'
           else valHTML = `<span class="${done ? 'done' : 'mid'}">${done ? '✅ ' : ''}${escapeHtml(statusLabel(cv))}</span>${cd ? ` <span class="mono">${escapeHtml(cd)}</span>` : ''}`
         }
-        const labelCls = f.type === 'chip' && DONE_VALUES.has(cv) ? 'done' : (f.type === 'chip' && cv ? 'mid' : '')
+        const aDoneLbl = ALWAYS_DONE_SECTIONS.has(sec.id)
+        const labelCls = f.type === 'chip' && (DONE_VALUES.has(cv) || (aDoneLbl && cv)) ? 'done' : (f.type === 'chip' && cv ? 'mid' : '')
         return `<tr><td class="lbl ${labelCls}">${escapeHtml(f.kr)}<br><span class="cn">${escapeHtml(f.cn)}</span></td><td class="val">${valHTML}</td></tr>`
       }).join('')
       const memo = cells[`${sec.id}._memo`]?.v || ''
@@ -763,12 +773,13 @@ function PwModal({ G, onClose, onSuccess }) {
 // ──────────────────────────────────────────────────────────
 // Cell editor — status chips / datepicker / text + highlight toggle
 // ──────────────────────────────────────────────────────────
-function CellEditor({ G, field, cell, editable, allowStock, onChange }) {
+function CellEditor({ G, field, cell, editable, allowStock, onChange, alwaysDone = false }) {
   const v = cell?.v || ''
   const d = cell?.d || ''
   const h = !!cell?.h
   const hlBg = G.dk ? 'rgba(212,165,114,0.18)' : 'rgba(252,211,77,0.28)'
-  const done = DONE_VALUES.has(v)
+  // ⑧생산: 어떤 값이든 선택되면 완료(✅·초록)로 표시
+  const done = DONE_VALUES.has(v) || (alwaysDone && !!v)
 
   if (!editable) {
     const empty = !v && !d
@@ -831,7 +842,7 @@ function CellEditor({ G, field, cell, editable, allowStock, onChange }) {
             <button key={o.v} type="button"
               onClick={() => onChange({ ...cell, v: on ? '' : o.v })}
               style={{ padding: '3px 8px', fontSize: 10.5, borderRadius: 999, cursor: 'pointer', fontWeight: 600, border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.18)' : 'rgba(201,168,110,0.16)') : 'transparent', color: on ? G.accent : G.mu, lineHeight: 1.35 }}>
-              {on && isDone ? '✅ ' : ''}{o.ko} {o.cn}
+              {on && (isDone || alwaysDone) ? '✅ ' : ''}{o.ko} {o.cn}
             </button>
           )
         })}
@@ -948,6 +959,9 @@ function ProcessCard({ G, mo, record, editable, onZoom,
     warnList.push(`${sec.kr} ${mids.map(statusLabel).join('/')}`.trim())
   }
   const allDone = !warnList.length && SECTIONS.every(sec => sectionStatus(sec, cells) === 'ok')
+  // ⑧생산(이하) 섹션에 어떤 상태든 선택되면 "생산 돌입" — 헤더 요약 최우선 표시
+  const productionEntered = SECTIONS.some(sec => ALWAYS_DONE_SECTIONS.has(sec.id)
+    && sec.fields.some(f => f.type === 'chip' && cells[`${sec.id}.${f.key}`]?.v))
 
   // overflow visible so the date-picker popover isn't clipped by the card
   return (
@@ -1033,7 +1047,11 @@ function ProcessCard({ G, mo, record, editable, onZoom,
             </div>
           )}
           {/* ② 경고 항목 요약 — 각 경고를 독립 행(세로 병렬)으로 표시 (빨강 깜빡) / 전체 완료 (초록 정적) */}
-          {warnList.length ? (
+          {productionEntered ? (
+            <div style={{ fontSize: 11, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              ✅ 생산 돌입 · 已进入生产
+            </div>
+          ) : warnList.length ? (
             <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
               {warnList.map((w, i) => (
                 <div key={i} className="iku-blink" title={`⚠ ${w}`}
@@ -1093,7 +1111,7 @@ function ProcessCard({ G, mo, record, editable, onZoom,
                 {sec.fields.map(f => {
                   const cellKey = `${sec.id}.${f.key}`
                   const cell = cells[cellKey]
-                  const st = f.type === 'chip' ? chipStatus(cell) : 'none'
+                  const st = f.type === 'chip' ? chipStatus(cell, sec.id) : 'none'
                   const labelColor = st === 'done' ? G.ok : (st === 'mid' ? G.bad : G.mu)
                   return (
                     <div key={cellKey} style={{ display: 'grid', gridTemplateColumns: '104px 1fr', gap: 8, alignItems: editable ? 'start' : 'center' }}>
@@ -1104,7 +1122,7 @@ function ProcessCard({ G, mo, record, editable, onZoom,
                           <span style={{ color: st === 'none' ? G.fa : labelColor, fontSize: 12.7 }}>{f.cn}</span>
                         </span>
                       </div>
-                      <CellEditor G={G} field={f} cell={cell} editable={editable} allowStock={allowStock} onChange={(val) => setCell(cellKey, val)} />
+                      <CellEditor G={G} field={f} cell={cell} editable={editable} allowStock={allowStock} alwaysDone={ALWAYS_DONE_SECTIONS.has(sec.id)} onChange={(val) => setCell(cellKey, val)} />
                     </div>
                   )
                 })}
