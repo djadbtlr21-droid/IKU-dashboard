@@ -937,6 +937,19 @@ function ProcessCard({ G, mo, record, editable, onZoom,
   const setFabric = (val) => onDraft(itemNo, { fabric: val })
   const totalQty = fieldStr(mo?.Plan_Total_Quantity)       // 총 수량 (Zoho)
 
+  // ② 경고 항목 요약 — 공정 ①~⑧ 중 중간 상태(完成/已入库 아님)가 선택된 섹션
+  const warnList = []
+  for (const sec of SECTIONS) {
+    if (sectionStatus(sec, cells) !== 'warn') continue
+    const mids = sec.fields
+      .filter(f => f.type === 'chip')
+      .map(f => cells[`${sec.id}.${f.key}`]?.v)
+      .filter(v => v && !DONE_VALUES.has(v))
+    warnList.push(`${sec.kr} ${mids.map(statusLabel).join('/')}`.trim())
+  }
+  const warnText = warnList.length ? '⚠ ' + warnList.join(' · ') : ''
+  const allDone = !warnList.length && SECTIONS.every(sec => sectionStatus(sec, cells) === 'ok')
+
   // overflow visible so the date-picker popover isn't clipped by the card
   return (
     <div className="card" style={{ padding: 0, overflow: 'visible', display: 'flex', flexDirection: 'column', outline: printMode && checked ? `2px solid ${G.primary}` : 'none' }}>
@@ -1006,17 +1019,31 @@ function ProcessCard({ G, mo, record, editable, onZoom,
           )}
           <div title={getMoSku(mo)} style={{ fontSize: 11, color: G.tx, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getMoSku(mo)}</div>
           {chiName && <div title={chiName} style={{ fontSize: 11, color: G.mu, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{chiName}</div>}
-          {/* ⑤ 수량(件) + 우측 노란 네모 원단명 */}
+          {/* 🏭 공장 · 📅 월 */}
           <div style={{ fontSize: 10, color: G.fa, marginTop: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span>🏭 {getMoFactory(mo)}</span>
             {monthKey && <span>📅 {monthKey}</span>}
-            {totalQty && <span className="num" style={{ fontWeight: 600, color: G.mu }}>📦 {totalQty}件</span>}
-            <span title={displayFabric || '-'} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, maxWidth: '100%', fontSize: 9.5, fontWeight: 600, color: G.dk ? '#E8C898' : '#8A6D2E', background: G.dk ? 'rgba(232,200,152,0.14)' : 'rgba(252,211,77,0.28)', border: `1px solid ${G.dk ? 'rgba(232,200,152,0.4)' : 'rgba(201,168,110,0.5)'}`, borderRadius: 6, padding: '1px 7px' }}>
-              🧵 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayFabric || '-'}</span>
-            </span>
           </div>
-          {/* ⑤ 원단 성분 수치(중량·혼용률) 표시 제거 — 명칭 배지만 사용 */}
-          {/* ① 카드 내부 저장 버튼 제거 — 일괄저장으로 일원화 */}
+          {/* ① 수량 + 원단 1줄 (말줄임, 2줄 금지, hover tooltip) */}
+          {(totalQty || displayFabric) && (
+            <div title={[totalQty ? `${totalQty}件` : '', displayFabric].filter(Boolean).join(' · ')}
+              style={{ fontSize: 10, color: G.mu, fontWeight: 600, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {totalQty && <span className="num">📦 {totalQty}件</span>}
+              {totalQty && displayFabric && <span style={{ color: G.fa }}> · </span>}
+              {displayFabric && <span>🧵 {displayFabric}</span>}
+            </div>
+          )}
+          {/* ② 경고 항목 요약 (빨강 깜빡) / 전체 완료 (초록 정적) */}
+          {warnText ? (
+            <div className="iku-blink" title={warnText}
+              style={{ fontSize: 10, fontWeight: 700, color: G.bad, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {warnText}
+            </div>
+          ) : allDone ? (
+            <div style={{ fontSize: 10, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              ✅ 전체 완료 · 全部完成
+            </div>
+          ) : null}
         </div>
       </div>
 
