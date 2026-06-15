@@ -900,9 +900,51 @@ function SectionIndicator({ G, status }) {
 function SectionToggle({ G, collapsed, onToggle }) {
   return (
     <button type="button" onClick={onToggle} title={collapsed ? '펴기 展开' : '접기 收起'}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: 'none', border: `1px solid ${G.border}`, borderRadius: 6, cursor: 'pointer', color: G.mu, padding: '2px 7px', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>
-      {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: 'none', border: `1px solid ${G.border}`, borderRadius: 6, cursor: 'pointer', color: G.mu, padding: '3px 8px', fontSize: 13.2, fontWeight: 600, fontFamily: 'inherit' }}>
+      {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
       {collapsed ? '펴기 展开' : '접기 收起'}
+    </button>
+  )
+}
+
+// ──────────────────────────────────────────────────────────
+// C안 통합 필터 패널 — 행(라벨+칩), 칩, 구분선, 행 전환(height) 헬퍼
+// ──────────────────────────────────────────────────────────
+function FilterRow({ G, label, children }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '7px 0' }}>
+      <span style={{ width: 60, flexShrink: 0, fontSize: 11, fontWeight: 600, color: G.mu }}>{label}</span>
+      {children}
+    </div>
+  )
+}
+function PanelDivider({ G }) {
+  return <div style={{ height: 1, background: G.hair }} />
+}
+// 행 표시/숨김 — grid-template-rows 0fr↔1fr 로 height transition 0.2s
+function CollapseRow({ show, children }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateRows: show ? '1fr' : '0fr', transition: 'grid-template-rows .2s ease' }}>
+      <div style={{ overflow: 'hidden', minHeight: 0 }}>{children}</div>
+    </div>
+  )
+}
+// 통합 패널 칩 — tone='ok' 이면 초록(오더완료), 기본은 골드 accent
+function PanelChip({ G, on, onClick, label, cn, count, tone }) {
+  const onColor = tone === 'ok' ? G.ok : G.accent
+  const onBg = tone === 'ok'
+    ? (G.dk ? 'rgba(110,190,140,0.14)' : 'rgba(60,160,90,0.10)')
+    : (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)')
+  const onBorder = tone === 'ok' ? G.ok : G.primary
+  const strongBorder = G.dk ? '#4A453E' : '#D9D0BE'
+  return (
+    <button type="button" onClick={onClick} className="chip" style={{
+      border: `1px solid ${on ? onBorder : strongBorder}`,
+      background: on ? onBg : 'transparent',
+      color: on ? onColor : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6,
+    }}>
+      {label}{cn ? <span style={{ color: on ? onColor : G.mu, fontWeight: 500, opacity: 0.85 }}>{cn}</span> : null}
+      <span className="num" style={{ fontSize: 11, padding: '1px 6px', borderRadius: 999, background: on ? onBorder : G.hair, color: on ? '#fff' : G.mu }}>{count}</span>
     </button>
   )
 }
@@ -1242,9 +1284,9 @@ export default function ProcessPage({ G }) {
   // ③ 삭제 목록 (deleted_mo / deleted_style) — 숨기기 기능 대체
   const [deletions, setDeletions] = useState({ mo: [], style: [] })
 
-  // 데이터 소스 모드: 'ordered'(오더완료/MO) | 'unordered'(미오더/Style)
-  const [mode, setMode] = useState('ordered')
-  const [styleTab, setStyleTab] = useState(null)   // { type:'month'|'season', value }
+  // ── C안 통합 필터: 구분 分类 ('all' 전체 | 'ordered' 오더완료 | 'unordered' 미오더) ──
+  const [gubun, setGubun] = useState('all')
+  const [styleTab, setStyleTab] = useState(null)   // { type:'month'|'season', value } — 시즌·월 행
 
   // 미오더(Style) 데이터 + 메타(공장/비고/숨김)
   const [styleList, setStyleList] = useState([])
@@ -1522,8 +1564,13 @@ export default function ProcessPage({ G }) {
   }, [showToast])
 
   const resetFilters = () => {
-    setCategory('all'); setSubFactory(''); setSearch(''); setFactorySel([]); setMonth(''); setProcFilter('')
+    setGubun('all'); setCategory('all'); setSubFactory(''); setSearch(''); setFactorySel([]); setMonth(''); setProcFilter(''); setStyleTab(null)
   }
+  // 구분 변경 시 하위 행(공장·시즌/월) 선택값 초기화
+  const changeGubun = (g) => { setGubun(g); setCategory('all'); setSubFactory(''); setStyleTab(null) }
+  // 행 표시 조건 + 카드 목록 표시 조건
+  const showOrdered = gubun !== 'unordered'      // 전체·오더완료
+  const showUnordered = gubun !== 'ordered'      // 전체·미오더
 
   // ── 미오더 섹션 통합 수정 모드 (비밀번호 불필요) ──
   const onChangeStyleFactory = useCallback((sku, value) => {
@@ -1613,23 +1660,18 @@ export default function ProcessPage({ G }) {
 
   const inputStyle = { padding: '8px 12px', borderRadius: 8, fontSize: 12, border: `1px solid ${G.border}`, background: G.card, color: G.tx, outline: 'none', fontFamily: 'inherit' }
 
-  const CatTab = ({ id, kr, cn, count }) => {
-    const on = mode === 'ordered' && category === id
-    return (
-      <button onClick={() => { setMode('ordered'); setCategory(id); if (id !== 'outsource') setSubFactory('') }} className="chip" style={{
-        border: `1px solid ${on ? G.primary : G.border}`,
-        background: on ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent',
-        color: on ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6,
-      }}>
-        {kr} <span style={{ color: G.mu, fontWeight: 500 }}>{cn}</span>
-        <span className="num" style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: on ? G.primary : G.hair, color: on ? '#fff' : G.mu }}>{count}</span>
-      </button>
-    )
-  }
+  // 페이지 한정 버튼/칩 스케일·테두리 강화 (10%) — .proc-page 스코프
+  const strongBorder = G.dk ? '#4A453E' : '#D9D0BE'
+  const pageBtnCss = `
+.proc-page .chip{padding:7.7px 15.4px!important;font-size:12.1px!important;min-height:35px!important}
+.proc-page .chip .num{font-size:11px!important}
+.proc-page .btn-ghost{border-color:${strongBorder}}
+`
 
   return (
-    <div style={{ animation: 'fadeIn 0.4s ease' }}>
+    <div className="proc-page" style={{ animation: 'fadeIn 0.4s ease' }}>
       <style>{PAGE_CSS}</style>
+      <style>{pageBtnCss}</style>
 
       {/* Header */}
       <div className="card" style={{ padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, gap: 12, flexWrap: 'wrap' }}>
@@ -1651,50 +1693,60 @@ export default function ProcessPage({ G }) {
         </div>
       </div>
 
-      {/* ── 탭 그룹: 오더완료 下单完成 / 미오더 未下单 ── */}
-      <div style={{ marginBottom: 14 }}>
-        {/* 오더완료 그룹 (기존 MO) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 12px', background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: '10px 10px 0 0' }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: G.accent, marginRight: 4 }}>오더완료 · 下单完成</span>
-          <CatTab id="all" kr="전체" cn="全部" count={catCounts.all} />
-          <CatTab id="hexiang" kr="HEXIANG" cn="合祥" count={catCounts.hx} />
-          <CatTab id="outsource" kr="외주공장" cn="外发工厂" count={catCounts.out} />
-          <span style={{ marginLeft: 'auto', fontSize: 11, color: G.mu }}>총 <b style={{ color: G.tx }}>{catCounts.all}</b>개 오더 · 共{catCounts.all}个订单</span>
+      {/* ── C안 통합 필터 패널 (구분 / 공장 / 시즌·월) ── */}
+      <div style={{ position: 'relative', border: `1px solid ${G.border}`, borderRadius: 12, padding: '12px 16px', marginBottom: 14, background: G.card }}>
+        {/* 우측 상단 총계 (구분에 따라 텍스트 변경) */}
+        <div style={{ position: 'absolute', top: 12, right: 16, fontSize: 11, color: G.mu, textAlign: 'right' }}>
+          {gubun === 'ordered' ? (
+            <>총 <b style={{ color: G.tx }}>{catCounts.all}</b>개 오더 · 共{catCounts.all}个订单</>
+          ) : gubun === 'unordered' ? (
+            <>총 <b style={{ color: G.tx }}>{unorderedStyles.length}</b>개 스타일 · 共{unorderedStyles.length}个款式</>
+          ) : (
+            <>총 <b style={{ color: G.tx }}>{catCounts.all}</b>개 오더 · <b style={{ color: G.tx }}>{unorderedStyles.length}</b>개 스타일 · 共{catCounts.all}个订单·{unorderedStyles.length}个款式</>
+          )}
         </div>
-        {/* 미오더 그룹 (Style) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 12px', background: G.dk ? 'rgba(210,137,113,0.07)' : 'rgba(138,62,46,0.05)', border: `1px solid ${G.hair}`, borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: G.bad, marginRight: 4 }}>미오더 · 未下单</span>
-          {/* 전체 全部 — 기본 선택(styleTab 없음) */}
-          {(() => {
-            const on = mode === 'unordered' && !styleTab
-            return (
-              <button onClick={() => { setMode('unordered'); setStyleTab(null) }} className="chip"
-                style={{ border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: on ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                전체 <span style={{ color: G.mu, fontWeight: 500 }}>全部</span>
-                <span className="num" style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: on ? G.primary : G.hair, color: on ? '#fff' : G.mu }}>{unorderedStyles.length}</span>
-              </button>
-            )
-          })()}
-          {styleLoading ? (
-            <span style={{ fontSize: 11, color: G.fa }}>불러오는 중 · 加载中…</span>
-          ) : unorderedTabs.length === 0 ? (
-            <span style={{ fontSize: 11, color: G.fa }}>미오더 항목 없음 · 暂无未下单</span>
-          ) : unorderedTabs.map(t => {
-            const on = mode === 'unordered' && styleTab && styleTab.type === t.type && styleTab.value === t.value
-            return (
-              <button key={`${t.type}:${t.value}`} onClick={() => { setMode('unordered'); setStyleTab({ type: t.type, value: t.value }) }} className="chip"
-                style={{ border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.12)') : 'transparent', color: on ? G.accent : G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                {t.label}{t.type === 'season' && <span style={{ fontSize: 9, color: G.fa }}>시즌</span>}
-                <span className="num" style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: on ? G.primary : G.hair, color: on ? '#fff' : G.mu }}>{t.count}</span>
-              </button>
-            )
-          })}
-          <span style={{ marginLeft: 'auto', fontSize: 11, color: G.mu }}>총 <b style={{ color: G.tx }}>{unorderedStyles.length}</b>개 스타일 · 共{unorderedStyles.length}个款式</span>
-        </div>
+
+        {/* 행 1 — 구분 分类 (항상 표시) */}
+        <FilterRow G={G} label="구분 分类">
+          <PanelChip G={G} on={gubun === 'all'} onClick={() => changeGubun('all')} label="전체" cn="全部" count={catCounts.all + unorderedStyles.length} />
+          <PanelChip G={G} on={gubun === 'ordered'} onClick={() => changeGubun('ordered')} label="오더완료" cn="已下单" count={catCounts.all} tone="ok" />
+          <PanelChip G={G} on={gubun === 'unordered'} onClick={() => changeGubun('unordered')} label="미오더" cn="未下单" count={unorderedStyles.length} />
+        </FilterRow>
+
+        {/* 행 2 — 공장 工厂 (구분=전체·오더완료 시 표시) */}
+        <CollapseRow show={showOrdered}>
+          <PanelDivider G={G} />
+          <FilterRow G={G} label="공장 工厂">
+            <PanelChip G={G} on={category === 'all'} onClick={() => { setCategory('all'); setSubFactory('') }} label="전체" cn="全部" count={catCounts.all} />
+            <PanelChip G={G} on={category === 'hexiang'} onClick={() => { setCategory('hexiang'); setSubFactory('') }} label="HEXIANG" cn="合祥" count={catCounts.hx} />
+            <PanelChip G={G} on={category === 'outsource'} onClick={() => setCategory('outsource')} label="외주공장" cn="外发工厂" count={catCounts.out} />
+          </FilterRow>
+        </CollapseRow>
+
+        {/* 행 3 — 시즌·월 季节·月份 (구분=전체·미오더 시 표시) */}
+        <CollapseRow show={showUnordered}>
+          <PanelDivider G={G} />
+          <FilterRow G={G} label="시즌·월 季节">
+            <PanelChip G={G} on={!styleTab} onClick={() => setStyleTab(null)} label="전체" cn="全部" count={unorderedStyles.length} />
+            {styleLoading ? (
+              <span style={{ fontSize: 11, color: G.fa }}>불러오는 중 · 加载中…</span>
+            ) : unorderedTabs.length === 0 ? (
+              <span style={{ fontSize: 11, color: G.fa }}>미오더 항목 없음 · 暂无未下单</span>
+            ) : unorderedTabs.map(t => (
+              <PanelChip key={`${t.type}:${t.value}`}
+                G={G} on={!!styleTab && styleTab.type === t.type && styleTab.value === t.value}
+                onClick={() => setStyleTab({ type: t.type, value: t.value })}
+                label={t.type === 'season' ? `${t.label} 시즌` : t.label} cn="" count={t.count} />
+            ))}
+          </FilterRow>
+        </CollapseRow>
       </div>
 
-      {mode === 'ordered' ? (
+      {showOrdered && (
       <>
+      {gubun === 'all' && (
+        <div style={{ fontSize: 12, fontWeight: 700, color: G.accent, margin: '4px 0 10px' }}>오더완료 · 下单完成</div>
+      )}
       {/* Outsource sub-factory chips */}
       {category === 'outsource' && outsourceFactories.length > 0 && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -1733,7 +1785,7 @@ export default function ProcessPage({ G }) {
               <button onClick={c.clear} style={{ background: 'none', border: 'none', cursor: 'pointer', color: G.mu, display: 'flex', padding: 0 }}><X size={11} /></button>
             </span>
           ))}
-          <button onClick={resetFilters} style={{ fontSize: 10.5, color: G.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>전체 초기화 · 重置</button>
+          <button onClick={resetFilters} style={{ fontSize: 11.55, color: G.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>전체 초기화 · 重置</button>
         </div>
       )}
 
@@ -1760,25 +1812,25 @@ export default function ProcessPage({ G }) {
               onChange={e => { setEditorName(e.target.value); if (editorError) setEditorError(false) }}
               onAnimationEnd={() => setShaking(false)}
               placeholder="수정자 이름 · 修改人姓名"
-              style={{ ...inputStyle, minHeight: 36, padding: '7px 12px', width: 170, border: `1px solid ${editorError ? G.bad : G.border}`, animation: shaking ? 'ikuShake .4s ease' : undefined }}
+              style={{ ...inputStyle, minHeight: 40, padding: '8px 13px', width: 180, fontSize: 13.2, border: `1px solid ${editorError ? G.bad : G.border}`, animation: shaking ? 'ikuShake .4s ease' : undefined }}
             />
             <button onClick={batchSaveOrders} disabled={orderSaving} className="btn-primary"
-              style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: orderSaving ? 0.6 : 1 }}>
+              style={{ minHeight: 40, padding: '8px 15px', fontSize: 13.2, display: 'flex', alignItems: 'center', gap: 6, opacity: orderSaving ? 0.6 : 1 }}>
               {orderSaving ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={14} />} 일괄저장 批量保存
             </button>
             <button onClick={() => { if (orderDirty) setOrderExitConfirm(true); else exitOrderEdit() }} className="btn-ghost"
-              style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+              style={{ minHeight: 40, padding: '8px 15px', fontSize: 13.2, display: 'flex', alignItems: 'center', gap: 6 }}>
               <X size={14} /> 편집 종료 退出编辑
             </button>
           </>
         ) : (
           <>
             <button onClick={onEditClick} disabled={styleEditMode} title={styleEditMode ? '미오더 수정 중 · 未下单编辑中' : ''} className="btn-ghost"
-              style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: styleEditMode ? 0.5 : 1 }}>
+              style={{ minHeight: 40, padding: '8px 15px', fontSize: 13.2, display: 'flex', alignItems: 'center', gap: 6, opacity: styleEditMode ? 0.5 : 1 }}>
               <Pencil size={14} /> 수정 修改
             </button>
             <button onClick={enterPrintMode} disabled={loading || procLoading || visible.length === 0} className="btn-ghost"
-              style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: (loading || procLoading || visible.length === 0) ? 0.5 : 1 }}>
+              style={{ minHeight: 40, padding: '8px 15px', fontSize: 13.2, display: 'flex', alignItems: 'center', gap: 6, opacity: (loading || procLoading || visible.length === 0) ? 0.5 : 1 }}>
               🖨 프린트 打印
             </button>
           </>
@@ -1819,9 +1871,14 @@ export default function ProcessPage({ G }) {
         </div>
       )}
       </>
-      ) : (
+      )}
+
+      {showUnordered && (
       <>
         {/* ── 미오더 섹션 (Style) ── */}
+        {gubun === 'all' && (
+          <div style={{ fontSize: 12, fontWeight: 700, color: G.bad, margin: '8px 0 10px' }}>미오더 · 未下单</div>
+        )}
         {/* 검색 (SKU·영문명·중문명) — 월별/시즌은 위 탭이 필터 역할 */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ position: 'relative', flex: '1 1 220px', minWidth: 180 }}>
@@ -1843,21 +1900,21 @@ export default function ProcessPage({ G }) {
           </div>
           {styleEditMode ? (
             <>
-              <button onClick={saveStyleEdit} disabled={styleSaving} className="btn-primary" style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: styleSaving ? 0.6 : 1 }}>
+              <button onClick={saveStyleEdit} disabled={styleSaving} className="btn-primary" style={{ minHeight: 40, padding: '8px 15px', fontSize: 13.2, display: 'flex', alignItems: 'center', gap: 6, opacity: styleSaving ? 0.6 : 1 }}>
                 {styleSaving ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={14} />} 일괄저장 批量保存
               </button>
-              <button onClick={() => { if (styleDirty) setStyleExitConfirm(true); else exitStyleEdit() }} className="btn-ghost" style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button onClick={() => { if (styleDirty) setStyleExitConfirm(true); else exitStyleEdit() }} className="btn-ghost" style={{ minHeight: 40, padding: '8px 15px', fontSize: 13.2, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <X size={14} /> 편집 종료 退出编辑
               </button>
             </>
           ) : (
-            <button onClick={() => { setStyleDrafts({}); setStyleEditMode(true) }} disabled={editMode} title={editMode ? '오더완료 수정 중 · 下单完成编辑中' : ''} className="btn-ghost" style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: editMode ? 0.5 : 1 }}>
+            <button onClick={() => { setStyleDrafts({}); setStyleEditMode(true) }} disabled={editMode} title={editMode ? '오더완료 수정 중 · 下单完成编辑中' : ''} className="btn-ghost" style={{ minHeight: 40, padding: '8px 15px', fontSize: 13.2, display: 'flex', alignItems: 'center', gap: 6, opacity: editMode ? 0.5 : 1 }}>
               <Pencil size={14} /> 수정 修改
             </button>
           )}
           {!styleEditMode && (
             <button onClick={doStylePrint} disabled={styleLoading || visibleStyles.length === 0} className="btn-ghost"
-              style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: (styleLoading || visibleStyles.length === 0) ? 0.5 : 1 }}>
+              style={{ minHeight: 40, padding: '8px 15px', fontSize: 13.2, display: 'flex', alignItems: 'center', gap: 6, opacity: (styleLoading || visibleStyles.length === 0) ? 0.5 : 1 }}>
               🖨 프린트 打印
             </button>
           )}
@@ -1869,7 +1926,7 @@ export default function ProcessPage({ G }) {
           <div style={{ textAlign: 'center', padding: '60px 20px', color: G.mu }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: G.bad }}>데이터를 불러올 수 없습니다 · 无法加载数据</div>
             <div style={{ fontSize: 11, color: G.fa, marginTop: 4, marginBottom: 14 }}>{styleErr}</div>
-            <button onClick={loadStyles} className="btn-primary" style={{ minHeight: 38, padding: '8px 18px', fontSize: 12 }}>재시도 · 重试</button>
+            <button onClick={loadStyles} className="btn-primary" style={{ minHeight: 42, padding: '9px 20px', fontSize: 13.2 }}>재시도 · 重试</button>
           </div>
         ) : visibleStyles.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: G.mu }}>
@@ -1907,8 +1964,8 @@ export default function ProcessPage({ G }) {
       {printMode && (
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 1400, background: G.surf, borderTop: `1px solid ${G.border}`, boxShadow: '0 -4px 16px rgba(0,0,0,0.12)', padding: '12px 16px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: G.tx }}>{selectedToPrint.size}개 선택 · 已选 {selectedToPrint.size} 个</span>
-          <button onClick={doPrint} className="btn-primary" style={{ minHeight: 40, padding: '8px 18px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>🖨 프린트하기 打印</button>
-          <button onClick={() => setPrintMode(false)} className="btn-ghost" style={{ minHeight: 40, padding: '8px 18px', fontSize: 13 }}>취소 取消</button>
+          <button onClick={doPrint} className="btn-primary" style={{ minHeight: 44, padding: '9px 20px', fontSize: 14.3, display: 'flex', alignItems: 'center', gap: 6 }}>🖨 프린트하기 打印</button>
+          <button onClick={() => setPrintMode(false)} className="btn-ghost" style={{ minHeight: 44, padding: '9px 20px', fontSize: 14.3 }}>취소 取消</button>
         </div>
       )}
 
@@ -1927,9 +1984,9 @@ export default function ProcessPage({ G }) {
             <div style={{ fontSize: 13.5, fontWeight: 700, color: G.tx, marginBottom: 6 }}>저장하지 않은 변경사항이 있습니다. 종료하시겠습니까?</div>
             <div style={{ fontSize: 11.5, color: G.mu, marginBottom: 16 }}>有未保存的更改，确认退出？</div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button onClick={async () => { const ok = await batchSaveOrders(); if (ok) exitOrderEdit() }} className="btn-primary" style={{ minHeight: 34, padding: '7px 12px', fontSize: 11.5 }}>일괄저장 후 종료 · 保存并退出</button>
-              <button onClick={exitOrderEdit} className="btn-ghost" style={{ minHeight: 34, padding: '7px 12px', fontSize: 11.5, color: G.bad, borderColor: G.bad }}>저장 없이 종료 · 直接退出</button>
-              <button onClick={() => setOrderExitConfirm(false)} className="btn-ghost" style={{ minHeight: 34, padding: '7px 12px', fontSize: 11.5 }}>취소 · 取消</button>
+              <button onClick={async () => { const ok = await batchSaveOrders(); if (ok) exitOrderEdit() }} className="btn-primary" style={{ minHeight: 37, padding: '8px 13px', fontSize: 12.65 }}>일괄저장 후 종료 · 保存并退出</button>
+              <button onClick={exitOrderEdit} className="btn-ghost" style={{ minHeight: 37, padding: '8px 13px', fontSize: 12.65, color: G.bad, borderColor: G.bad }}>저장 없이 종료 · 直接退出</button>
+              <button onClick={() => setOrderExitConfirm(false)} className="btn-ghost" style={{ minHeight: 37, padding: '8px 13px', fontSize: 12.65 }}>취소 · 取消</button>
             </div>
           </div>
         </div>
@@ -1942,9 +1999,9 @@ export default function ProcessPage({ G }) {
             <div style={{ fontSize: 13.5, fontWeight: 700, color: G.tx, marginBottom: 6 }}>저장하지 않은 변경사항이 있습니다. 종료하시겠습니까?</div>
             <div style={{ fontSize: 11.5, color: G.mu, marginBottom: 16 }}>有未保存的更改，确认退出？</div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button onClick={async () => { const ok = await saveStyleEdit(); if (ok) exitStyleEdit() }} className="btn-primary" style={{ minHeight: 34, padding: '7px 12px', fontSize: 11.5 }}>일괄저장 후 종료 · 保存并退出</button>
-              <button onClick={exitStyleEdit} className="btn-ghost" style={{ minHeight: 34, padding: '7px 12px', fontSize: 11.5, color: G.bad, borderColor: G.bad }}>저장 없이 종료 · 直接退出</button>
-              <button onClick={() => setStyleExitConfirm(false)} className="btn-ghost" style={{ minHeight: 34, padding: '7px 12px', fontSize: 11.5 }}>취소 · 取消</button>
+              <button onClick={async () => { const ok = await saveStyleEdit(); if (ok) exitStyleEdit() }} className="btn-primary" style={{ minHeight: 37, padding: '8px 13px', fontSize: 12.65 }}>일괄저장 후 종료 · 保存并退出</button>
+              <button onClick={exitStyleEdit} className="btn-ghost" style={{ minHeight: 37, padding: '8px 13px', fontSize: 12.65, color: G.bad, borderColor: G.bad }}>저장 없이 종료 · 直接退出</button>
+              <button onClick={() => setStyleExitConfirm(false)} className="btn-ghost" style={{ minHeight: 37, padding: '8px 13px', fontSize: 12.65 }}>취소 · 取消</button>
             </div>
           </div>
         </div>

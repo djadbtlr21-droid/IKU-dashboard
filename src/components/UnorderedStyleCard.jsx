@@ -102,8 +102,8 @@ export default function UnorderedStyleCard({
         </div>
         {/* ⑤ 오더 전환 버튼 — 1줄, 100% 폭 (폰트 +3%) */}
         <button type="button" onClick={(e) => { stop(e); setConfirmConvert(true) }} className="btn-ghost"
-          style={{ marginTop: 4, width: '100%', minHeight: 30, padding: '6px 4px', fontSize: 10.3, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-          <Check size={12} /> 오더 전환 · 转为已下单
+          style={{ marginTop: 4, width: '100%', minHeight: 33, padding: '7px 5px', fontSize: 11.3, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+          <Check size={13} /> 오더 전환 · 转为已下单
         </button>
       </div>
 
