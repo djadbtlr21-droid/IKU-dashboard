@@ -900,8 +900,8 @@ function SectionIndicator({ G, status }) {
 function SectionToggle({ G, collapsed, onToggle }) {
   return (
     <button type="button" onClick={onToggle} title={collapsed ? '펴기 展开' : '접기 收起'}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: 'none', border: `1px solid ${G.border}`, borderRadius: 6, cursor: 'pointer', color: G.mu, padding: '2px 7px', fontSize: 10, fontWeight: 600, fontFamily: 'inherit' }}>
-      {collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: 'none', border: `1px solid ${G.border}`, borderRadius: 6, cursor: 'pointer', color: G.mu, padding: '2px 7px', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>
+      {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
       {collapsed ? '펴기 展开' : '접기 收起'}
     </button>
   )
@@ -1080,7 +1080,7 @@ function ProcessCard({ G, mo, record, editable, onZoom,
             <div key={sec.id} style={{ paddingBottom: 20, borderBottom: `1px solid ${G.hair}` }}>
               {/* section title (number scales with it); flexWrap so right-side
                   items drop below instead of overlapping on narrow cards */}
-              <div style={{ fontSize: 12.65, fontWeight: 700, color: G.tx, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.2 }}>
+              <div style={{ fontSize: 15.18, fontWeight: 700, color: G.tx, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.2 }}>
                 <span><span style={{ color: G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: G.mu, fontWeight: 500 }}>{sec.cn}</span></span>
                 {!editable && <MemoBadge G={G} memo={memo} />}
                 {/* ⑥ 원단명/성분 (read): Zoho 자동값 + KV 오버라이드 우선 — 제목 우측 */}
@@ -1149,7 +1149,7 @@ function ProcessCard({ G, mo, record, editable, onZoom,
 
         {/* ⑨ card-wide 비고 */}
         <div>
-          <div style={{ fontSize: 12.65, fontWeight: 700, color: G.tx, marginBottom: 8, lineHeight: 1.2 }}>
+          <div style={{ fontSize: 15.18, fontWeight: 700, color: G.tx, marginBottom: 8, lineHeight: 1.2 }}>
             <span style={{ color: G.accent, marginRight: 5 }}>⑨</span>전체 비고 <span style={{ color: G.mu, fontWeight: 500 }}>整体备注</span>
           </div>
           {editable ? (
