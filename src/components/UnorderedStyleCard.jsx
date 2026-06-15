@@ -1,174 +1,130 @@
 import { useState } from 'react'
-import { Pencil, Save, X, Check, Factory, MessageSquare, Trash2 } from 'lucide-react'
+import { Check, Trash2 } from 'lucide-react'
 import ZohoImage from './ZohoImage'
 import {
-  F, pick, styleKey, imageField, styleImageUrl, styleStatusBadge,
+  F, pick, styleKey, imageField, styleImageUrl, statusInfo,
 } from '../utils/styleFields'
 
 // ──────────────────────────────────────────────────────────
 // 미오더 스타일 카드 (未下单)
-// 체크리스트 대신: 스타일/샘플 상태 배지 + 오더예정공장 + 비고 + 오더 전환
-// 오더예정공장·비고는 비밀번호 없이 "수정" 버튼 → input → 저장 (KV).
+// 수정 모드는 섹션 단위로 통합 제어(editMode prop). 카드 내 개별 수정 버튼 없음.
+// 이미지 오버레이 없음 — 모든 정보는 이미지 아래 텍스트 영역에 표시.
 // ──────────────────────────────────────────────────────────
-export default function UnorderedStyleCard({ G, style, factory, note, onZoom, onSaveFactory, onSaveNote, onConvert, onDelete }) {
+export default function UnorderedStyleCard({
+  G, style, factory, note, editMode, draftFactory, draftNote,
+  onChangeFactory, onChangeNote, onConvert, onDelete, onZoom,
+}) {
   const sku = styleKey(style)
-  const eng = pick(style, F.eng)
   const chi = pick(style, F.chi)
   const brand = pick(style, F.brand)
   const category = pick(style, F.category)
   const fabric = pick(style, F.fabric)
-  const cost = pick(style, F.cost)
-  const styleSt = pick(style, F.styleStatus)
-  const sampleSt = pick(style, F.sampleStatus)
-  const sb = styleStatusBadge(G, styleSt)
+  const styleSt = pick(style, F.styleStatus)    // 샘플 상태 (打样状态)
+  const sampleSt = pick(style, F.sampleStatus)  // 승인 상태 (审批状态)
   const imgUrl = styleImageUrl(style)
+  const sInfo = statusInfo(G, styleSt)
+  const aInfo = statusInfo(G, sampleSt)
 
-  // 오더 예정 공장 편집
-  const [editFactory, setEditFactory] = useState(false)
-  const [draftFactory, setDraftFactory] = useState(factory || '')
-  // 비고 편집
-  const [editNote, setEditNote] = useState(false)
-  const [draftNote, setDraftNote] = useState(note || '')
-  // 오더 전환 확인
   const [confirmConvert, setConfirmConvert] = useState(false)
-  // 삭제 확인
   const [confirmDelete, setConfirmDelete] = useState(false)
-  // ③ 카드 수정 모드 (삭제 버튼은 수정 모드에서만 표시)
-  const [cardEdit, setCardEdit] = useState(false)
 
-  const startFactory = () => { setDraftFactory(factory || ''); setEditFactory(true) }
-  const saveFactory = () => { onSaveFactory(sku, draftFactory.trim()); setEditFactory(false) }
-  const startNote = () => { setDraftNote(note || ''); setEditNote(true) }
-  const saveNote = () => { onSaveNote(sku, draftNote.trim()); setEditNote(false) }
+  const inputStyle = { width: '100%', boxSizing: 'border-box', padding: '4px 6px', fontSize: 10, border: `1px solid ${G.border}`, borderRadius: 5, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }
 
-  const inputStyle = { width: '100%', boxSizing: 'border-box', padding: '5px 8px', fontSize: 11.5, border: `1px solid ${G.border}`, borderRadius: 6, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }
-  const miniBtn = (extra = {}) => ({ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10.5, fontWeight: 600, padding: '3px 8px', borderRadius: 6, cursor: 'pointer', border: `1px solid ${G.border}`, background: 'transparent', color: G.mu, ...extra })
-
-  const infoLine = (label, val) => val ? (
-    <div style={{ display: 'flex', gap: 6, fontSize: 11, lineHeight: 1.45 }}>
-      <span style={{ color: G.fa, flexShrink: 0 }}>{label}</span>
-      <span style={{ color: G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val}</span>
+  // ⑤ 항목명(한/중): 값 — 상태값 색/깜빡 적용
+  const statusRow = (kr, cn, val, info) => (
+    <div style={{ display: 'flex', gap: 4, fontSize: 9.5, lineHeight: 1.45 }}>
+      <span style={{ color: G.fa, flexShrink: 0 }}>{kr} {cn}:</span>
+      <span className={info?.blink ? 'mio-blink' : undefined}
+        style={{ color: info?.color || G.tx, fontWeight: info ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val || '—'}</span>
     </div>
-  ) : null
+  )
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'visible', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      {/* 이미지 + 상태 배지 */}
-      <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', background: G.cardAlt, borderTopLeftRadius: 12, borderTopRightRadius: 12, overflow: 'hidden' }}>
-        <div style={{ width: '100%', height: '100%', cursor: imgUrl ? 'zoom-in' : 'default' }}
-          onClick={() => { if (imgUrl) onZoom(imgUrl) }}>
-          <ZohoImage mo={style} field={imageField(style) || 'Style_Image'} G={G} alt={sku} placeholderText="No Image · 无图片" />
-        </div>
-        <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-          {sb && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: sb.color, padding: '2px 8px', borderRadius: 999, boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }}>{sb.label}</span>}
-          {sampleSt && <span style={{ fontSize: 9.5, fontWeight: 600, color: G.tx, background: 'rgba(255,255,255,0.88)', padding: '2px 7px', borderRadius: 999 }}>{sampleSt}</span>}
-        </div>
-        {/* ② 미오더 배지(한/중) + ③ 수정 토글 + (수정 모드 시) 삭제 버튼 (우상단) */}
-        <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: G.bad, padding: '2px 7px', borderRadius: 999 }}>미오더 · 未下单</span>
-          {cardEdit && (
-            <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }} title="삭제 · 删除"
-              style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: 'none', background: G.bad, color: '#fff' }}>
+      {/* ③ 이미지 — 오버레이 없음, 고정 높이, object-fit cover, 클릭 시 라이트박스 */}
+      <div style={{ width: '100%', height: 185, background: G.cardAlt, borderTopLeftRadius: 12, borderTopRightRadius: 12, overflow: 'hidden', cursor: imgUrl ? 'zoom-in' : 'default' }}
+        onClick={() => { if (imgUrl) onZoom(imgUrl) }}>
+        <ZohoImage mo={style} field={imageField(style) || 'Style_Image'} G={G} alt={sku} placeholderText="" iconSize={22} />
+      </div>
+
+      {/* ④ 텍스트 영역 */}
+      <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 2.5, flex: 1 }}>
+        {/* 1. SKU (+ 수정 모드 시 삭제 버튼) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span className="syne" style={{ fontSize: 11, fontWeight: 700, color: G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{pick(style, F.sku) || sku}</span>
+          {editMode && (
+            <button type="button" onClick={() => setConfirmDelete(true)} title="삭제 · 删除"
+              style={{ flexShrink: 0, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: `1px solid ${G.bad}`, background: 'transparent', color: G.bad }}>
               <Trash2 size={12} />
             </button>
           )}
-          <button type="button" onClick={(e) => { e.stopPropagation(); setCardEdit(v => !v) }} title={cardEdit ? '완료 完成' : '수정 修改'}
-            style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: 'none', background: 'rgba(0,0,0,0.5)', color: '#fff' }}>
-            {cardEdit ? <X size={12} /> : <Pencil size={12} />}
-          </button>
         </div>
-      </div>
-
-      {/* 정보 */}
-      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <div className="syne" style={{ fontSize: 13.5, fontWeight: 700, color: G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pick(style, F.sku) || sku}</div>
-        {eng && <div style={{ fontSize: 11.5, color: G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{eng}</div>}
-        {chi && <div style={{ fontSize: 11, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chi}</div>}
-        <div style={{ height: 1, background: G.hair, margin: '5px 0' }} />
-        {infoLine('브랜드 品牌', brand)}
-        {infoLine('분류 分类', category)}
-        {infoLine('원단 面料', fabric)}
-        {infoLine('원가 成本', cost)}
-
-        {/* ①② 상태 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 6 }}>
-          <div style={{ display: 'flex', gap: 6, fontSize: 11 }}>
-            <span style={{ color: G.fa, flexShrink: 0, width: 64 }}>样品状态</span>
-            <span style={{ color: styleSt ? G.tx : G.fa, fontWeight: 500 }}>{styleSt || '—'}</span>
+        {/* 2. 중문 스타일명 */}
+        {chi && <div style={{ fontSize: 9.5, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chi}</div>}
+        {/* 3. 브랜드 品牌 · 분류 分类 */}
+        {(brand || category) && (
+          <div style={{ fontSize: 9, color: G.fa, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {[brand && `品牌 ${brand}`, category && `分类 ${category}`].filter(Boolean).join(' · ')}
           </div>
-          <div style={{ display: 'flex', gap: 6, fontSize: 11 }}>
-            <span style={{ color: G.fa, flexShrink: 0, width: 64 }}>打样状态</span>
-            <span style={{ color: sampleSt ? G.tx : G.fa, fontWeight: 500 }}>{sampleSt || '—'}</span>
-          </div>
-        </div>
-
-        {/* ③ 오더 예정 공장 */}
-        <div style={{ marginTop: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 3 }}>
-            <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Factory size={11} /> 오더예정공장 · 预计下单工厂</span>
-            {!editFactory && <button type="button" onClick={startFactory} style={miniBtn()}><Pencil size={10} /> 수정 修改</button>}
-          </div>
-          {editFactory ? (
-            <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-              <input value={draftFactory} maxLength={60} onChange={e => setDraftFactory(e.target.value)} placeholder="공장명 · 工厂名" style={inputStyle} autoFocus />
-              <button type="button" onClick={saveFactory} style={miniBtn({ color: '#fff', background: G.tx, borderColor: G.tx })}><Save size={11} /></button>
-              <button type="button" onClick={() => setEditFactory(false)} style={miniBtn()}><X size={11} /></button>
-            </div>
+        )}
+        {/* 4. 원단 面料 */}
+        {fabric && <div style={{ fontSize: 9, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><span style={{ color: G.fa }}>面料 </span>{fabric}</div>}
+        {/* 5. 샘플 상태 · 6. 승인 상태 */}
+        {statusRow('샘플 상태', '打样状态', styleSt, sInfo)}
+        {statusRow('승인 상태', '审批状态', sampleSt, aInfo)}
+        {/* 7. 미오더 */}
+        <div style={{ fontSize: 9, fontWeight: 700, color: G.bad }}>미오더 · 未下单</div>
+        {/* 8. 오더예정공장 */}
+        <div style={{ marginTop: 2 }}>
+          <div style={{ fontSize: 9, color: G.fa }}>预计下单工厂 · 오더예정공장</div>
+          {editMode ? (
+            <input value={draftFactory ?? (factory || '')} maxLength={60} onChange={e => onChangeFactory(sku, e.target.value)} placeholder="공장명 · 工厂名" style={inputStyle} />
           ) : (
-            <div style={{ fontSize: 11.5, color: factory ? G.tx : G.fa, fontWeight: factory ? 600 : 400 }}>{factory || '미정 · 未定'}</div>
+            <div style={{ fontSize: 10, color: factory ? G.tx : G.fa, fontWeight: factory ? 600 : 400 }}>{factory || '미정 · 未定'}</div>
           )}
         </div>
-
-        {/* ④ 비고 */}
-        <div style={{ marginTop: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 3 }}>
-            <span style={{ fontSize: 10.5, color: G.mu, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}><MessageSquare size={11} /> 비고 · 备注</span>
-            {!editNote && <button type="button" onClick={startNote} style={miniBtn()}><Pencil size={10} /> 수정 修改</button>}
-          </div>
-          {editNote ? (
-            <div style={{ display: 'flex', gap: 5, alignItems: 'flex-start' }}>
-              <textarea value={draftNote} maxLength={300} rows={2} onChange={e => setDraftNote(e.target.value)} placeholder="비고 입력 · 输入备注" style={{ ...inputStyle, resize: 'vertical' }} autoFocus />
-              <button type="button" onClick={saveNote} style={miniBtn({ color: '#fff', background: G.tx, borderColor: G.tx })}><Save size={11} /></button>
-              <button type="button" onClick={() => setEditNote(false)} style={miniBtn()}><X size={11} /></button>
-            </div>
+        {/* 9. 비고 */}
+        <div style={{ marginTop: 2 }}>
+          <div style={{ fontSize: 9, color: G.fa }}>备注 · 비고</div>
+          {editMode ? (
+            <textarea value={draftNote ?? (note || '')} maxLength={300} rows={2} onChange={e => onChangeNote(sku, e.target.value)} placeholder="비고 · 输入备注" style={{ ...inputStyle, resize: 'vertical' }} />
           ) : (
-            <div style={{ fontSize: 11.5, color: note ? G.tx : G.fa, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{note || '—'}</div>
+            <div style={{ fontSize: 10, color: note ? G.tx : G.fa, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{note || '—'}</div>
           )}
         </div>
-
-        {/* 하단 — 오더 전환 */}
+        {/* 10. 오더 전환 (하단 고정) */}
         <button type="button" onClick={() => setConfirmConvert(true)} className="btn-ghost"
-          style={{ marginTop: 10, minHeight: 34, padding: '7px 10px', fontSize: 11.5, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-          <Check size={13} /> 오더 전환 · 转为已下单
+          style={{ marginTop: 'auto', minHeight: 30, padding: '6px 8px', fontSize: 10.5, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+          <Check size={12} /> 오더 전환 · 转为已下单
         </button>
       </div>
 
-      {/* 오더 전환 확인 모달 (카드 위 오버레이) */}
+      {/* 오더 전환 확인 모달 */}
       {confirmConvert && (
         <div onClick={e => { if (e.target === e.currentTarget) setConfirmConvert(false) }}
-          style={{ position: 'absolute', inset: 0, background: G.overlayBg, borderRadius: 12, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 }}>
-          <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, padding: 16, boxShadow: G.cardShadow, textAlign: 'center', maxWidth: 220 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: G.tx, marginBottom: 4 }}>이 스타일이 오더되었나요?</div>
-            <div style={{ fontSize: 11, color: G.mu, marginBottom: 12 }}>该款式已下单了吗？<br /><span style={{ fontSize: 10, color: G.fa }}>목록에서 숨겨집니다 (Zoho 변경 없음)</span></div>
+          style={{ position: 'absolute', inset: 0, background: G.overlayBg, borderRadius: 12, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
+          <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, padding: 14, boxShadow: G.cardShadow, textAlign: 'center', maxWidth: 200 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: G.tx, marginBottom: 4 }}>이 스타일이 오더되었나요?</div>
+            <div style={{ fontSize: 10.5, color: G.mu, marginBottom: 12 }}>该款式已下单了吗？<br /><span style={{ fontSize: 9.5, color: G.fa }}>목록에서 숨겨집니다 (Zoho 변경 없음)</span></div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-              <button type="button" onClick={() => setConfirmConvert(false)} className="btn-ghost" style={{ minHeight: 32, padding: '6px 12px', fontSize: 11 }}>취소 取消</button>
-              <button type="button" onClick={() => { setConfirmConvert(false); onConvert(sku) }} className="btn-primary" style={{ minHeight: 32, padding: '6px 12px', fontSize: 11 }}>확인 确认</button>
+              <button type="button" onClick={() => setConfirmConvert(false)} className="btn-ghost" style={{ minHeight: 30, padding: '6px 12px', fontSize: 11 }}>취소 取消</button>
+              <button type="button" onClick={() => { setConfirmConvert(false); onConvert(sku) }} className="btn-primary" style={{ minHeight: 30, padding: '6px 12px', fontSize: 11 }}>확인 确认</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ③ 삭제 확인 모달 */}
+      {/* 삭제 확인 모달 */}
       {confirmDelete && (
         <div onClick={e => { if (e.target === e.currentTarget) setConfirmDelete(false) }}
-          style={{ position: 'absolute', inset: 0, background: G.overlayBg, borderRadius: 12, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 }}>
-          <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, padding: 16, boxShadow: G.cardShadow, textAlign: 'center', maxWidth: 230 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: G.tx, marginBottom: 4 }}>이 항목을 목록에서 삭제하시겠습니까?</div>
-            <div style={{ fontSize: 11, color: G.mu, marginBottom: 10 }}>确认从列表中删除此项目？</div>
-            <div style={{ fontSize: 10, color: G.fa, marginBottom: 12 }}>Zoho ERP 데이터는 변경되지 않습니다<br />Zoho ERP数据不会被修改</div>
+          style={{ position: 'absolute', inset: 0, background: G.overlayBg, borderRadius: 12, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
+          <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, padding: 14, boxShadow: G.cardShadow, textAlign: 'center', maxWidth: 210 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: G.tx, marginBottom: 4 }}>이 항목을 목록에서 삭제하시겠습니까?</div>
+            <div style={{ fontSize: 10.5, color: G.mu, marginBottom: 8 }}>确认从列表中删除此项目？</div>
+            <div style={{ fontSize: 9.5, color: G.fa, marginBottom: 12 }}>Zoho ERP 데이터는 변경되지 않습니다<br />Zoho ERP数据不会被修改</div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-              <button type="button" onClick={() => setConfirmDelete(false)} className="btn-ghost" style={{ minHeight: 32, padding: '6px 12px', fontSize: 11 }}>취소 取消</button>
-              <button type="button" onClick={() => { setConfirmDelete(false); onDelete(sku) }} className="btn-primary" style={{ minHeight: 32, padding: '6px 12px', fontSize: 11, background: G.bad, borderColor: G.bad }}>확인 确认</button>
+              <button type="button" onClick={() => setConfirmDelete(false)} className="btn-ghost" style={{ minHeight: 30, padding: '6px 12px', fontSize: 11 }}>취소 取消</button>
+              <button type="button" onClick={() => { setConfirmDelete(false); onDelete(sku) }} className="btn-primary" style={{ minHeight: 30, padding: '6px 12px', fontSize: 11, background: G.bad, borderColor: G.bad }}>확인 确认</button>
             </div>
           </div>
         </div>

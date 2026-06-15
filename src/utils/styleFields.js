@@ -114,6 +114,15 @@ export function isInProgress(rec) {
   return /in.?progress|进行|sampling|제작\s*중|제작중/.test(t)
 }
 
+// 상태값 → 색상/깜빡임. In Progress·진행=빨강+깜빡 · 승인됨·활성화·완료=초록 · 그외=뮤트
+export function statusInfo(G, val) {
+  const s = String(val || '').toLowerCase()
+  if (!s) return null
+  if (/in.?progress|进行|sampling|제작\s*중|제작중|진행/.test(s)) return { color: G.bad, blink: true }
+  if (/approved|승인|已批准|active|활성|启用|complete|完成|完了|完工/.test(s)) return { color: G.ok, blink: false }
+  return { color: G.mu, blink: false }
+}
+
 export function fmtTime(s) {
   if (!s) return ''
   const d = new Date(s)

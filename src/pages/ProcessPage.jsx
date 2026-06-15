@@ -493,6 +493,16 @@ const PAGE_CSS = `
 @media(max-width:1150px){.proc-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:860px){.proc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.proc-grid{grid-template-columns:repeat(1,minmax(0,1fr))}}
+/* ⑥ 미오더 카드 그리드 — 1줄 10개 (Style 탭과 동일) */
+.mio-grid{display:grid;gap:10px;align-items:stretch;grid-template-columns:repeat(10,minmax(0,1fr))}
+@media(max-width:1500px){.mio-grid{grid-template-columns:repeat(8,minmax(0,1fr))}}
+@media(max-width:1200px){.mio-grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media(max-width:900px){.mio-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:768px){.mio-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:520px){.mio-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* ⑤ 상태 깜빡임 (opacity 1↔0.25) */
+@keyframes mioBlink {0%,100%{opacity:1}50%{opacity:.25}}
+.mio-blink{animation:mioBlink 1.6s ease-in-out infinite}
 `
 
 // ──────────────────────────────────────────────────────────
@@ -1152,6 +1162,10 @@ export default function ProcessPage({ G }) {
   // ⑥ MO 원단명 오버라이드 (key fabric:{MO_ID}) — KV값 우선
   const [moFabric, setMoFabric] = useState({})
 
+  // 미오더 섹션 통합 수정 모드 + draft (오더예정공장/비고)
+  const [styleEditMode, setStyleEditMode] = useState(false)
+  const [styleDrafts, setStyleDrafts] = useState({})   // { [sku]: { factory?, note? } }
+
   const toastTimer = useRef(null)
   const showToast = useCallback((msg, type = 'ok') => {
     setToast({ msg, type })
@@ -1398,25 +1412,60 @@ export default function ProcessPage({ G }) {
     setCategory('all'); setSubFactory(''); setSearch(''); setFactorySel([]); setMonth(''); setProcFilter('')
   }
 
-  // ── 미오더 메타 저장 (비밀번호 불필요) ──
-  const onSaveStyleFactory = useCallback((sku, value) => {
-    setStyleMeta(prev => ({ ...prev, factory: { ...prev.factory, [sku]: value } }))
-    saveStyleFactory(sku, value)
-      .then(r => showToast(r?.ok ? '저장됨 · 已保存' : '저장 실패 · 保存失败', r?.ok ? 'ok' : 'bad'))
+  // ── 미오더 섹션 통합 수정 모드 (비밀번호 불필요) ──
+  const onChangeStyleFactory = useCallback((sku, value) => {
+    setStyleDrafts(prev => ({ ...prev, [sku]: { ...prev[sku], factory: value } }))
+  }, [])
+  const onChangeStyleNote = useCallback((sku, value) => {
+    setStyleDrafts(prev => ({ ...prev, [sku]: { ...prev[sku], note: value } }))
+  }, [])
+  const cancelStyleEdit = useCallback(() => { setStyleEditMode(false); setStyleDrafts({}) }, [])
+  const saveStyleEdit = useCallback(() => {
+    const drafts = styleDrafts
+    const tasks = []
+    const nextFactory = { ...styleMeta.factory }
+    const nextNote = { ...styleMeta.note }
+    for (const [sku, d] of Object.entries(drafts)) {
+      if (d.factory !== undefined && d.factory.trim() !== (styleMeta.factory[sku] || '')) {
+        const v = d.factory.trim(); nextFactory[sku] = v; tasks.push(saveStyleFactory(sku, v))
+      }
+      if (d.note !== undefined && d.note.trim() !== (styleMeta.note[sku] || '')) {
+        const v = d.note.trim(); nextNote[sku] = v; tasks.push(saveStyleNote(sku, v))
+      }
+    }
+    setStyleMeta(prev => ({ ...prev, factory: nextFactory, note: nextNote }))
+    setStyleEditMode(false); setStyleDrafts({})
+    if (!tasks.length) { showToast('변경 없음 · 无更改', 'ok'); return }
+    Promise.all(tasks)
+      .then(rs => showToast(rs.every(r => r?.ok) ? '저장됨 · 已保存' : '일부 저장 실패 · 部分保存失败', rs.every(r => r?.ok) ? 'ok' : 'bad'))
       .catch(() => showToast('저장 실패 · 保存失败', 'bad'))
-  }, [showToast])
-  const onSaveStyleNote = useCallback((sku, value) => {
-    setStyleMeta(prev => ({ ...prev, note: { ...prev.note, [sku]: value } }))
-    saveStyleNote(sku, value)
-      .then(r => showToast(r?.ok ? '저장됨 · 已保存' : '저장 실패 · 保存失败', r?.ok ? 'ok' : 'bad'))
-      .catch(() => showToast('저장 실패 · 保存失败', 'bad'))
-  }, [showToast])
+  }, [styleDrafts, styleMeta, showToast])
   const onConvertStyle = useCallback((sku) => {
     setStyleMeta(prev => ({ ...prev, hidden: [...new Set([...(prev.hidden || []), sku])] }))
     hideStyle(sku)
       .then(r => showToast(r?.ok ? '오더 전환됨 · 已转为下单' : '실패 · 失败', r?.ok ? 'ok' : 'bad'))
       .catch(() => showToast('실패 · 失败', 'bad'))
   }, [showToast])
+
+  // 미오더 프린트 — 현재 표시 중인 스타일을 간단한 표로 인쇄
+  const doStylePrint = useCallback(() => {
+    if (!visibleStyles.length) { showToast('표시할 스타일이 없습니다 · 无款式', 'bad'); return }
+    let win
+    try { win = window.open('', '_blank') } catch { win = null }
+    if (!win) { showToast('팝업이 차단되었습니다 · 弹窗被拦截', 'bad'); return }
+    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const rows = visibleStyles.map(st => {
+      const sk = styleKey(st)
+      return `<tr><td>${esc(pick(st, SF.sku) || sk)}</td><td>${esc(pick(st, SF.chi))}</td><td>${esc(pick(st, SF.brand))}</td><td>${esc(pick(st, SF.category))}</td><td>${esc(pick(st, SF.fabric))}</td><td>${esc(pick(st, SF.styleStatus))}</td><td>${esc(pick(st, SF.sampleStatus))}</td><td>${esc(styleMeta.factory[sk] || '')}</td><td>${esc(styleMeta.note[sk] || '')}</td></tr>`
+    }).join('')
+    const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>미오더 · 未下单</title>
+<style>body{font-family:'Noto Sans KR','Noto Sans SC',sans-serif;padding:20px;color:#1a1714}h1{font-size:16px;color:#9A7228}table{width:100%;border-collapse:collapse;font-size:11px;margin-top:10px}th,td{border:1px solid #ddd;padding:5px 7px;text-align:left}th{background:#FBF9F4}@media print{.np{display:none}}</style></head>
+<body><div class="np" style="text-align:right"><button onclick="window.print()">인쇄 打印</button></div>
+<h1>미오더 · 未下单 (${visibleStyles.length})</h1>
+<table><thead><tr><th>SKU</th><th>款号</th><th>品牌</th><th>分类</th><th>面料</th><th>打样状态</th><th>审批状态</th><th>预计下单工厂</th><th>备注</th></tr></thead><tbody>${rows}</tbody></table>
+</body></html>`
+    win.document.open(); win.document.write(html); win.document.close()
+  }, [visibleStyles, styleMeta, showToast])
 
   // ⑥ 원단명 오버라이드 저장 (key fabric:{MO_ID}) — 카드 저장 시 호출
   const onSaveFabric = useCallback((id, value) => {
@@ -1689,13 +1738,35 @@ export default function ProcessPage({ G }) {
           )}
         </div>
 
-        {/* 결과 수 */}
-        <div style={{ fontSize: 11, color: G.mu, marginBottom: 12 }}>
-          {styleLoading ? '불러오는 중 · 加载中…' : `${visibleStyles.length}개 스타일 · ${visibleStyles.length} 个款式`}
+        {/* ① 미오더 카드 목록 위 우측: 수정/저장/취소 + 프린트 */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 11, color: G.mu, marginRight: 'auto' }}>
+            {styleLoading ? '불러오는 중 · 加载中…' : `${visibleStyles.length}개 스타일 · ${visibleStyles.length} 个款式`}
+          </div>
+          {styleEditMode ? (
+            <>
+              <button onClick={saveStyleEdit} className="btn-primary" style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Save size={14} /> 저장 · 保存
+              </button>
+              <button onClick={cancelStyleEdit} className="btn-ghost" style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <X size={14} /> 취소 · 取消
+              </button>
+            </>
+          ) : (
+            <button onClick={() => { setStyleDrafts({}); setStyleEditMode(true) }} className="btn-ghost" style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Pencil size={14} /> 수정 · 修改
+            </button>
+          )}
+          {!styleEditMode && (
+            <button onClick={doStylePrint} disabled={styleLoading || visibleStyles.length === 0} className="btn-ghost"
+              style={{ minHeight: 36, padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, opacity: (styleLoading || visibleStyles.length === 0) ? 0.5 : 1 }}>
+              🖨 프린트 打印
+            </button>
+          )}
         </div>
 
         {styleLoading ? (
-          <div className="proc-grid">{[...Array(5)].map((_, i) => <SkeletonCard key={i} G={G} />)}</div>
+          <div className="mio-grid">{[...Array(10)].map((_, i) => <SkeletonCard key={i} G={G} />)}</div>
         ) : styleErr ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: G.mu }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: G.bad }}>데이터를 불러올 수 없습니다 · 无法加载数据</div>
@@ -1709,7 +1780,7 @@ export default function ProcessPage({ G }) {
             <div style={{ fontSize: 12, color: G.fa, marginTop: 4 }}>위 미오더 탭을 선택하거나 검색해 보세요 · 请选择未下单标签或搜索</div>
           </div>
         ) : (
-          <div className="proc-grid">
+          <div className="mio-grid">
             {visibleStyles.map(st => {
               const sk = styleKey(st)
               return (
@@ -1717,9 +1788,12 @@ export default function ProcessPage({ G }) {
                   key={sk} G={G} style={st}
                   factory={styleMeta.factory[sk] || ''}
                   note={styleMeta.note[sk] || ''}
+                  editMode={styleEditMode}
+                  draftFactory={styleDrafts[sk]?.factory}
+                  draftNote={styleDrafts[sk]?.note}
+                  onChangeFactory={onChangeStyleFactory}
+                  onChangeNote={onChangeStyleNote}
                   onZoom={setZoomSrc}
-                  onSaveFactory={onSaveStyleFactory}
-                  onSaveNote={onSaveStyleNote}
                   onConvert={onConvertStyle}
                   onDelete={handleDeleteStyle}
                 />
