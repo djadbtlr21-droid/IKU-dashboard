@@ -31,15 +31,21 @@ export default function UnorderedStyleCard({
 
   const inputStyle = { width: '100%', boxSizing: 'border-box', padding: '4px 6px', fontSize: 10, border: `1px solid ${G.border}`, borderRadius: 5, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }
 
-  // ③ 상태: 라벨(뮤트) + 값(2줄, 말줄임 없음, 상태색/깜빡)
+  // 상태: 라벨(뮤트) 줄 + 값 줄(② 1줄 고정 nowrap+ellipsis+tooltip, 상태색/깜빡)
   const statusBlock = (kr, cn, val, info) => (
     <div style={{ marginTop: 2 }}>
       <div style={{ fontSize: 9, color: G.fa }}>{kr} {cn}</div>
-      <div className={info?.blink ? 'mio-blink' : undefined}
-        style={{ fontSize: 9.5, color: info?.color || G.tx, fontWeight: info ? 700 : 500, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35 }}>{val || '미정 未定'}</div>
+      <div className={info?.blink ? 'mio-blink' : undefined} title={val || ''}
+        style={{ fontSize: 9.2, color: info?.color || G.tx, fontWeight: info ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35 }}>{val || '미정 未定'}</div>
     </div>
   )
-  const meta = [brand && `브랜드 品牌 ${brand}`, gender && `성별 性别 ${gender}`, category && `분류 分类 ${category}`].filter(Boolean).join(' · ')
+  // ③ 항목명(뮤트) : 값(기본) — Style 탭 카드와 동일 패턴
+  const row = (kr, cn, val) => (
+    <div style={{ fontSize: 9.5, lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ color: G.fa }}>{kr} {cn}: </span>
+      <span style={{ color: val ? G.tx : G.fa, fontWeight: val ? 600 : 400 }}>{val || '미정 未定'}</span>
+    </div>
+  )
   const stop = (e) => e.stopPropagation()
 
   return (
@@ -63,14 +69,12 @@ export default function UnorderedStyleCard({
             </button>
           )}
         </div>
-        {/* ② 아이템명 货号 */}
-        <div style={{ fontSize: 9.5, color: G.mu, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          <span style={{ color: G.fa }}>아이템명 货号: </span>{chi || '미정 未定'}
-        </div>
-        {/* ① 브랜드 品牌 · 성별 性别 · 분류 分类 */}
-        {meta && <div style={{ fontSize: 9, color: G.fa, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta}</div>}
-        {/* 원단 面料 */}
-        {fabric && <div style={{ fontSize: 9, color: G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><span style={{ color: G.fa }}>원단 面料: </span>{fabric}</div>}
+        {/* ② 아이템명 货号 · ③ 항목명 뮤트 / 값 기본 */}
+        {row('아이템명', '货号', chi || '미정 未定')}
+        {row('브랜드', '品牌', brand)}
+        {row('성별', '性别', gender)}
+        {row('분류', '分类', category)}
+        {row('원단', '面料', fabric)}
         {/* ③ 샘플 상태 · 승인 상태 (2줄) */}
         {statusBlock('샘플 상태', '打样状态', styleSt, sInfo)}
         {statusBlock('승인 상태', '审批状态', sampleSt, aInfo)}

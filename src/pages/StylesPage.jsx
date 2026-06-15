@@ -5,7 +5,7 @@ import ZohoImage from '../components/ZohoImage'
 import StyleDetailModal from '../components/StyleDetailModal'
 import {
   F, pick, recId, imageField, styleImageUrl,
-  isOrdered, monthOf, monthLabel, seasonOf, hasSizeSpec,
+  isOrdered, monthOf, monthLabel, seasonOf, statusInfo,
 } from '../utils/styleFields'
 
 // ──────────────────────────────────────────────────────────
@@ -25,14 +25,8 @@ const PAGE_CSS = `
 .sty-blink{animation:styBlink 1.6s ease-in-out infinite}
 `
 
-// 상태값 분류 → 색상/깜빡임 (In Progress·진행=빨강깜빡 · 승인됨·완료=초록 · 그외=뮤트)
-function statusInfo(G, val) {
-  const s = String(val || '').toLowerCase()
-  if (!s) return null
-  if (/in.?progress|进行|sampling|제작\s*중|제작중|진행/.test(s)) return { color: G.bad, blink: true }
-  if (/approved|승인|已批准|complete|完成|完了|完工/.test(s)) return { color: G.ok, blink: false }
-  return { color: G.mu, blink: false }
-}
+// 상태값 색상/깜빡임은 ../utils/styleFields 의 statusInfo 공용 사용
+// (Active/Approved=초록 · In Progress/Sampling=빨강+깜빡 · 그외=뮤트)
 
 // Zoho Creator v2.1(이 계정)에서 max_records 가 200 미만이면 HTTP 400(빈 결과)을
 // 반환하는 특성이 있어, 앱 전역(mo-list 등)과 동일하게 200 으로 고정한다.
@@ -92,52 +86,52 @@ function StyleCard({ G, rec, onOpen, onZoom }) {
   const styleSt = pick(rec, F.styleStatus)     // 샘플 상태 (Sampling / Active …)
   const ordered = isOrdered(rec)
   const imgUrl = styleImageUrl(rec)
-  const hasSize = hasSizeSpec(rec)
 
   const sampleInfo = statusInfo(G, styleSt)    // 샘플 상태 색/깜빡
   const approvalInfo = statusInfo(G, sampleSt) // 승인 상태 색/깜빡
   const skuRed = (sampleInfo?.blink || approvalInfo?.blink)   // 제작중이면 SKU 빨강
 
-  // ⑧ 항목명(한/중) : 값  — 항목명 뮤트, 값 기본. info 있으면 값 색/깜빡 적용
-  const row = (kr, cn, val, info) => val ? (
-    <div style={{ display: 'flex', gap: 4, fontSize: 9, lineHeight: 1.45 }}>
-      <span style={{ color: G.fa, flexShrink: 0 }}>{kr} {cn}:</span>
-      <span className={info?.blink ? 'sty-blink' : undefined}
-        style={{ color: info?.color || G.tx, fontWeight: info ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val}</span>
+  // ④ 미오더 카드와 동일 레이아웃: 항목명(뮤트) : 값(기본)
+  const row = (kr, cn, val) => (
+    <div style={{ fontSize: 9.5, lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ color: G.fa }}>{kr} {cn}: </span>
+      <span style={{ color: val ? G.tx : G.fa, fontWeight: val ? 600 : 400 }}>{val || '미정 未定'}</span>
     </div>
-  ) : null
+  )
+  // 상태: 라벨 줄 + 값 줄(② 1줄 nowrap+ellipsis+tooltip, 상태색/깜빡)
+  const statusBlock = (kr, cn, val, info) => (
+    <div style={{ marginTop: 2 }}>
+      <div style={{ fontSize: 9, color: G.fa }}>{kr} {cn}</div>
+      <div className={info?.blink ? 'sty-blink' : undefined} title={val || ''}
+        style={{ fontSize: 9.2, color: info?.color || G.tx, fontWeight: info ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35 }}>{val || '미정 未定'}</div>
+    </div>
+  )
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', cursor: 'pointer' }}
       onClick={() => onOpen(rec)}>
-      {/* ① 이미지 영역 — 오버레이 없음, 고정 높이, object-fit cover, 클릭 시 라이트박스 */}
+      {/* 이미지 — 오버레이 없음, 고정 높이, cover, 클릭 시 라이트박스 */}
       <div style={{ width: '100%', height: 185, background: G.cardAlt }}
         onClick={(e) => { if (imgUrl) { e.stopPropagation(); onZoom(imgUrl) } }}>
         <ZohoImage mo={rec} field={imageField(rec) || 'Style_Image'} G={G} alt={sku} placeholderText="" iconSize={22} />
       </div>
 
-      {/* ② 텍스트 영역 (이미지 아래) — ⑧ 항목명 한/중 병행 */}
+      {/* ④ 텍스트 영역 — 미오더 카드와 동일 구조 */}
       <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 2.5, flex: 1 }}>
-        {/* SKU */}
+        {/* 1. SKU */}
         <div className="syne" style={{ fontSize: 11, fontWeight: 700, color: skuRed ? G.bad : G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sku || '—'}</div>
-        {row('스타일명', '款号', chi)}
+        {/* 2~4. 항목명:값 */}
+        {row('아이템명', '货号', chi)}
         {row('브랜드', '品牌', brand)}
         {row('성별', '性别', gender)}
         {row('분류', '分类', category)}
         {row('원단', '面料', fabric)}
-        {/* 사이즈 — 없음이면 빨강+깜빡 */}
-        <div style={{ display: 'flex', gap: 4, fontSize: 9, lineHeight: 1.45 }}>
-          <span style={{ color: G.fa, flexShrink: 0 }}>사이즈 尺码:</span>
-          <span className={hasSize ? undefined : 'sty-blink'} style={{ color: hasSize ? G.ok : G.bad, fontWeight: 700 }}>
-            {hasSize ? '✓ 있음 有' : '✗ 없음 无尺码'}
-          </span>
-        </div>
-        {row('샘플 상태', '打样状态', styleSt, sampleInfo)}
-        {row('승인 상태', '审批状态', sampleSt, approvalInfo)}
-        {/* 오더 여부 */}
-        <div style={{ display: 'flex', gap: 4, fontSize: 9, lineHeight: 1.45 }}>
-          <span style={{ color: G.fa, flexShrink: 0 }}>오더 여부 下单:</span>
-          <span style={{ color: ordered ? G.ok : G.bad, fontWeight: 700 }}>{ordered ? '오더완료 · 已下单' : '미오더 · 未下单'}</span>
+        {/* 5~6. 샘플/승인 상태 (2줄) */}
+        {statusBlock('샘플 상태', '打样状态', styleSt, sampleInfo)}
+        {statusBlock('승인 상태', '审批状态', sampleSt, approvalInfo)}
+        {/* 9. 미오더/오더완료 배지 (중앙) */}
+        <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', justifyContent: 'center' }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: ordered ? G.ok : G.bad, padding: '2px 10px', borderRadius: 999 }}>{ordered ? '오더완료 · 已下单' : '미오더 · 未下单'}</span>
         </div>
       </div>
     </div>

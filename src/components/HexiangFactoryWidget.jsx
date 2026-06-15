@@ -182,14 +182,12 @@ function PwModal({ G, onClose, onSuccess }) {
 // 읽기 모드: 인원 텍스트 · 비고 텍스트 · 공정명 읽기전용 · "수정" 버튼
 // 편집 모드: 인원 ± · 비고 input · 공정명 input · "저장 / 취소"
 // ──────────────────────────────────────────────────────────
-function WorkerLine({ G, lineIdx, def, line, editing, onRequestEdit, onSave, onCancel, onLiveCount }) {
-  const { count, tasks, remark } = line
-
-  // 편집용 draft — 이 컴포넌트는 editing 토글 시 key 변경으로 remount 되므로
-  // useState 초기값이 그때의 저장값으로 자동 초기화됨(효과 없이).
-  const [dCount, setDCount] = useState(count)
-  const [dTasks, setDTasks] = useState(tasks)
-  const [dRemark, setDRemark] = useState(remark || '')
+function WorkerLine({ G, lineIdx, def, line, editing, draft, onDraft }) {
+  // 컨트롤드: 편집 중엔 draft, 아니면 committed(line) 사용
+  const src = (editing && draft) ? draft : line
+  const count = src.count
+  const tasks = src.tasks || {}
+  const remark = src.remark || ''
 
   // fadein/fadeout 연출용 로컬 인덱스 추적
   const [entering, setEntering] = useState(null)
@@ -200,49 +198,34 @@ function WorkerLine({ G, lineIdx, def, line, editing, onRequestEdit, onSave, onC
   useEffect(() => () => { clearTimeout(enterTimer.current); clearTimeout(leaveTimer.current) }, [])
 
   const add = () => {
-    if (!editing || dCount >= 100 || leaving !== null) return
-    const newIdx = dCount
-    setDCount(dCount + 1)
-    onLiveCount?.(def.id, dCount + 1)   // ⑤ 실시간 합산
+    if (!editing || count >= 100 || leaving !== null) return
+    const newIdx = count
+    onDraft({ count: count + 1 })
     setEntering(newIdx)
     clearTimeout(enterTimer.current)
     enterTimer.current = setTimeout(() => setEntering(null), 320)
   }
 
   const remove = () => {
-    if (!editing || dCount <= 0 || leaving !== null) return
-    const removeIdx = dCount - 1
+    if (!editing || count <= 0 || leaving !== null) return
+    const removeIdx = count - 1
     setLeaving(removeIdx)
     clearTimeout(leaveTimer.current)
-    onLiveCount?.(def.id, removeIdx)   // ⑤ 실시간 합산
     leaveTimer.current = setTimeout(() => {
       setLeaving(null)
-      setDCount(removeIdx)
-      setDTasks(prev => {
-        const t = {}
-        for (const [k, v] of Object.entries(prev)) if (Number(k) < removeIdx) t[k] = v
-        return t
-      })
+      const t = {}
+      for (const [k, v] of Object.entries(tasks)) if (Number(k) < removeIdx) t[k] = v
+      onDraft({ count: removeIdx, tasks: t })
     }, 200)
   }
 
   const onTask = (i, v) => {
-    setDTasks(prev => {
-      const t = { ...prev }
-      if (v) t[String(i)] = v; else delete t[String(i)]
-      return t
-    })
+    const t = { ...tasks }
+    if (v) t[String(i)] = v; else delete t[String(i)]
+    onDraft({ tasks: t })
   }
 
-  const save = () => {
-    const t = {}
-    for (const [k, v] of Object.entries(dTasks)) if (Number(k) < dCount) t[k] = v
-    onSave({ count: dCount, tasks: t, remark: dRemark.trim() })
-  }
-
-  const viewCount = editing ? dCount : count
-  const viewTasks = editing ? dTasks : tasks
-  const total = (editing && leaving !== null) ? Math.max(dCount, leaving + 1) : viewCount
+  const total = (editing && leaving !== null) ? Math.max(count, leaving + 1) : count
   const cells = []
   for (let i = 0; i < total; i++) cells.push(i)
 
@@ -250,15 +233,15 @@ function WorkerLine({ G, lineIdx, def, line, editing, onRequestEdit, onSave, onC
 
   return (
     <div style={{ background: G.cardAlt, border: `0.5px solid ${G.hair}`, borderRadius: 10, padding: 12, minWidth: 0 }}>
-      {/* 헤더: 좌 제목 · 중앙 비고 · 우 컨트롤 */}
+      {/* 헤더: 좌 제목 · 중앙 비고 · 우 인원(+편집 시 ±) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: G.tx, flexShrink: 0 }}>{def.kr}</span>
 
-        {/* ② 라인 비고 (헤더 중앙) */}
+        {/* 라인 비고 (헤더 중앙) */}
         <div style={{ flex: '1 1 140px', minWidth: 120 }}>
           {editing ? (
-            <input type="text" value={dRemark} maxLength={120}
-              onChange={e => setDRemark(e.target.value)}
+            <input type="text" value={remark} maxLength={120}
+              onChange={e => onDraft({ remark: e.target.value })}
               placeholder="라인 비고 입력 · 输入备注"
               style={{ width: '100%', boxSizing: 'border-box', padding: '4px 8px', fontSize: 11, border: `1px solid ${G.border}`, borderRadius: 6, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }} />
           ) : (
@@ -270,30 +253,17 @@ function WorkerLine({ G, lineIdx, def, line, editing, onRequestEdit, onSave, onC
           )}
         </div>
 
-        {/* 우측 컨트롤 */}
+        {/* 우측: 인원 배지 + (편집 시) 인원 조절 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 600, color: G.accent, background: G.dk ? 'rgba(232,200,152,0.12)' : 'rgba(201,168,110,0.14)', border: `1px solid ${G.hair}`, borderRadius: 999, padding: '2px 8px' }}>
-            <Users size={11} /> {viewCount}명 작업 중 · {viewCount}名工人
+            <Users size={11} /> {count}명 작업 중 · {count}名工人
           </span>
-          {editing ? (
-            <>
-              {/* ③ 인원 조절 (편집 모드에서만) */}
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <button type="button" onClick={remove} aria-label="감소" title="감소 减少" style={stepBtnStyle}><Minus size={13} /></button>
-                <span className="num" style={{ minWidth: 18, textAlign: 'center', fontSize: 13, fontWeight: 700, color: G.tx }}>{dCount}</span>
-                <button type="button" onClick={add} aria-label="증가" title="증가 增加" style={stepBtnStyle}><Plus size={13} /></button>
-              </div>
-              <button type="button" onClick={save} className="btn-primary" style={{ minHeight: 30, padding: '5px 11px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Save size={12} /> 저장 保存
-              </button>
-              <button type="button" onClick={onCancel} className="btn-ghost" style={{ minHeight: 30, padding: '5px 11px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <X size={12} /> 취소 取消
-              </button>
-            </>
-          ) : (
-            <button type="button" onClick={onRequestEdit} className="btn-ghost" style={{ minHeight: 30, padding: '5px 11px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Pencil size={12} /> 수정 修改
-            </button>
+          {editing && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <button type="button" onClick={remove} aria-label="감소" title="감소 减少" style={stepBtnStyle}><Minus size={13} /></button>
+              <span className="num" style={{ minWidth: 18, textAlign: 'center', fontSize: 13, fontWeight: 700, color: G.tx }}>{count}</span>
+              <button type="button" onClick={add} aria-label="증가" title="증가 增加" style={stepBtnStyle}><Plus size={13} /></button>
+            </div>
           )}
         </div>
       </div>
@@ -308,7 +278,7 @@ function WorkerLine({ G, lineIdx, def, line, editing, onRequestEdit, onSave, onC
             return (
               <div key={i} className={`hxw-cell ${cls}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                 <input
-                  type="text" maxLength={7} value={viewTasks[String(i)] || ''}
+                  type="text" maxLength={7} value={tasks[String(i)] || ''}
                   onChange={e => onTask(i, e.target.value)}
                   readOnly={!editing}
                   placeholder="공정명 工序"
@@ -335,13 +305,12 @@ export default function HexiangFactoryWidget({ G, visible }) {
   })
   const [loaded, setLoaded] = useState(false)
   const [toast, setToast] = useState(null)   // { type:'ok'|'bad', msg }
-  // ⑤ 실시간 합산 인원 (편집 중 +/- 즉시 반영)
-  const [liveCounts, setLiveCounts] = useState({ old: 15, yoga: 6 })
 
-  // ③ 라인별 편집 상태 + 검증된 비밀번호
-  const [editing, setEditing] = useState({ old: false, yoga: false })
+  // ① 단일 수정 모드 (양쪽 라인 동시 편집) + draft + 검증된 비밀번호
+  const [editMode, setEditMode] = useState(false)
+  const [drafts, setDrafts] = useState(null)     // { old:{count,tasks,remark}, yoga:{...} } | null
   const [password, setPassword] = useState('')
-  const [pwModal, setPwModal] = useState(null)   // { lineId } | null
+  const [pwModal, setPwModal] = useState(false)
 
   // ④ 접기/펴기 (localStorage 유지, 기본값 펼침)
   const [collapsed, setCollapsed] = useState(() => {
@@ -373,7 +342,6 @@ export default function HexiangFactoryWidget({ G, visible }) {
             old: { count: oc, tasks: d.lines.old?.tasks || {}, remark: d.lines.old?.remark || '' },
             yoga: { count: yc, tasks: d.lines.yoga?.tasks || {}, remark: d.lines.yoga?.remark || '' },
           })
-          setLiveCounts({ old: oc, yoga: yc })
         }
       })
       .catch(err => console.error('[HexiangWidget] load', err))
@@ -383,31 +351,37 @@ export default function HexiangFactoryWidget({ G, visible }) {
 
   useEffect(() => () => { clearTimeout(toastTimer.current) }, [])
 
-  // ③ 수정 버튼 → 비밀번호 모달
-  const requestEdit = (lineId) => setPwModal({ lineId })
+  // ① 단일 수정 버튼 → 비밀번호 모달 → 양쪽 라인 동시 편집
+  const requestEdit = () => setPwModal(true)
   const onPwSuccess = (pw) => {
     setPassword(pw)
-    if (pwModal?.lineId) setEditing(e => ({ ...e, [pwModal.lineId]: true }))
-    setPwModal(null)
+    setDrafts({
+      old: { count: lines.old.count, tasks: { ...lines.old.tasks }, remark: lines.old.remark || '' },
+      yoga: { count: lines.yoga.count, tasks: { ...lines.yoga.tasks }, remark: lines.yoga.remark || '' },
+    })
+    setEditMode(true)
+    setPwModal(false)
   }
-
-  // 저장 → KV 기록 후 읽기 모드 복귀 (전체 lines + 비밀번호 전송)
-  const handleSaveLine = useCallback((lineId, draftLine) => {
-    const next = { ...lines, [lineId]: draftLine }
-    setLines(next)
-    setLiveCounts(c => ({ ...c, [lineId]: draftLine.count }))
-    setEditing(e => ({ ...e, [lineId]: false }))
+  const onDraft = useCallback((lineId, partial) => {
+    setDrafts(d => (d ? { ...d, [lineId]: { ...d[lineId], ...partial } } : d))
+  }, [])
+  const cancelEdit = () => { setEditMode(false); setDrafts(null) }
+  const saveEdit = () => {
+    if (!drafts) return
+    const prune = (l) => {
+      const t = {}
+      for (const [k, v] of Object.entries(l.tasks || {})) if (Number(k) < l.count) t[k] = v
+      return { count: l.count, tasks: t, remark: (l.remark || '').trim() }
+    }
+    const next = { old: prune(drafts.old), yoga: prune(drafts.yoga) }
+    setLines(next); setEditMode(false); setDrafts(null)
     saveFactoryConfig(next, password)
-      .then(res => { if (res?.ok) showToast('ok', '저장됨 · 已保存'); else showToast('bad', '저장 실패 · 保存失败') })
+      .then(res => showToast(res?.ok ? 'ok' : 'bad', res?.ok ? '저장됨 · 已保存' : '저장 실패 · 保存失败'))
       .catch(() => showToast('bad', '저장 실패 · 保存失败'))
-  }, [lines, password, showToast])
-
-  const handleCancel = (lineId) => {
-    setLiveCounts(c => ({ ...c, [lineId]: lines[lineId].count }))   // 취소 시 합산 원복
-    setEditing(e => ({ ...e, [lineId]: false }))
   }
-  const onLiveCount = useCallback((lineId, n) => setLiveCounts(c => ({ ...c, [lineId]: n })), [])
-  const totalWorkers = (liveCounts.old || 0) + (liveCounts.yoga || 0)
+  const totalWorkers = (editMode && drafts)
+    ? (drafts.old.count + drafts.yoga.count)
+    : (lines.old.count + lines.yoga.count)
 
   return (
     <div style={{ display: visible ? 'block' : 'none' }} aria-hidden={!visible}>
@@ -424,10 +398,25 @@ export default function HexiangFactoryWidget({ G, visible }) {
           <div style={{ fontSize: 14, fontWeight: 700, color: G.tx }}>
             🏭 HEXIANG 合祥 공인 현황 · 工人情况
           </div>
-          {/* ⑤ 총 투입 인원 (실시간 합산) — ② 크기 30% 확대 */}
-          <span style={{ marginLeft: 'auto', fontSize: 14.3, fontWeight: 600, color: G.mu, background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999, padding: '4px 13px', whiteSpace: 'nowrap' }}>
+          {/* 총 투입 인원 (실시간 합산) — ① 폰트/패딩 10% 축소 */}
+          <span style={{ marginLeft: 'auto', fontSize: 12.9, fontWeight: 600, color: G.mu, background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999, padding: '3.6px 11.7px', whiteSpace: 'nowrap' }}>
             총 <span className="num" style={{ color: G.accent, fontWeight: 700 }}>{totalWorkers}</span>명 투입 · 共{totalWorkers}名投入
           </span>
+          {/* ① 총 투입 인원 우측 단일 수정 버튼 (양쪽 라인 동시 편집) */}
+          {editMode ? (
+            <>
+              <button type="button" onClick={saveEdit} className="btn-primary" style={{ minHeight: 30, padding: '5px 11px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                <Save size={12} /> 저장 保存
+              </button>
+              <button type="button" onClick={cancelEdit} className="btn-ghost" style={{ minHeight: 30, padding: '5px 11px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                <X size={12} /> 취소 取消
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={requestEdit} className="btn-ghost" style={{ minHeight: 30, padding: '5px 11px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              <Pencil size={12} /> 수정 修改
+            </button>
+          )}
         </div>
 
         {/* 본문 — 접힘 시 height 0 트랜지션 */}
@@ -435,13 +424,11 @@ export default function HexiangFactoryWidget({ G, visible }) {
           <div className="hxw-body">
             {LINES.map((def, li) => (
               <WorkerLine
-                key={`${def.id}-${editing[def.id] ? 'edit' : 'read'}`} G={G} lineIdx={li} def={def}
+                key={def.id} G={G} lineIdx={li} def={def}
                 line={lines[def.id]}
-                editing={editing[def.id]}
-                onRequestEdit={() => requestEdit(def.id)}
-                onSave={(draft) => handleSaveLine(def.id, draft)}
-                onCancel={() => handleCancel(def.id)}
-                onLiveCount={onLiveCount}
+                editing={editMode}
+                draft={drafts ? drafts[def.id] : null}
+                onDraft={(partial) => onDraft(def.id, partial)}
               />
             ))}
           </div>
@@ -452,7 +439,7 @@ export default function HexiangFactoryWidget({ G, visible }) {
       </div>
 
       {/* ③ 비밀번호 모달 */}
-      {pwModal && <PwModal G={G} onClose={() => setPwModal(null)} onSuccess={onPwSuccess} />}
+      {pwModal && <PwModal G={G} onClose={() => setPwModal(false)} onSuccess={onPwSuccess} />}
 
       {/* 조용한 토스트 */}
       {toast && (
