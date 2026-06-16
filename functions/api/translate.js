@@ -17,24 +17,32 @@ export async function onRequest({ request, env }) {
 
   const apiKey = env.GEMINI_API_KEY
 
-  // ── 1순위: Gemini API 직접 호출 ──
+  // ── 1순위: Gemini API 직접 호출 (gemini-chat.js 와 동일 모델) ──
+  let lastErr = ''
   if (apiKey) {
-    const model = 'gemini-2.5-flash'
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
-    const body = {
-      system_instruction: { parts: [{ text: SYS_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } },
-    }
-    try {
-      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      if (r.ok) {
-        const data = await r.json()
-        const out = (data?.candidates?.[0]?.content?.parts || []).map(p => p?.text || '').join('').trim()
-        if (out) return json({ ok: true, translation: out, source: 'gemini' })
+    // gemini-chat.js 가 쓰는 모델을 우선, 실패 시 안정 모델로 폴백
+    const models = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-1.5-flash']
+    for (const model of models) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
+      const body = {
+        system_instruction: { parts: [{ text: SYS_PROMPT }] },
+        contents: [{ role: 'user', parts: [{ text }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
       }
-      // fall through to proxy on non-OK / empty
-    } catch { /* fall through */ }
+      try {
+        const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        if (r.ok) {
+          const data = await r.json()
+          const out = (data?.candidates?.[0]?.content?.parts || []).map(p => p?.text || '').join('').trim()
+          if (out) return json({ ok: true, translation: out, source: 'gemini:' + model })
+          lastErr = 'empty:' + model
+        } else {
+          lastErr = `${model}:${r.status}:${(await r.text()).slice(0, 120)}`
+        }
+      } catch (e) { lastErr = `${model}:ex:${e.message}` }
+    }
+  } else {
+    lastErr = 'no-key'
   }
 
   // ── 2순위: 기존 JEMINI 프록시 폴백 ──
@@ -51,8 +59,11 @@ export async function onRequest({ request, env }) {
         data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
       ).trim()
       if (out) return json({ ok: true, translation: out, source: 'proxy' })
+      lastErr += ' | proxy:empty'
+    } else {
+      lastErr += ` | proxy:${r.status}`
     }
-  } catch { /* fall through */ }
+  } catch (e) { lastErr += ` | proxy:ex:${e.message}` }
 
-  return json({ ok: false, error: 'translation failed' }, 502)
+  return json({ ok: false, error: 'translation failed', detail: lastErr }, 502)
 }
