@@ -1084,7 +1084,7 @@ function RemarkBlock({ G, remark, remarkAuthor = '', editable, onChange, onAutho
             </div>
           ) : (
             <div style={{ fontSize: 14.5, color: remark ? G.tx : G.fa, whiteSpace: 'pre-wrap', lineHeight: 1.5, minHeight: '78px' }}>
-              {remarkAuthor ? <><span style={{ fontWeight: 600, color: G.accent }}>{remarkAuthor}</span><span style={{ color: G.mu }}> : </span></> : null}
+              {remarkAuthor ? <><span style={{ fontWeight: 700, color: '#B45309' }}>{remarkAuthor}</span><span style={{ color: G.mu }}> : </span></> : null}
               {remark || '—'}
             </div>
           )}
@@ -1212,28 +1212,26 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
         {/* ⑤ 이미지 우측 텍스트 영역 클릭 → MO 상세 모달 (수정 모드에선 모달 비활성) */}
         <div onClick={() => { if (!editable && onOpenDetail) onOpenDetail() }} title={!editable ? '상세 보기 · 查看详情' : ''}
           style={{ flex: 1, minWidth: 0, cursor: (!editable && onOpenDetail) ? 'pointer' : 'default' }}>
-          {/* ② 수정 모드: 1행 상태배지(좌)+휴지통(우), 2행 오더번호 — absolute 미사용(flex) */}
+          {/* 오더번호 + 상태배지 동일 행 (수정 모드: 우측에 삭제버튼 추가) */}
           {editable ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 9.5, fontWeight: 700, color: '#fff', background: badge.color, padding: '2px 7px', borderRadius: 999, minWidth: 58, textAlign: 'center', whiteSpace: 'nowrap' }}>
-                  {badge.kr}{badge.cn ? ` · ${badge.cn}` : ''}
-                </span>
-                {isShipped(mo) && <span style={{ fontSize: 9, color: G.ok, border: `1px solid ${G.ok}`, padding: '1px 6px', borderRadius: 999, whiteSpace: 'nowrap' }}>출고 已出货</span>}
-                <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }} title="삭제 · 删除"
-                  style={{ marginLeft: 'auto', flexShrink: 0, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: `1px solid ${G.border}`, background: G.card, color: G.bad }}>
-                  <Trash2 size={13} />
-                </button>
-              </div>
-              <div className="num" title={getMoNumber(mo)} style={{ fontSize: 13.2, fontWeight: 700, color: G.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 4 }}>{getMoNumber(mo)}</div>
-            </>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
-              <span className="num" style={{ fontSize: 13.2, fontWeight: 700, color: G.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: '1 1 auto', minWidth: 0 }}>{getMoNumber(mo)}</span>
-              <span style={{ fontSize: 9.5, fontWeight: 700, color: '#fff', background: badge.color, padding: '2px 7px', borderRadius: 999, flexShrink: 0, minWidth: 58, textAlign: 'center', whiteSpace: 'nowrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}>
+              <span className="num" title={getMoNumber(mo)} style={{ fontSize: 14.5, fontWeight: 700, color: G.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: '1 1 auto', minWidth: 0 }}>{getMoNumber(mo)}</span>
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: '#fff', background: badge.color, padding: '2.2px 7.7px', borderRadius: 999, flexShrink: 0, minWidth: 58, textAlign: 'center', whiteSpace: 'nowrap' }}>
                 {badge.kr}{badge.cn ? ` · ${badge.cn}` : ''}
               </span>
-              {isShipped(mo) && <span style={{ fontSize: 9, color: G.ok, border: `1px solid ${G.ok}`, padding: '1px 6px', borderRadius: 999, flexShrink: 0, whiteSpace: 'nowrap' }}>출고 已出货</span>}
+              {isShipped(mo) && <span style={{ fontSize: 9.5, color: G.ok, border: `1px solid ${G.ok}`, padding: '1px 6px', borderRadius: 999, flexShrink: 0, whiteSpace: 'nowrap' }}>출고 已出货</span>}
+              <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }} title="삭제 · 删除"
+                style={{ marginLeft: 'auto', flexShrink: 0, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: `1px solid ${G.border}`, background: G.card, color: G.bad }}>
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}>
+              <span className="num" style={{ fontSize: 14.5, fontWeight: 700, color: G.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: '1 1 auto', minWidth: 0 }}>{getMoNumber(mo)}</span>
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: '#fff', background: badge.color, padding: '2.2px 7.7px', borderRadius: 999, flexShrink: 0, minWidth: 58, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                {badge.kr}{badge.cn ? ` · ${badge.cn}` : ''}
+              </span>
+              {isShipped(mo) && <span style={{ fontSize: 9.5, color: G.ok, border: `1px solid ${G.ok}`, padding: '1px 6px', borderRadius: 999, flexShrink: 0, whiteSpace: 'nowrap' }}>출고 已出货</span>}
             </div>
           )}
           <div title={getMoSku(mo)} style={{ fontSize: 13.3, color: G.tx, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getMoSku(mo)}</div>
@@ -1719,7 +1717,7 @@ export default function ProcessPage({ G }) {
     try {
       for (const [itemNo, d] of Object.entries(orderDrafts)) {
         const rec = proc.items[itemNo] || {}
-        if (d.cells !== undefined || d.remark !== undefined) {
+        if (d.cells !== undefined || d.remark !== undefined || d.remarkAuthor !== undefined) {
           const cellsSrc = d.cells !== undefined ? d.cells : (rec.cells || {})
           const cleaned = {}
           for (const [k, val] of Object.entries(cellsSrc)) if (val && (val.v || val.d || val.h)) cleaned[k] = val
