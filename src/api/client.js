@@ -69,6 +69,15 @@ export async function fetchProcessData() {
   return apiFetch('/api/process')
 }
 
+// ── 중→한 번역 (현 상황 비고) — functions/api/translate.js ──
+export async function translateText(text, targetLang = 'ko') {
+  return apiFetch('/api/translate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, targetLang }),
+  })
+}
+
 // Verify the edit password (server-side). Returns a structured result so the
 // UI can distinguish a wrong password (401) from a server/config error (5xx)
 // or a network failure — never throws.

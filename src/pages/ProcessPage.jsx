@@ -10,6 +10,7 @@ import {
   fetchStyleList, fetchStyleMeta, saveStyleFactory, saveStyleNote, hideStyle,
   fetchMoFabric, saveMoFabric,
   fetchDeletions, deleteMo, deleteStyle,
+  translateText,
 } from '../api/client'
 import { getMoNumber, getMoSku, getMoFactory, getMonthKey } from '../utils/moHelpers'
 import { pick, F as SF, isOrdered as styleIsOrdered, styleKey, seasonOf, monthOf } from '../utils/styleFields'
@@ -165,30 +166,31 @@ function completionDateOf(sec, cells) {
   const f = completionField(sec)
   return f ? (cells[`${sec.id}.${f.key}`]?.d || '') : ''
 }
-// 완료 판단: 섹션에 完成/已入库/生产完成/报价完成(=DONE_VALUES) 칩이 선택됨
+// 완료 판단: 섹션에 完成/已入库/生产完成/报价完成(=DONE_VALUES) 칩이 선택됨.
+// ⑧생산(ALWAYS_DONE_SECTIONS)은 어떤 상태든 선택되면 완성으로 간주.
 function sectionDone(sec, cells) {
-  return sec.fields.some(f => f.type === 'chip' && DONE_VALUES.has(cells[`${sec.id}.${f.key}`]?.v))
+  const chips = sec.fields.filter(f => f.type === 'chip')
+  if (ALWAYS_DONE_SECTIONS.has(sec.id)) return chips.some(f => cells[`${sec.id}.${f.key}`]?.v)
+  return chips.some(f => DONE_VALUES.has(cells[`${sec.id}.${f.key}`]?.v))
 }
-// 오늘(자정) 기준으로 날짜가 경과했는지
-function isPastYMD(ymd) {
-  const d = parseYMD(ymd)
-  if (!d) return false
-  const t = new Date(); t.setHours(0, 0, 0, 0); d.setHours(0, 0, 0, 0)
-  return d.getTime() < t.getTime()
-}
-// 접힘 상태 섹션 제목 아래 완성일 행 — 항상 표시, 좌측 정렬, 아이콘 우측 배치
-//   미입력=라벨만 회색 · 미완료/미경과=날짜 회색 · 미완료/경과=빨강 깜빡 + ⚠ · 완료=초록 + ✓
+// 접힘 상태 섹션 제목 아래 완성일 행 — 항상 표시, 좌측 정렬, 아이콘 날짜 우측(gap 4).
+//   ① 날짜 미설정+미완성 → "예상 완성일 预计完成日:" 라벨만 회색 (아이콘 없음)
+//   ②③ 날짜 설정+미완성 → "예상 완성일 预计完成日: yyyy-mm-dd ⚠" 빨강 깜빡 (경과 여부 무관)
+//   ④ 완성 → "완성일 完成日: yyyy-mm-dd ✅" 초록 정적 (날짜 없으면 — 표시)
 function CompletionBadge({ G, sec, cells }) {
   const ymd = completionDateOf(sec, cells)
-  const done = !!ymd && sectionDone(sec, cells)
-  const overdue = !!ymd && !done && isPastYMD(ymd)
-  const color = done ? G.ok : (overdue ? G.bad : G.mu)
-  const icon = done ? '✅' : (overdue ? '⚠' : '')
+  const done = sectionDone(sec, cells)
+  const incomplete = !done && !!ymd          // 미완성 + 날짜 설정 = 빨강 깜빡
+  const color = done ? G.ok : (incomplete ? G.bad : G.mu)
+  const blink = incomplete
+  const label = done ? '완성일 完成日:' : '예상 완성일 预计完成日:'
+  const dateText = done ? (ymd || '—') : ymd  // 완성+무날짜 → '—', 미완성+무날짜 → 라벨만
+  const icon = done ? '✅' : (incomplete ? '⚠' : '')
   return (
-    <div className={overdue ? 'iku-blink' : undefined}
-      style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 4, fontSize: 11, fontWeight: overdue ? 700 : (done ? 600 : 400), color, marginTop: 3, marginLeft: 0, paddingLeft: 0 }}>
-      <span>예상 완성일 预计完成日:</span>
-      {ymd && <span className="num">{ymd}</span>}
+    <div className={blink ? 'iku-blink' : undefined}
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 4, fontSize: 11, fontWeight: blink ? 700 : (done ? 600 : 400), color, marginTop: 3, marginLeft: 0, paddingLeft: 0 }}>
+      <span>{label}</span>
+      {dateText && <span className="num">{dateText}</span>}
       {icon && <span>{icon}</span>}
     </div>
   )
@@ -361,11 +363,11 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
       return `<div class="sec">${title}<table class="grid">${rows}${memoRow}</table></div>`
     }).join('')
 
-    // ⑨ card-wide remark — always shown (not collapsible on screen)
+    // 현 상황 비고 现况备注 — 헤더 바로 아래(①자체샘플 위), 번호 없음
     const remark = rec.remark || ''
-    const remarkHTML = `<div class="sec"><div class="sec-title"><span class="ttl"><span class="no">⑨</span> 전체 비고 <span class="cn">整体备注</span></span></div><div class="remark">${remark ? escapeHtml(remark) : '—'}</div></div>`
+    const remarkHTML = `<div class="sec"><div class="sec-title"><span class="ttl">현 상황 비고 <span class="cn">现况备注</span></span></div><div class="remark">${remark ? escapeHtml(remark) : '—'}</div></div>`
 
-    return `<section class="card">${header}${secsHTML}${remarkHTML}</section>`
+    return `<section class="card">${header}${remarkHTML}${secsHTML}</section>`
   }
 
   const body = mos.map(cardHTML).join('')
@@ -1005,9 +1007,74 @@ function PanelChip({ G, on, onClick, label, cn, count, tone }) {
 }
 
 // ──────────────────────────────────────────────────────────
+// 현 상황 비고 现况备注 — 헤더 바로 아래(①자체샘플 위). 번호(⑨) 없음.
+// 접기/펴기 토글 + 중→한 번역(Gemini) 기능. KV 키(remark)는 기존 그대로.
+// ──────────────────────────────────────────────────────────
+function RemarkBlock({ G, remark, editable, onChange, collapsed, onToggle, showToast }) {
+  const [tOpen, setTOpen] = useState(false)
+  const [tLoading, setTLoading] = useState(false)
+  const [tResult, setTResult] = useState('')
+  const hasText = !!(remark && remark.trim())
+  const transBg = G.dk ? 'rgba(55,138,221,0.14)' : '#EAF4FB'
+  const onTranslate = async () => {
+    if (tOpen) { setTOpen(false); return }          // 펼쳐져 있으면 닫기 (토글)
+    if (!hasText || tLoading) return
+    setTLoading(true)
+    try {
+      const r = await translateText(remark.trim(), 'ko')
+      if (r?.ok && r.translation) { setTResult(r.translation); setTOpen(true) }
+      else showToast?.('번역 실패 · 翻译失败, 잠시 후 다시 시도해주세요', 'bad')
+    } catch {
+      showToast?.('번역 실패 · 翻译失败, 잠시 후 다시 시도해주세요', 'bad')
+    } finally { setTLoading(false) }
+  }
+  return (
+    <div style={{ paddingBottom: 20, borderBottom: `1px solid ${G.hair}` }}>
+      {/* 제목 행: 현 상황 비고 + 번역 버튼 + 접기/펴기 토글 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: collapsed ? 0 : 8 }}>
+        <span style={{ fontSize: 15.18, fontWeight: 700, color: G.tx, lineHeight: 1.2 }}>현 상황 비고 <span style={{ color: G.mu, fontWeight: 500 }}>现况备注</span></span>
+        <button type="button" onClick={onTranslate} disabled={!hasText || tLoading}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 6, fontSize: 10.5, fontWeight: 600, fontFamily: 'inherit', cursor: (!hasText || tLoading) ? 'default' : 'pointer', border: `1px solid ${G.border}`, background: 'transparent', color: (!hasText || tLoading) ? G.fa : G.accent, opacity: (!hasText || tLoading) ? 0.55 : 1 }}>
+          {tLoading ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : null}
+          {tLoading ? '번역 중... · 翻译中...' : '중→한 번역 · 翻译'}
+        </button>
+        <span style={{ marginLeft: 'auto', flexShrink: 0 }}>
+          <SectionToggle G={G} collapsed={collapsed} onToggle={onToggle} />
+        </span>
+      </div>
+      {/* 본문 (접기/펴기) */}
+      <div style={{ display: 'grid', gridTemplateRows: collapsed ? '0fr' : '1fr', transition: 'grid-template-rows .25s ease' }}>
+        <div style={{ overflow: 'hidden', minHeight: 0 }}>
+          {editable ? (
+            <textarea value={remark} onChange={e => onChange(e.target.value)} rows={2}
+              placeholder="자유 메모 · 自由备注"
+              style={{ width: '100%', padding: '8px 10px', fontSize: 12, border: `1px solid ${G.border}`, borderRadius: 8, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+          ) : (
+            <div style={{ fontSize: 13.2, color: remark ? G.tx : G.fa, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{remark || '—'}</div>
+          )}
+          {/* 번역 결과 — 슬라이드 다운 (0.3s) */}
+          <div style={{ display: 'grid', gridTemplateRows: tOpen ? '1fr' : '0fr', transition: 'grid-template-rows .3s ease' }}>
+            <div style={{ overflow: 'hidden', minHeight: 0 }}>
+              <div style={{ position: 'relative', marginTop: 8, padding: '8px 26px 8px 10px', borderRadius: 8, background: transBg }}>
+                <div style={{ fontSize: 10, color: G.mu, fontWeight: 600, marginBottom: 4 }}>🇰🇷 한국어 번역</div>
+                <div style={{ fontSize: 12.5, color: G.tx, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{tResult}</div>
+                <button type="button" onClick={() => setTOpen(false)} title="닫기 · 关闭"
+                  style={{ position: 'absolute', top: 6, right: 6, width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 5, border: 'none', background: 'transparent', color: G.mu, cursor: 'pointer' }}>
+                  <X size={12} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────────────────
 // Process card (one order)
 // ──────────────────────────────────────────────────────────
-function ProcessCard({ G, mo, record, editable, onZoom,
+function ProcessCard({ G, mo, record, editable, onZoom, showToast,
   collapsedFor, onToggleSection, printMode, checked, onToggleChecked, fabricKv = '', onDelete, onOpenDetail, draft, onDraft }) {
   const [confirmDelete, setConfirmDelete] = useState(false)   // ③ 삭제 확인
   const itemNo = itemNoOf(mo)
@@ -1130,14 +1197,14 @@ function ProcessCard({ G, mo, record, editable, onZoom,
           <div title={getMoSku(mo)} style={{ fontSize: 12.1, color: G.tx, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getMoSku(mo)}</div>
           {chiName && <div title={chiName} style={{ fontSize: 12.1, color: G.mu, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{chiName}</div>}
           {/* 🏭 공장 · 📅 월 */}
-          <div style={{ fontSize: 11, color: G.fa, marginTop: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12.1, color: G.fa, marginTop: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span>🏭 {getMoFactory(mo)}</span>
             {monthKey && <span>📅 {monthKey}</span>}
           </div>
           {/* ① 수량 + 원단 1줄 (말줄임, 2줄 금지, hover tooltip) */}
           {(totalQty || displayFabric) && (
             <div title={[totalQty ? `${totalQty}件` : '', displayFabric].filter(Boolean).join(' · ')}
-              style={{ fontSize: 11, color: G.mu, fontWeight: 600, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              style={{ fontSize: 12.1, color: G.mu, fontWeight: 600, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {totalQty && <span className="num">📦 {totalQty}件</span>}
               {totalQty && displayFabric && <span style={{ color: G.fa }}> · </span>}
               {displayFabric && <span>🧵 {displayFabric}</span>}
@@ -1145,20 +1212,20 @@ function ProcessCard({ G, mo, record, editable, onZoom,
           )}
           {/* ② 경고 항목 요약 — 각 경고를 독립 행(세로 병렬)으로 표시 (빨강 깜빡) / 전체 완료 (초록 정적) */}
           {productionEntered ? (
-            <div style={{ fontSize: 11, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontSize: 12.1, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               ✅ 생산 돌입 · 已进入生产
             </div>
           ) : warnList.length ? (
             <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
               {warnList.map((w, i) => (
                 <div key={i} className="iku-blink" title={`⚠ ${w}`}
-                  style={{ fontSize: 11, fontWeight: 700, color: G.bad, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  style={{ fontSize: 12.1, fontWeight: 700, color: G.bad, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   ⚠ {w}
                 </div>
               ))}
             </div>
           ) : allDone ? (
-            <div style={{ fontSize: 11, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontSize: 12.1, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               ✅ 전체 완료 · 全部完成
             </div>
           ) : null}
@@ -1167,6 +1234,9 @@ function ProcessCard({ G, mo, record, editable, onZoom,
 
       {/* Checklist — item ⑥: roomier spacing + 1px divider between sections */}
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* ① 현 상황 비고 — 헤더 바로 아래, ①자체샘플 위 (번호 없음) */}
+        <RemarkBlock G={G} remark={remark} editable={editable} onChange={setRemark}
+          collapsed={collapsedFor('remark')} onToggle={() => toggleSection('remark')} showToast={showToast} />
         {SECTIONS.map(sec => {
           const allowStock = RAW_SECTIONS.has(sec.id)
           const memoKey = `${sec.id}._memo`
@@ -1246,20 +1316,6 @@ function ProcessCard({ G, mo, record, editable, onZoom,
           )
         })}
 
-        {/* ⑨ card-wide 비고 */}
-        <div>
-          <div style={{ fontSize: 15.18, fontWeight: 700, color: G.tx, marginBottom: 8, lineHeight: 1.2 }}>
-            <span style={{ color: G.accent, marginRight: 5 }}>⑨</span>전체 비고 <span style={{ color: G.mu, fontWeight: 500 }}>整体备注</span>
-          </div>
-          {editable ? (
-            <textarea value={remark} onChange={e => setRemark(e.target.value)} rows={2}
-              placeholder="자유 메모 · 自由备注"
-              style={{ width: '100%', padding: '8px 10px', fontSize: 12, border: `1px solid ${G.border}`, borderRadius: 8, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
-          ) : (
-            <div style={{ fontSize: 13.2, color: remark ? G.tx : G.fa, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{remark || '—'}</div>
-          )}
-        </div>
-
         {record?.lastUpdated && (
           <div style={{ fontSize: 9.5, color: G.fa, textAlign: 'right' }}>
             최근 수정 · 最近修改: {fmtTime(record.lastUpdated)}{record.lastUpdatedBy ? ` · ${record.lastUpdatedBy}` : ''}
@@ -1314,14 +1370,16 @@ export default function ProcessPage({ G }) {
   // Section collapse — owned here so the print feature can read expanded sections.
   // Shape: { [itemNo]: { [secId]: bool } }. Default (absent) = collapsed (item ②).
   const [collapsedByItem, setCollapsedByItem] = useState({})
+  // 'remark'(현 상황 비고)은 기본 펼침, 나머지 섹션은 기본 접힘
+  const defaultCollapsed = (secId) => secId !== 'remark'
   const sectionCollapsed = useCallback((itemNo, secId) => {
     const m = collapsedByItem[itemNo]
-    return m && secId in m ? m[secId] : true
+    return m && secId in m ? m[secId] : defaultCollapsed(secId)
   }, [collapsedByItem])
   const toggleCardSection = useCallback((itemNo, secId) => {
     setCollapsedByItem(prev => {
       const cur = prev[itemNo] || {}
-      const curVal = secId in cur ? cur[secId] : true
+      const curVal = secId in cur ? cur[secId] : defaultCollapsed(secId)
       return { ...prev, [itemNo]: { ...cur, [secId]: !curVal } }
     })
   }, [])
@@ -1913,6 +1971,7 @@ export default function ProcessPage({ G }) {
               record={proc.items[itemNoOf(mo)]}
               editable={editMode}
               onZoom={setZoomSrc}
+              showToast={showToast}
               collapsedFor={(secId) => sectionCollapsed(itemNoOf(mo), secId)}
               onToggleSection={(secId) => toggleCardSection(itemNoOf(mo), secId)}
               printMode={printMode}
