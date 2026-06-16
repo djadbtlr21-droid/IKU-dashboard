@@ -363,9 +363,9 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
       return `<div class="sec">${title}<table class="grid">${rows}${memoRow}</table></div>`
     }).join('')
 
-    // 현 상황 비고 现况备注 — 헤더 바로 아래(①자체샘플 위), 번호 없음
+    // 최신현황 메모 最新状况备注 — 헤더 바로 아래(①자체샘플 위), 번호 없음
     const remark = rec.remark || ''
-    const remarkHTML = `<div class="sec"><div class="sec-title"><span class="ttl">현 상황 비고 <span class="cn">现况备注</span></span></div><div class="remark">${remark ? escapeHtml(remark) : '—'}</div></div>`
+    const remarkHTML = `<div class="sec"><div class="sec-title"><span class="ttl">최신현황 메모 <span class="cn">最新状况备注</span></span></div><div class="remark">${remark ? escapeHtml(remark) : '—'}</div></div>`
 
     return `<section class="card">${header}${remarkHTML}${secsHTML}</section>`
   }
@@ -1007,7 +1007,7 @@ function PanelChip({ G, on, onClick, label, cn, count, tone }) {
 }
 
 // ──────────────────────────────────────────────────────────
-// 현 상황 비고 现况备注 — 헤더 바로 아래(①자체샘플 위). 번호(⑨) 없음.
+// 최신현황 메모 最新状况备注 — 헤더 바로 아래(①자체샘플 위). 번호 없음.
 // 접기/펴기 토글 + 중→한 번역(Gemini) 기능. KV 키(remark)는 기존 그대로.
 // ──────────────────────────────────────────────────────────
 function RemarkBlock({ G, remark, editable, onChange, collapsed, onToggle, showToast }) {
@@ -1029,10 +1029,10 @@ function RemarkBlock({ G, remark, editable, onChange, collapsed, onToggle, showT
     } finally { setTLoading(false) }
   }
   return (
-    <div style={{ paddingBottom: 20, borderBottom: `1px solid ${G.hair}` }}>
-      {/* 제목 행: 현 상황 비고 + 번역 버튼 + 접기/펴기 토글 */}
+    <div style={{ paddingTop: 4, paddingBottom: 12 }}>
+      {/* 제목 행: 최신현황 메모 + 번역 버튼 + 접기/펴기 토글 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: collapsed ? 0 : 8 }}>
-        <span style={{ fontSize: 15.18, fontWeight: 700, color: G.tx, lineHeight: 1.2 }}>현 상황 비고 <span style={{ color: G.mu, fontWeight: 500 }}>现况备注</span></span>
+        <span style={{ fontSize: 15.18, fontWeight: 700, color: G.tx, lineHeight: 1.2 }}>최신현황 메모 <span style={{ color: G.mu, fontWeight: 500 }}>最新状况备注</span></span>
         <button type="button" onClick={onTranslate} disabled={!hasText || tLoading}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 6, fontSize: 10.5, fontWeight: 600, fontFamily: 'inherit', cursor: (!hasText || tLoading) ? 'default' : 'pointer', border: `1px solid ${G.border}`, background: 'transparent', color: (!hasText || tLoading) ? G.fa : G.accent, opacity: (!hasText || tLoading) ? 0.55 : 1 }}>
           {tLoading ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : null}
@@ -1048,9 +1048,9 @@ function RemarkBlock({ G, remark, editable, onChange, collapsed, onToggle, showT
           {editable ? (
             <textarea value={remark} onChange={e => onChange(e.target.value)} rows={2}
               placeholder="자유 메모 · 自由备注"
-              style={{ width: '100%', padding: '8px 10px', fontSize: 12, border: `1px solid ${G.border}`, borderRadius: 8, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+              style={{ width: '100%', padding: '8px 10px', fontSize: 12, border: `1px solid ${G.border}`, borderRadius: 8, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', minHeight: '78px' }} />
           ) : (
-            <div style={{ fontSize: 13.2, color: remark ? G.tx : G.fa, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{remark || '—'}</div>
+            <div style={{ fontSize: 13.2, color: remark ? G.tx : G.fa, whiteSpace: 'pre-wrap', lineHeight: 1.5, minHeight: '78px' }}>{remark || '—'}</div>
           )}
           {/* 번역 결과 — 슬라이드 다운 (0.3s) */}
           <div style={{ display: 'grid', gridTemplateRows: tOpen ? '1fr' : '0fr', transition: 'grid-template-rows .3s ease' }}>
@@ -1154,7 +1154,7 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
         </div>
       )}
       {/* Header */}
-      <div style={{ display: 'flex', gap: 12, padding: 14, borderBottom: `1px solid ${G.hair}`, borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
+      <div style={{ display: 'flex', gap: 12, padding: 14, borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
         <div
           onClick={() => { if (imgUrl && onZoom) onZoom(imgUrl) }}
           title={imgUrl ? '클릭하여 확대 · 点击放大' : ''}
@@ -1194,17 +1194,17 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
               {isShipped(mo) && <span style={{ fontSize: 9, color: G.ok, border: `1px solid ${G.ok}`, padding: '1px 6px', borderRadius: 999, flexShrink: 0, whiteSpace: 'nowrap' }}>출고 已出货</span>}
             </div>
           )}
-          <div title={getMoSku(mo)} style={{ fontSize: 12.1, color: G.tx, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getMoSku(mo)}</div>
-          {chiName && <div title={chiName} style={{ fontSize: 12.1, color: G.mu, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{chiName}</div>}
+          <div title={getMoSku(mo)} style={{ fontSize: 13.3, color: G.tx, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getMoSku(mo)}</div>
+          {chiName && <div title={chiName} style={{ fontSize: 13.3, color: G.mu, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{chiName}</div>}
           {/* 🏭 공장 · 📅 월 */}
-          <div style={{ fontSize: 12.1, color: G.fa, marginTop: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 13.3, color: G.fa, marginTop: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span>🏭 {getMoFactory(mo)}</span>
             {monthKey && <span>📅 {monthKey}</span>}
           </div>
           {/* ① 수량 + 원단 1줄 (말줄임, 2줄 금지, hover tooltip) */}
           {(totalQty || displayFabric) && (
             <div title={[totalQty ? `${totalQty}件` : '', displayFabric].filter(Boolean).join(' · ')}
-              style={{ fontSize: 12.1, color: G.mu, fontWeight: 600, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              style={{ fontSize: 13.3, color: G.mu, fontWeight: 600, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {totalQty && <span className="num">📦 {totalQty}件</span>}
               {totalQty && displayFabric && <span style={{ color: G.fa }}> · </span>}
               {displayFabric && <span>🧵 {displayFabric}</span>}
@@ -1212,31 +1212,33 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
           )}
           {/* ② 경고 항목 요약 — 각 경고를 독립 행(세로 병렬)으로 표시 (빨강 깜빡) / 전체 완료 (초록 정적) */}
           {productionEntered ? (
-            <div style={{ fontSize: 12.1, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontSize: 13.3, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               ✅ 생산 돌입 · 已进入生产
             </div>
           ) : warnList.length ? (
             <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
               {warnList.map((w, i) => (
                 <div key={i} className="iku-blink" title={`⚠ ${w}`}
-                  style={{ fontSize: 12.1, fontWeight: 700, color: G.bad, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  style={{ fontSize: 13.3, fontWeight: 700, color: G.bad, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   ⚠ {w}
                 </div>
               ))}
             </div>
           ) : allDone ? (
-            <div style={{ fontSize: 12.1, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontSize: 13.3, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               ✅ 전체 완료 · 全部完成
             </div>
           ) : null}
         </div>
       </div>
 
-      {/* Checklist — item ⑥: roomier spacing + 1px divider between sections */}
-      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {/* ① 현 상황 비고 — 헤더 바로 아래, ①자체샘플 위 (번호 없음) */}
+      {/* 최신현황 메모 — 헤더와 한 세트(동일 계열 배경), 하단 진한 구분선 */}
+      <div style={{ background: G.cardAlt, padding: '0 14px', borderBottom: `2px solid #9CA3AF` }}>
         <RemarkBlock G={G} remark={remark} editable={editable} onChange={setRemark}
           collapsed={collapsedFor('remark')} onToggle={() => toggleSection('remark')} showToast={showToast} />
+      </div>
+      {/* Checklist — ①~⑧ 공정 체크리스트 */}
+      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 20 }}>
         {SECTIONS.map(sec => {
           const allowStock = RAW_SECTIONS.has(sec.id)
           const memoKey = `${sec.id}._memo`

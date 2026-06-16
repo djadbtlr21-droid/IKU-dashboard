@@ -62,23 +62,31 @@ export async function onRequest({ request, env }) {
   } catch (e) { lastErr += ` proxy-chat:ex:${e.message}` }
 
   // ── 3순위: GEMINI_API_KEY 직접 호출 (지원 리전에서만 동작) ──
-  const apiKey = env.GEMINI_API_KEY
+  const apiKey = env?.GEMINI_API_KEY
+    ?? globalThis.GEMINI_API_KEY
+    ?? (typeof GEMINI_API_KEY !== 'undefined' ? GEMINI_API_KEY : null)
   if (apiKey) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`
     const body = {
-      system_instruction: { parts: [{ text: SYS_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 4000, thinkingConfig: { thinkingBudget: 0 } },
+      contents: [{ parts: [{ text: `${SYS_PROMPT}\n\n${text}` }] }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 1000 },
     }
     try {
       const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const rawBody = await r.text()
       if (r.ok) {
-        const data = await r.json()
+        let data = null
+        try { data = JSON.parse(rawBody) } catch { lastErr += ' gemini:json-parse-fail' }
         const out = (data?.candidates?.[0]?.content?.parts || []).map(p => p?.text || '').join('').trim()
         if (out) return json({ ok: true, translation: out, source: 'gemini' })
-      } else { lastErr += ` gemini:${r.status}` }
+        lastErr += ' gemini:empty'
+      } else {
+        console.error('[translate] Gemini API error body:', rawBody)
+        lastErr += ` gemini:${r.status}`
+      }
     } catch (e) { lastErr += ` gemini:ex:${e.message}` }
   }
 
-  return json({ ok: false, error: 'translation failed', detail: lastErr }, 502)
+  console.error('[translate] all routes failed:', lastErr, { apiKeyPresent: !!apiKey })
+  return json({ ok: false, error: 'translation failed', detail: lastErr, apiKeyPresent: !!apiKey }, 502)
 }
