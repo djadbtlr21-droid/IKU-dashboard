@@ -183,13 +183,13 @@ function CompletionBadge({ G, sec, cells }) {
   const done = !!ymd && sectionDone(sec, cells)
   const overdue = !!ymd && !done && isPastYMD(ymd)
   const color = done ? G.ok : (overdue ? G.bad : G.mu)
-  const icon = done ? '✓' : (overdue ? '⚠' : '')
+  const icon = done ? '✅' : (overdue ? '⚠' : '')
   return (
     <div className={overdue ? 'iku-blink' : undefined}
-      style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 6, fontSize: 11, fontWeight: overdue ? 700 : (done ? 600 : 400), color, marginTop: 3, marginLeft: 0, paddingLeft: 0 }}>
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 4, fontSize: 11, fontWeight: overdue ? 700 : (done ? 600 : 400), color, marginTop: 3, marginLeft: 0, paddingLeft: 0 }}>
       <span>예상 완성일 预计完成日:</span>
       {ymd && <span className="num">{ymd}</span>}
-      {icon && <span style={{ marginLeft: 'auto' }}>{icon}</span>}
+      {icon && <span>{icon}</span>}
     </div>
   )
 }
