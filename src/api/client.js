@@ -112,11 +112,11 @@ export async function verifyProcessPassword(password) {
 }
 
 // Save one item's process cells. Returns { ok, ...data }.
-export async function saveProcessItem({ password, editorName, itemNo, cells, remark }) {
+export async function saveProcessItem({ password, editorName, itemNo, cells, remark, remarkAuthor = '' }) {
   return apiFetch('/api/process', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password, editorName, itemNo, cells, remark }),
+    body: JSON.stringify({ password, editorName, itemNo, cells, remark, remarkAuthor }),
   })
 }
 

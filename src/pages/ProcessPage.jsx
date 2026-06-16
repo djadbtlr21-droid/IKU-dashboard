@@ -368,7 +368,7 @@ function buildPrintHTML({ mos, items, isExpanded, origin, now }) {
 
     // 최신현황 메모 最新状况备注 — 헤더 바로 아래(①자체샘플 위), 번호 없음
     const remark = rec.remark || ''
-    const remarkHTML = `<div class="sec"><div class="sec-title"><span class="ttl">최신현황 메모 <span class="cn">最新状况备注</span></span></div><div class="remark">${remark ? escapeHtml(remark) : '—'}</div></div>`
+    const remarkHTML = `<div class="sec"><div class="sec-title"><span class="ttl">현황 메모 <span class="cn">状况备注</span></span></div><div class="remark">${remark ? escapeHtml(remark) : '—'}</div></div>`
 
     return `<section class="card">${header}${remarkHTML}${secsHTML}</section>`
   }
@@ -1010,17 +1010,19 @@ function PanelChip({ G, on, onClick, label, cn, count, tone }) {
 }
 
 // ──────────────────────────────────────────────────────────
-// 최신현황 메모 最新状况备注 — 헤더 바로 아래(①자체샘플 위). 번호 없음.
-// 접기/펴기 토글 + 중→한 번역(Gemini) 기능. KV 키(remark)는 기존 그대로.
+// 현황 메모 状况备注 — 헤더 바로 아래(①자체샘플 위). 번호 없음.
+// 접기/펴기 토글 + 중→한 번역(Gemini) + 작성자 기입 기능. KV 키(remark)는 기존 그대로.
 // ──────────────────────────────────────────────────────────
-function RemarkBlock({ G, remark, editable, onChange, collapsed, onToggle, showToast }) {
+function RemarkBlock({ G, remark, remarkAuthor = '', editable, onChange, onAuthorChange, authorError, collapsed, onToggle, showToast }) {
   const [tOpen, setTOpen] = useState(false)
   const [tLoading, setTLoading] = useState(false)
   const [tResult, setTResult] = useState('')
+  const [authorTouched, setAuthorTouched] = useState(false)
   const hasText = !!(remark && remark.trim())
   const transBg = G.dk ? 'rgba(55,138,221,0.14)' : '#EAF4FB'
+  const showAuthorErr = (authorError || (authorTouched && !remarkAuthor.trim())) && hasText
   const onTranslate = async () => {
-    if (tOpen) { setTOpen(false); return }          // 펼쳐져 있으면 닫기 (토글)
+    if (tOpen) { setTOpen(false); return }
     if (!hasText || tLoading) return
     setTLoading(true)
     try {
@@ -1033,9 +1035,9 @@ function RemarkBlock({ G, remark, editable, onChange, collapsed, onToggle, showT
   }
   return (
     <div style={{ paddingTop: 4, paddingBottom: 12 }}>
-      {/* 제목 행: 최신현황 메모 + 번역 버튼 + 접기/펴기 토글 */}
+      {/* 제목 행: 현황 메모 + 번역 버튼 + 접기/펴기 토글 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: collapsed ? 0 : 8 }}>
-        <span style={{ fontSize: 15.18, fontWeight: 700, color: G.tx, lineHeight: 1.2 }}>최신현황 메모 <span style={{ color: G.mu, fontWeight: 500 }}>最新状况备注</span></span>
+        <span style={{ fontSize: 15.18, fontWeight: 700, color: G.tx, lineHeight: 1.2 }}>현황 메모 <span style={{ color: G.mu, fontWeight: 500 }}>状况备注</span></span>
         <button type="button" onClick={onTranslate} disabled={!hasText || tLoading}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 6, fontSize: 10.5, fontWeight: 600, fontFamily: 'inherit', cursor: (!hasText || tLoading) ? 'default' : 'pointer', border: `1px solid ${G.border}`, background: 'transparent', color: (!hasText || tLoading) ? G.fa : G.accent, opacity: (!hasText || tLoading) ? 0.55 : 1 }}>
           {tLoading ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : null}
@@ -1049,18 +1051,32 @@ function RemarkBlock({ G, remark, editable, onChange, collapsed, onToggle, showT
       <div style={{ display: 'grid', gridTemplateRows: collapsed ? '0fr' : '1fr', transition: 'grid-template-rows .25s ease' }}>
         <div style={{ overflow: 'hidden', minHeight: 0 }}>
           {editable ? (
-            <textarea value={remark} onChange={e => onChange(e.target.value)} rows={2}
-              placeholder="자유 메모 · 自由备注"
-              style={{ width: '100%', padding: '8px 10px', fontSize: 12, border: `1px solid ${G.border}`, borderRadius: 8, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', minHeight: '78px' }} />
+            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0, width: 110 }}>
+                <label style={{ fontSize: 10, color: G.mu, fontWeight: 600 }}>작성자 · 修改人</label>
+                <input type="text" value={remarkAuthor} onChange={e => onAuthorChange(e.target.value)}
+                  onBlur={() => setAuthorTouched(true)}
+                  placeholder="이름 · 姓名"
+                  style={{ width: '100%', padding: '7px 8px', fontSize: 12, border: `1px solid ${showAuthorErr ? G.bad : G.border}`, borderRadius: 7, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                {showAuthorErr && <div style={{ fontSize: 10, color: G.bad, lineHeight: 1.2 }}>필수 입력 · 必填</div>}
+              </div>
+              <span style={{ color: G.mu, paddingTop: 23, flexShrink: 0 }}>:</span>
+              <textarea value={remark} onChange={e => onChange(e.target.value)} rows={2}
+                placeholder="자유 메모 · 自由备注"
+                style={{ flex: 1, padding: '8px 10px', fontSize: 13.2, border: `1px solid ${G.border}`, borderRadius: 8, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', minHeight: '78px' }} />
+            </div>
           ) : (
-            <div style={{ fontSize: 13.2, color: remark ? G.tx : G.fa, whiteSpace: 'pre-wrap', lineHeight: 1.5, minHeight: '78px' }}>{remark || '—'}</div>
+            <div style={{ fontSize: 14.5, color: remark ? G.tx : G.fa, whiteSpace: 'pre-wrap', lineHeight: 1.5, minHeight: '78px' }}>
+              {remarkAuthor ? <><span style={{ fontWeight: 600, color: G.accent }}>{remarkAuthor}</span><span style={{ color: G.mu }}> : </span></> : null}
+              {remark || '—'}
+            </div>
           )}
           {/* 번역 결과 — 슬라이드 다운 (0.3s) */}
           <div style={{ display: 'grid', gridTemplateRows: tOpen ? '1fr' : '0fr', transition: 'grid-template-rows .3s ease' }}>
             <div style={{ overflow: 'hidden', minHeight: 0 }}>
               <div style={{ position: 'relative', marginTop: 8, padding: '8px 26px 8px 10px', borderRadius: 8, background: transBg }}>
-                <div style={{ fontSize: 10, color: G.mu, fontWeight: 600, marginBottom: 4 }}>🇰🇷 한국어 번역</div>
-                <div style={{ fontSize: 12.5, color: G.tx, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{tResult}</div>
+                <div style={{ fontSize: 11, color: G.mu, fontWeight: 600, marginBottom: 4 }}>🇰🇷 한국어 번역</div>
+                <div style={{ fontSize: 13.8, color: G.tx, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{tResult}</div>
                 <button type="button" onClick={() => setTOpen(false)} title="닫기 · 关闭"
                   style={{ position: 'absolute', top: 6, right: 6, width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 5, border: 'none', background: 'transparent', color: G.mu, cursor: 'pointer' }}>
                   <X size={12} />
@@ -1078,12 +1094,13 @@ function RemarkBlock({ G, remark, editable, onChange, collapsed, onToggle, showT
 // Process card (one order)
 // ──────────────────────────────────────────────────────────
 function ProcessCard({ G, mo, record, editable, onZoom, showToast,
-  collapsedFor, onToggleSection, printMode, checked, onToggleChecked, fabricKv = '', onDelete, onOpenDetail, draft, onDraft }) {
+  collapsedFor, onToggleSection, printMode, checked, onToggleChecked, fabricKv = '', onDelete, onOpenDetail, draft, onDraft, authorError = false }) {
   const [confirmDelete, setConfirmDelete] = useState(false)   // ③ 삭제 확인
   const itemNo = itemNoOf(mo)
 
   const savedCells = record?.cells || {}
   const savedRemark = record?.remark || ''
+  const savedRemarkAuthor = record?.remarkAuthor || ''
 
   // Collapse state is owned by the parent so the print feature can read it.
   const toggleSection = onToggleSection
@@ -1091,6 +1108,7 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
   // ① 컨트롤드: 편집값은 부모 draft 로 일원화(카드 자체 저장 없음, 일괄저장)
   const cells = (draft && draft.cells) ? draft.cells : savedCells
   const remark = (draft && draft.remark !== undefined) ? draft.remark : savedRemark
+  const remarkAuthor = (draft && draft.remarkAuthor !== undefined) ? draft.remarkAuthor : savedRemarkAuthor
 
   const setCell = (cellKey, val) => {
     const base = (draft && draft.cells) ? draft.cells : savedCells
@@ -1099,6 +1117,7 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
     onDraft(itemNo, { cells: next })
   }
   const setRemark = (val) => onDraft(itemNo, { remark: val })
+  const setRemarkAuthor = (val) => onDraft(itemNo, { remarkAuthor: val })
 
   const badge = procStatusBadge(mo, G)
   const chiName = typeof mo.Chi_Style_Name === 'string' ? mo.Chi_Style_Name : (mo.Chi_Style_Name?.zc_display_value || '')
@@ -1216,32 +1235,47 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
               {displayFabric && <span>🧵 {displayFabric}</span>}
             </div>
           )}
-          {/* 경고(①~⑦) + 생산돌입(⑧) 동시 표시 가능. 전체완료는 ①~⑧ 모두 완료일 때만. */}
-          {allDone ? (
-            <div style={{ fontSize: 13.3, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              ✅ 전체 완료 · 全部完成
-            </div>
-          ) : (warnList.length > 0 || productionEntered) ? (
-            <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-              {warnList.map((w, i) => (
-                <div key={i} className="iku-blink" title={`⚠ ${w}`}
-                  style={{ fontSize: 13.3, fontWeight: 700, color: G.bad, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  ⚠ {w}
-                </div>
-              ))}
-              {productionEntered && (
-                <div style={{ fontSize: 13.3, fontWeight: 700, color: G.ok, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  ✅ 생산 돌입 · 已进入生产
-                </div>
-              )}
-            </div>
-          ) : null}
+          {/* 경고/완성 영역 — 항상 최소 3행 높이 확보하여 카드 헤더 높이 통일 */}
+          {(() => {
+            const MAX_WARNS = 3
+            const displayed = warnList.slice(0, MAX_WARNS)
+            const extra = warnList.length > MAX_WARNS ? warnList.length - MAX_WARNS : 0
+            return (
+              <div style={{ marginTop: 4, minHeight: 57, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                {allDone ? (
+                  <div style={{ fontSize: 13.3, fontWeight: 700, color: G.ok, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    ✅ 전체 완료 · 全部完成
+                  </div>
+                ) : (
+                  <>
+                    {displayed.map((w, i) => (
+                      <div key={i} className="iku-blink" title={`⚠ ${w}`}
+                        style={{ fontSize: 13.3, fontWeight: 700, color: G.bad, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        ⚠ {w}
+                      </div>
+                    ))}
+                    {extra > 0 && (
+                      <div style={{ fontSize: 12, color: G.mu, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        +{extra}개 더 · 更多{extra}项
+                      </div>
+                    )}
+                    {productionEntered && (
+                      <div style={{ fontSize: 13.3, fontWeight: 700, color: G.ok, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        ✅ 생산 돌입 · 已进入生产
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </div>
 
-      {/* 최신현황 메모 — 헤더와 한 세트(동일 계열 배경), 하단 진한 구분선 */}
+      {/* 현황 메모 — 헤더와 한 세트(동일 계열 배경), 하단 진한 구분선 */}
       <div style={{ background: G.cardAlt, padding: '0 14px', borderBottom: `2px solid #9CA3AF` }}>
-        <RemarkBlock G={G} remark={remark} editable={editable} onChange={setRemark}
+        <RemarkBlock G={G} remark={remark} remarkAuthor={remarkAuthor} editable={editable}
+          onChange={setRemark} onAuthorChange={setRemarkAuthor} authorError={authorError}
           collapsed={collapsedFor('remark')} onToggle={() => toggleSection('remark')} showToast={showToast} />
       </div>
       {/* Checklist — ①~⑧ 공정 체크리스트 */}
@@ -1373,6 +1407,7 @@ export default function ProcessPage({ G }) {
   const [zoomSrc, setZoomSrc] = useState(null)  // image lightbox
   const [selectedMo, setSelectedMo] = useState(null)  // MO 상세 모달 { id, row }
   const [selectedStyle, setSelectedStyle] = useState(null)  // 미오더 Style 상세 모달
+  const [authorErrorItems, setAuthorErrorItems] = useState(new Set())
   const editorRef = useRef(null)
   const fabricDiagRef = useRef(false)
 
@@ -1642,6 +1677,21 @@ export default function ProcessPage({ G }) {
   // ① 오더완료 일괄저장 — 변경된 모든 카드(공정/비고/원단명) 한꺼번에 KV 저장, 편집모드 유지
   const batchSaveOrders = useCallback(async () => {
     if (!requireEditor()) return
+    // 현황 메모가 있는데 작성자가 없으면 저장 전 경고
+    const missingAuthor = new Set()
+    for (const [itemNo, d] of Object.entries(orderDrafts)) {
+      if (d.remark !== undefined && d.remark.trim()) {
+        const rec = proc.items[itemNo] || {}
+        const effectiveAuthor = d.remarkAuthor !== undefined ? d.remarkAuthor : (rec.remarkAuthor || '')
+        if (!effectiveAuthor.trim()) missingAuthor.add(itemNo)
+      }
+    }
+    if (missingAuthor.size > 0) {
+      setAuthorErrorItems(missingAuthor)
+      showToast('작성자를 입력하세요 · 请输入修改人姓名', 'bad')
+      return
+    }
+    setAuthorErrorItems(new Set())
     setOrderSaving(true)
     let ok = true
     try {
@@ -1652,8 +1702,9 @@ export default function ProcessPage({ G }) {
           const cleaned = {}
           for (const [k, val] of Object.entries(cellsSrc)) if (val && (val.v || val.d || val.h)) cleaned[k] = val
           const remarkVal = d.remark !== undefined ? d.remark : (rec.remark || '')
+          const remarkAuthorVal = d.remarkAuthor !== undefined ? d.remarkAuthor : (rec.remarkAuthor || '')
           try {
-            const res = await saveProcessItem({ password, editorName: editorName.trim(), itemNo, cells: cleaned, remark: remarkVal })
+            const res = await saveProcessItem({ password, editorName: editorName.trim(), itemNo, cells: cleaned, remark: remarkVal, remarkAuthor: remarkAuthorVal })
             if (res?.ok) setProc(p => ({ ...p, items: { ...p.items, [itemNo]: res.record }, lastUpdated: res.record.lastUpdated, lastUpdatedBy: res.record.lastUpdatedBy }))
             else ok = false
           } catch { ok = false }
@@ -1666,7 +1717,7 @@ export default function ProcessPage({ G }) {
       }
     } catch { ok = false }
     setOrderSaving(false)
-    if (ok) { setOrderDrafts({}); showToast('일괄저장 완료 · 批量保存成功', 'ok') }   // 편집 모드 유지
+    if (ok) { setOrderDrafts({}); showToast('일괄저장 완료 · 批量保存成功', 'ok') }
     else showToast('저장 실패 · 保存失败, 다시 시도해주세요', 'bad')
     return ok
   }, [orderDrafts, proc.items, password, editorName, requireEditor, showToast])
@@ -1991,6 +2042,7 @@ export default function ProcessPage({ G }) {
               onDraft={onOrderDraft}
               onDelete={handleDeleteMo}
               onOpenDetail={() => setSelectedMo({ id: itemNoOf(mo), row: mo })}
+              authorError={authorErrorItems.has(itemNoOf(mo))}
             />
           ))}
         </div>

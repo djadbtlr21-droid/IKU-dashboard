@@ -192,10 +192,12 @@ export async function onRequest(context) {
     }
     let remark = typeof body.remark === 'string' ? body.remark : ''
     if (remark.length > MAX_REMARK) remark = remark.slice(0, MAX_REMARK)
+    const remarkAuthor = typeof body.remarkAuthor === 'string' ? body.remarkAuthor.trim().slice(0, 60) : ''
 
     const record = {
       cells,
       remark,
+      remarkAuthor,
       lastUpdated: new Date().toISOString(),
       lastUpdatedBy: editor,
     }
