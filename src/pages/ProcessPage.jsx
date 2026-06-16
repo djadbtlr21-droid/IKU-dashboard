@@ -176,14 +176,22 @@ function isPastYMD(ymd) {
   const t = new Date(); t.setHours(0, 0, 0, 0); d.setHours(0, 0, 0, 0)
   return d.getTime() < t.getTime()
 }
-// 접힘 상태 섹션 제목 아래 완성일 표시 (미설정=null, 완료=초록✓, 경과+미완료=빨강깜빡, 그외=회색)
+// 접힘 상태 섹션 제목 아래 완성일 행 — 항상 표시, 좌측 정렬, 아이콘 우측 배치
+//   미입력=라벨만 회색 · 미완료/미경과=날짜 회색 · 미완료/경과=빨강 깜빡 + ⚠ · 완료=초록 + ✓
 function CompletionBadge({ G, sec, cells }) {
   const ymd = completionDateOf(sec, cells)
-  if (!ymd) return null
-  const done = sectionDone(sec, cells)
-  if (done) return <div style={{ fontSize: 11, fontWeight: 600, color: G.ok, marginTop: 2, paddingLeft: 22 }}>✓ 예상 완성일 预计完成日: <span className="num">{ymd}</span></div>
-  if (isPastYMD(ymd)) return <div className="iku-blink" style={{ fontSize: 11, fontWeight: 700, color: G.bad, marginTop: 2, paddingLeft: 22 }}>⚠ 예상 완성일 초과 · 已超预计完成日: <span className="num">{ymd}</span></div>
-  return <div style={{ fontSize: 11, color: G.mu, marginTop: 2, paddingLeft: 22 }}>예상 완성일 预计完成日: <span className="num">{ymd}</span></div>
+  const done = !!ymd && sectionDone(sec, cells)
+  const overdue = !!ymd && !done && isPastYMD(ymd)
+  const color = done ? G.ok : (overdue ? G.bad : G.mu)
+  const icon = done ? '✓' : (overdue ? '⚠' : '')
+  return (
+    <div className={overdue ? 'iku-blink' : undefined}
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 6, fontSize: 11, fontWeight: overdue ? 700 : (done ? 600 : 400), color, marginTop: 3, marginLeft: 0, paddingLeft: 0 }}>
+      <span>예상 완성일 预计完成日:</span>
+      {ymd && <span className="num">{ymd}</span>}
+      {icon && <span style={{ marginLeft: 'auto' }}>{icon}</span>}
+    </div>
+  )
 }
 
 // ── date helpers (yyyy-mm-dd, compatible with prior input[type=date] values) ──
