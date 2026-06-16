@@ -73,6 +73,7 @@ const SECTIONS = [
       { key: 'pattern', kr: '패턴작업중', cn: '纸样制作中', type: 'chip' },
       { key: 'fit', kr: '핏조정중', cn: '版型调整中', type: 'chip' },
       { key: 'done', kr: '완성', cn: '完成', type: 'chip' },
+      { key: 'completionDate', kr: '예상 완성일', cn: '预计完成日', type: 'date', completion: true },
     ],
   },
   {
@@ -83,43 +84,45 @@ const SECTIONS = [
       { key: 'fine_tune', kr: '미세조정중', cn: '细节调整中', type: 'chip' },
       { key: 'size_sample', kr: '사이즈샘플완성', cn: '尺码样完成', type: 'chip' },
       { key: 'done', kr: '완성', cn: '完成', type: 'chip' },
+      { key: 'completionDate', kr: '예상 완성일', cn: '预计完成日', type: 'date', completion: true },
     ],
   },
   {
     id: 'price', no: '③', kr: '가격', cn: '单价', fields: [
       { key: 'cost_fixed', kr: '공장가격확정', cn: '成本核算', type: 'chip', statuses: PRICE_STATUSES },
+      { key: 'completionDate', kr: '예상 완성일', cn: '预计完成日', type: 'date', completion: true },
     ],
   },
   {
     id: 'fabric', no: '④', kr: '원단', cn: '面料', fields: [
       { key: 'ordered', kr: '오더완료', cn: '已下单', type: 'chip' },
       { key: 'type_color', kr: '퀄리티·색상확인', cn: '品质及颜色确认', type: 'chip' },
-      { key: 'eta', kr: '예상납기', cn: '预计交期', type: 'date' },
+      { key: 'eta', kr: '예상 완성일', cn: '预计完成日', type: 'date', completion: true },
     ],
   },
   {
     id: 'sub_material', no: '⑤', kr: '부자재', cn: '辅料', fields: [
       { key: 'ordered', kr: '오더완료', cn: '已下单', type: 'chip' },
       { key: 'sample_color', kr: '샘플컬러확인', cn: '样品颜色确认', type: 'chip' },
-      { key: 'eta', kr: '예상납기', cn: '预计交期', type: 'date' },
+      { key: 'eta', kr: '예상 완성일', cn: '预计完成日', type: 'date', completion: true },
     ],
   },
   {
     id: 'label', no: '⑥', kr: '라벨', cn: '标签', fields: [
       { key: 'ordered', kr: '오더완료', cn: '已下单', type: 'chip' },
-      { key: 'eta', kr: '예상납기', cn: '预计交期', type: 'date' },
+      { key: 'eta', kr: '예상 완성일', cn: '预计完成日', type: 'date', completion: true },
     ],
   },
   {
     id: 'wash_label', no: '⑦', kr: '텍라벨', cn: '洗水标', fields: [
       { key: 'ordered', kr: '오더완료', cn: '已下单', type: 'chip' },
-      { key: 'eta', kr: '예상납기', cn: '预计交期', type: 'date' },
+      { key: 'eta', kr: '예상 완성일', cn: '预计完成日', type: 'date', completion: true },
     ],
   },
   {
     id: 'production', no: '⑧', kr: '생산', cn: '生产', fields: [
       { key: 'in_production', kr: '생산상태', cn: '生产状态', type: 'chip', statuses: PRODUCTION_STATUSES },
-      { key: 'prod_done_eta', kr: '생산완료예정', cn: '预计生产完成', type: 'date' },
+      { key: 'prod_done_eta', kr: '예상 완성일', cn: '预计完成日', type: 'date', completion: true },
       { key: 'ship_eta', kr: '선적예정일', cn: '预计装船日', type: 'date' },
       // 검품 验货 / 선적 装船 rows removed (item ⑤). Old saved values are kept in
       // KV (not deleted) — they are simply no longer rendered.
@@ -153,6 +156,34 @@ function sectionStatus(sec, cells) {
   if (ALWAYS_DONE_SECTIONS.has(sec.id)) return 'ok'   // ⑧생산: 어떤 상태든 완료
   const anyMid = selected.some(f => !DONE_VALUES.has(cells[`${sec.id}.${f.key}`]?.v))
   return anyMid ? 'warn' : 'ok'
+}
+
+// ── 예상 완성일 (완성일) 헬퍼 ──
+// 섹션의 완성일 필드(= completion 플래그) 값(yyyy-mm-dd) — 없으면 빈값
+function completionField(sec) { return sec.fields.find(f => f.completion) }
+function completionDateOf(sec, cells) {
+  const f = completionField(sec)
+  return f ? (cells[`${sec.id}.${f.key}`]?.d || '') : ''
+}
+// 완료 판단: 섹션에 完成/已入库/生产完成/报价完成(=DONE_VALUES) 칩이 선택됨
+function sectionDone(sec, cells) {
+  return sec.fields.some(f => f.type === 'chip' && DONE_VALUES.has(cells[`${sec.id}.${f.key}`]?.v))
+}
+// 오늘(자정) 기준으로 날짜가 경과했는지
+function isPastYMD(ymd) {
+  const d = parseYMD(ymd)
+  if (!d) return false
+  const t = new Date(); t.setHours(0, 0, 0, 0); d.setHours(0, 0, 0, 0)
+  return d.getTime() < t.getTime()
+}
+// 접힘 상태 섹션 제목 아래 완성일 표시 (미설정=null, 완료=초록✓, 경과+미완료=빨강깜빡, 그외=회색)
+function CompletionBadge({ G, sec, cells }) {
+  const ymd = completionDateOf(sec, cells)
+  if (!ymd) return null
+  const done = sectionDone(sec, cells)
+  if (done) return <div style={{ fontSize: 11, fontWeight: 600, color: G.ok, marginTop: 2, paddingLeft: 22 }}>✓ 예상 완성일 预计完成日: <span className="num">{ymd}</span></div>
+  if (isPastYMD(ymd)) return <div className="iku-blink" style={{ fontSize: 11, fontWeight: 700, color: G.bad, marginTop: 2, paddingLeft: 22 }}>⚠ 예상 완성일 초과 · 已超预计完成日: <span className="num">{ymd}</span></div>
+  return <div style={{ fontSize: 11, color: G.mu, marginTop: 2, paddingLeft: 22 }}>예상 완성일 预计完成日: <span className="num">{ymd}</span></div>
 }
 
 // ── date helpers (yyyy-mm-dd, compatible with prior input[type=date] values) ──
@@ -580,14 +611,28 @@ const PAGE_CSS = `
 // ──────────────────────────────────────────────────────────
 // Monday-first weekday headers, Chinese only (item ③).
 const WEEKDAYS_CN = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-const WEEKDAYS_KO = ['월', '화', '수', '목', '금', '토', '일']  // Monday-first
 function DatePicker({ G, value, onChange }) {
   const [open, setOpen] = useState(false)
+  const [coords, setCoords] = useState({ top: 0, left: 0 })   // 달력 팝업 위치(fixed)
+  const btnRef = useRef(null)
   const sel = parseYMD(value)
   const [view, setView] = useState(() => {
     const b = sel || new Date()
     return { y: b.getFullYear(), m: b.getMonth() }
   })
+
+  // 카드 overflow 영향을 받지 않도록 position:fixed + 높은 z-index. 버튼 위치 기준 좌표 계산.
+  const toggle = () => {
+    if (open) { setOpen(false); return }
+    const r = btnRef.current?.getBoundingClientRect()
+    if (r) {
+      const W = 232, H = 300
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - W - 8))
+      const top = (r.bottom + H + 8 > window.innerHeight) ? Math.max(8, r.top - H - 4) : r.bottom + 4
+      setCoords({ top, left })
+    }
+    setOpen(true)
+  }
 
   const today = new Date()
   // JS getDay(): 0=Sun..6=Sat → convert to Monday-first leading-blank offset.
@@ -609,25 +654,26 @@ function DatePicker({ G, value, onChange }) {
 
   return (
     <div style={{ position: 'relative', flex: '1 1 auto', minWidth: 0 }}>
-      <button type="button" onClick={() => setOpen(o => !o)}
+      <button ref={btnRef} type="button" onClick={toggle}
         style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 6, fontSize: 12, border: `1px solid ${G.border}`, background: G.bg, color: value ? G.tx : G.fa, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
         <Calendar size={12} style={{ flexShrink: 0, color: G.mu }} />
         <span className="num" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || '날짜 선택 · 选择日期'}</span>
       </button>
       {open && (
         <>
-          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 1200 }} />
-          <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 1201, background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: 10, width: 232, maxWidth: '80vw' }}>
-            {/* header — bilingual (KO 中) */}
+          {/* 카드 overflow 무시: backdrop + 팝업 모두 fixed, z-index 9999 */}
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 9998 }} />
+          <div style={{ position: 'fixed', top: coords.top, left: coords.left, zIndex: 9999, background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: 10, width: 232, maxWidth: '80vw' }}>
+            {/* header — 중국어 단독 (2026年6月) */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <button type="button" onClick={prev} style={{ background: 'none', border: 'none', cursor: 'pointer', color: G.mu, display: 'flex', padding: 4 }}><ChevronLeft size={16} /></button>
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: G.tx }}>{view.y}년 {view.m + 1}월 · {view.y}年{view.m + 1}月</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: G.tx }}>{view.y}年{view.m + 1}月</span>
               <button type="button" onClick={next} style={{ background: 'none', border: 'none', cursor: 'pointer', color: G.mu, display: 'flex', padding: 4 }}><ChevronRight size={16} /></button>
             </div>
-            {/* weekday row — Monday first, bilingual two-line (土 cool, 日 red) */}
+            {/* weekday row — Monday first, 중국어 단독 (周一…周日), 周六 cool · 周日 red */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 2 }}>
               {WEEKDAYS_CN.map((w, i) => (
-                <div key={w} style={{ textAlign: 'center', fontSize: 9, fontWeight: 600, lineHeight: 1.2, color: i === 6 ? G.bad : (i === 5 ? G.cool : G.mu), padding: '2px 0' }}>{WEEKDAYS_KO[i]}<br />{w}</div>
+                <div key={w} style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, lineHeight: 1.2, color: i === 6 ? G.bad : (i === 5 ? G.cool : G.mu), padding: '3px 0' }}>{w}</div>
               ))}
             </div>
             {/* days */}
@@ -642,10 +688,10 @@ function DatePicker({ G, value, onChange }) {
                   }}>{d}</button>
               ))}
             </div>
-            {/* footer */}
+            {/* footer — 중국어 단독 (今天 / 删除) */}
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-              <button type="button" onClick={goToday} style={{ flex: 1, padding: '5px 0', fontSize: 10.5, borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.accent, cursor: 'pointer', fontWeight: 600 }}>오늘 今天</button>
-              <button type="button" onClick={clear} style={{ flex: 1, padding: '5px 0', fontSize: 10.5, borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.bad, cursor: 'pointer', fontWeight: 600 }}>삭제 删除</button>
+              <button type="button" onClick={goToday} style={{ flex: 1, padding: '5px 0', fontSize: 11, borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.accent, cursor: 'pointer', fontWeight: 600 }}>今天</button>
+              <button type="button" onClick={clear} style={{ flex: 1, padding: '5px 0', fontSize: 11, borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.bad, cursor: 'pointer', fontWeight: 600 }}>删除</button>
             </div>
           </div>
         </>
@@ -1146,6 +1192,8 @@ function ProcessCard({ G, mo, record, editable, onZoom,
                   </span>
                 )}
               </div>
+              {/* 접힘 상태: 섹션 제목 바로 아래 예상 완성일 표시 */}
+              {isCollapsed && <CompletionBadge G={G} sec={sec} cells={cells} />}
               {/* collapsible body (item ① — smooth grid-rows animation) */}
               <div style={{ display: 'grid', gridTemplateRows: isCollapsed ? '0fr' : '1fr', transition: 'grid-template-rows .25s ease' }}>
               <div style={{ overflow: 'hidden', minHeight: 0 }}>
