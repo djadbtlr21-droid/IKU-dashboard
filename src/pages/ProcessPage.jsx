@@ -89,7 +89,7 @@ const SECTIONS = [
     ],
   },
   {
-    id: 'price', no: '③', kr: '가격', cn: '单价', fields: [
+    id: 'price', no: '③', kr: '단가', cn: '单价', fields: [
       { key: 'cost_fixed', kr: '공장가격확정', cn: '成本核算', type: 'chip', statuses: PRICE_STATUSES },
       { key: 'completionDate', kr: '예상 완성일', cn: '预计完成日', type: 'date', completion: true },
     ],
@@ -832,26 +832,34 @@ function PwModal({ G, onClose, onSuccess }) {
 // ──────────────────────────────────────────────────────────
 // Cell editor — status chips / datepicker / text + highlight toggle
 // ──────────────────────────────────────────────────────────
-function CellEditor({ G, field, cell, editable, allowStock, onChange, alwaysDone = false }) {
+function CellEditor({ G, field, cell, editable, allowStock, onChange, alwaysDone = false, isBlue = false }) {
   const v = cell?.v || ''
   const d = cell?.d || ''
   const h = !!cell?.h
   const hlBg = G.dk ? 'rgba(212,165,114,0.18)' : 'rgba(252,211,77,0.28)'
-  // ⑧생산: 어떤 값이든 선택되면 완료(✅·초록)로 표시
   const done = DONE_VALUES.has(v) || (alwaysDone && !!v)
 
   if (!editable) {
     const empty = !v && !d
-    // item ④ — mid status (chip, not done) blinks red, synced with the label
-    const midRead = field.type === 'chip' && !!v && !done
+    const midRead = field.type === 'chip' && !!v && !done && !isBlue
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap', padding: h ? '3px 6px' : 0, background: h ? hlBg : 'transparent', borderRadius: 6, textAlign: 'center' }}>
         {empty ? (
           <span style={{ fontSize: 12.7, color: G.fa }}>—</span>
         ) : (
           <>
-            {v && <span className={midRead ? 'iku-blink' : undefined} style={{ fontSize: 12.7, fontWeight: 600, color: done ? G.ok : (midRead ? G.bad : G.tx), padding: '2px 8px', background: G.cardAlt, border: `1px solid ${G.hair}`, borderRadius: 999 }}>{done ? '✅ ' : ''}{statusLabel(v)}</span>}
-            {d && <span className="num" style={{ fontSize: 12.7, color: G.accent, fontWeight: 600 }}>{d}</span>}
+            {v && (
+              <span className={midRead ? 'iku-blink' : undefined}
+                style={{ fontSize: 12.7, fontWeight: 600,
+                  color: isBlue ? '#1D4ED8' : (done ? G.ok : (midRead ? G.bad : G.tx)),
+                  padding: '2px 8px',
+                  background: isBlue ? '#DBEAFE' : G.cardAlt,
+                  border: `1px solid ${isBlue ? '#3B82F6' : G.hair}`,
+                  borderRadius: 999 }}>
+                {!isBlue && done ? '✅ ' : ''}{statusLabel(v)}
+              </span>
+            )}
+            {d && <span className="num" style={{ fontSize: 12.7, color: isBlue ? '#3B82F6' : G.accent, fontWeight: 600 }}>{d}</span>}
           </>
         )}
         {h && <AlertTriangle size={11} style={{ color: G.warn }} />}
@@ -896,12 +904,14 @@ function CellEditor({ G, field, cell, editable, allowStock, onChange, alwaysDone
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
         {opts.filter(o => allowStock || !o.stock).map(o => {
           const on = v === o.v
-          const isDone = DONE_VALUES.has(o.v)
           return (
             <button key={o.v} type="button"
               onClick={() => onChange({ ...cell, v: on ? '' : o.v })}
-              style={{ padding: '3px 8px', fontSize: 10.5, borderRadius: 999, cursor: 'pointer', fontWeight: 600, border: `1px solid ${on ? G.primary : G.border}`, background: on ? (G.dk ? 'rgba(232,200,152,0.18)' : 'rgba(201,168,110,0.16)') : 'transparent', color: on ? G.accent : G.mu, lineHeight: 1.35 }}>
-              {on && (isDone || alwaysDone) ? '✅ ' : ''}{o.ko} {o.cn}
+              style={{ padding: '3px 8px', fontSize: 10.5, borderRadius: 999, cursor: 'pointer', fontWeight: 600,
+                border: `1px solid ${on ? (isBlue ? '#3B82F6' : G.primary) : G.border}`,
+                background: on ? (isBlue ? '#DBEAFE' : (G.dk ? 'rgba(232,200,152,0.18)' : 'rgba(201,168,110,0.16)')) : 'transparent',
+                color: on ? (isBlue ? '#1D4ED8' : G.accent) : G.mu, lineHeight: 1.35 }}>
+              {o.ko} {o.cn}
             </button>
           )
         })}
@@ -949,17 +959,24 @@ function MemoBadge({ G, memo }) {
 
 // Section status dot (item ②): green ✅ when complete, amber ⚠ when a
 // mid status is present, nothing when no status is selected.
-function SectionIndicator({ G, status }) {
+function SectionIndicator({ G, status, isProduction = false, productionValue = '' }) {
+  if (isProduction && status === 'ok') {
+    const label = productionValue === '生产完成' ? '[생산완료]' : '[생산 중]'
+    return <span style={{ fontSize: 11, fontWeight: 700, color: '#1D4ED8', flexShrink: 0 }}>{label}</span>
+  }
   if (status === 'ok') return <CheckCircle2 size={15} style={{ color: '#15803D', flexShrink: 0 }} />
   if (status === 'warn') return <AlertTriangle size={15} className="iku-blink" style={{ color: '#D97706', flexShrink: 0 }} />
   return null
 }
 
 // Collapse / expand toggle for a section (item ①) — bilingual label.
-function SectionToggle({ G, collapsed, onToggle }) {
+function SectionToggle({ G, collapsed, onToggle, isProduction = false }) {
+  const btnColor = isProduction ? '#1D4ED8' : G.mu
+  const btnBorder = isProduction ? '#3B82F6' : G.border
+  const btnBg = isProduction ? (G.dk ? 'rgba(59,130,246,0.14)' : '#EFF6FF') : 'none'
   return (
     <button type="button" onClick={onToggle} title={collapsed ? '펴기 展开' : '접기 收起'}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: 'none', border: `1px solid ${G.border}`, borderRadius: 6, cursor: 'pointer', color: G.mu, padding: '3px 8px', fontSize: 13.2, fontWeight: 600, fontFamily: 'inherit' }}>
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: btnBg, border: `1px solid ${btnBorder}`, borderRadius: 6, cursor: 'pointer', color: btnColor, padding: '3px 8px', fontSize: 13.2, fontWeight: 600, fontFamily: 'inherit' }}>
       {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
       {collapsed ? '펴기 展开' : '접기 收起'}
     </button>
@@ -1146,11 +1163,11 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
       .filter(v => v && !DONE_VALUES.has(v))
     warnList.push(`${sec.kr} ${mids.map(statusLabel).join('/')}`.trim())
   }
-  // 전체 완료: ①~⑧ 모든 섹션이 'ok' 상태 (⑧생산 돌입만으로는 전체 완료 아님)
-  const allDone = !warnList.length && SECTIONS.every(sec => sectionStatus(sec, cells) === 'ok')
-  // ⑧생산 섹션에 어떤 상태든 선택되면 생산 돌입
-  const productionEntered = SECTIONS.some(sec => ALWAYS_DONE_SECTIONS.has(sec.id)
-    && sec.fields.some(f => f.type === 'chip' && cells[`${sec.id}.${f.key}`]?.v))
+  // 전체 완료: ①~⑦ 섹션이 모두 'ok' (⑧생산 제외 — 생산은 별도 표시)
+  const allDone = !warnList.length && SECTIONS.filter(sec => !ALWAYS_DONE_SECTIONS.has(sec.id)).every(sec => sectionStatus(sec, cells) === 'ok')
+  // ⑧생산 현재 상태값 (헤더 파란색 표시용)
+  const prodVal = cells['production.in_production']?.v || ''
+  const prodStatusObj = prodVal ? ALL_STATUS.find(x => x.v === prodVal) : null
 
   // overflow visible so the date-picker popover isn't clipped by the card
   return (
@@ -1244,7 +1261,7 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
               <div style={{ marginTop: 4, minHeight: 57, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                 {allDone ? (
                   <div style={{ fontSize: 13.3, fontWeight: 700, color: G.ok, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    ✅ 전체 완료 · 全部完成
+                    ✅ 생산 전 체크 항목 완료 · 产前项目全部完成
                   </div>
                 ) : (
                   <>
@@ -1259,12 +1276,12 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
                         +{extra}개 더 · 更多{extra}项
                       </div>
                     )}
-                    {productionEntered && (
-                      <div style={{ fontSize: 13.3, fontWeight: 700, color: G.ok, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        ✅ 생산 돌입 · 已进入生产
-                      </div>
-                    )}
                   </>
+                )}
+                {prodVal && (
+                  <div style={{ fontSize: 13.3, fontWeight: 700, color: '#1D4ED8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    🏭 {prodStatusObj?.ko || prodVal} · {prodStatusObj?.cn || prodVal}
+                  </div>
                 )}
               </div>
             )
@@ -1287,11 +1304,11 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
           const status = sectionStatus(sec, cells)   // item ② aggregate status
           const isCollapsed = collapsedFor(sec.id)   // item ① collapse state (parent-owned)
           return (
-            <div key={sec.id} style={{ paddingBottom: 20, borderBottom: `1px solid ${G.hair}` }}>
+            <div key={sec.id} style={{ paddingBottom: 20, borderBottom: `1px solid ${G.hair}`, ...(ALWAYS_DONE_SECTIONS.has(sec.id) ? { background: G.dk ? 'rgba(59,130,246,0.12)' : '#EFF6FF', borderLeft: '4px solid #3B82F6', borderRadius: 6, paddingLeft: 10, marginLeft: -4 } : {}) }}>
               {/* section title (number scales with it); flexWrap so right-side
                   items drop below instead of overlapping on narrow cards */}
-              <div style={{ fontSize: 15.18, fontWeight: 700, color: G.tx, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.2 }}>
-                <span><span style={{ color: G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: G.mu, fontWeight: 500 }}>{sec.cn}</span></span>
+              <div style={{ fontSize: 15.18, fontWeight: 700, color: ALWAYS_DONE_SECTIONS.has(sec.id) ? '#1D4ED8' : G.tx, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.2 }}>
+                <span><span style={{ color: ALWAYS_DONE_SECTIONS.has(sec.id) ? '#3B82F6' : G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: ALWAYS_DONE_SECTIONS.has(sec.id) ? '#93C5FD' : G.mu, fontWeight: 500 }}>{sec.cn}</span></span>
                 {!editable && <MemoBadge G={G} memo={memo} />}
                 {/* ⑥ 원단명/성분 (read): Zoho 자동값 + KV 오버라이드 우선 — 제목 우측 */}
                 {sec.id === 'fabric' && !editable && displayFabric && (
@@ -1308,13 +1325,18 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
                 {/* item ②/① — when collapsed, indicator + expand toggle live in the title row */}
                 {isCollapsed && (
                   <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    <SectionIndicator G={G} status={status} />
-                    <SectionToggle G={G} collapsed onToggle={() => toggleSection(sec.id)} />
+                    <SectionIndicator G={G} status={status} isProduction={ALWAYS_DONE_SECTIONS.has(sec.id)} productionValue={cells[`${sec.id}.in_production`]?.v || ''} />
+                    <SectionToggle G={G} collapsed onToggle={() => toggleSection(sec.id)} isProduction={ALWAYS_DONE_SECTIONS.has(sec.id)} />
                   </span>
                 )}
               </div>
-              {/* 접힘 상태: 섹션 제목 바로 아래 예상 완성일 표시 */}
-              {isCollapsed && <CompletionBadge G={G} sec={sec} cells={cells} />}
+              {/* 접힘 상태: 완성일 표시 (⑧생산은 생산 상태 표시로 대체) */}
+              {isCollapsed && (ALWAYS_DONE_SECTIONS.has(sec.id) ? (() => {
+                const pv = cells[`${sec.id}.in_production`]?.v || ''
+                if (!pv) return null
+                const pso = ALL_STATUS.find(x => x.v === pv)
+                return <div style={{ fontSize: 11, fontWeight: 700, color: '#1D4ED8', marginTop: 3 }}>{pv === '生产完成' ? '[생산완료]' : '[생산 중]'}: {pso?.ko} {pso?.cn}</div>
+              })() : <CompletionBadge G={G} sec={sec} cells={cells} />)}
               {/* collapsible body (item ① — smooth grid-rows animation) */}
               <div style={{ display: 'grid', gridTemplateRows: isCollapsed ? '0fr' : '1fr', transition: 'grid-template-rows .25s ease' }}>
               <div style={{ overflow: 'hidden', minHeight: 0 }}>
@@ -1324,7 +1346,7 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
                   const cellKey = `${sec.id}.${f.key}`
                   const cell = cells[cellKey]
                   const st = f.type === 'chip' ? chipStatus(cell, sec.id) : 'none'
-                  const labelColor = st === 'done' ? G.ok : (st === 'mid' ? G.bad : G.mu)
+                  const labelColor = ALWAYS_DONE_SECTIONS.has(sec.id) ? '#1D4ED8' : (st === 'done' ? G.ok : (st === 'mid' ? G.bad : G.mu))
                   return (
                     <div key={cellKey} style={{ display: 'grid', gridTemplateColumns: '104px 1fr', gap: 8, alignItems: editable ? 'start' : 'center' }}>
                       <div style={{ fontSize: 13.97, paddingTop: editable ? 7 : 0, lineHeight: 1.3 }}>
@@ -1334,7 +1356,7 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
                           <span style={{ color: st === 'none' ? G.fa : labelColor, fontSize: 12.7 }}>{f.cn}</span>
                         </span>
                       </div>
-                      <CellEditor G={G} field={f} cell={cell} editable={editable} allowStock={allowStock} alwaysDone={ALWAYS_DONE_SECTIONS.has(sec.id)} onChange={(val) => setCell(cellKey, val)} />
+                      <CellEditor G={G} field={f} cell={cell} editable={editable} allowStock={allowStock} alwaysDone={ALWAYS_DONE_SECTIONS.has(sec.id)} isBlue={ALWAYS_DONE_SECTIONS.has(sec.id)} onChange={(val) => setCell(cellKey, val)} />
                     </div>
                   )
                 })}
@@ -1349,8 +1371,8 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
                 )}
                 {/* item ②/① — expanded: indicator + collapse toggle at section bottom-right */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                  <SectionIndicator G={G} status={status} />
-                  <SectionToggle G={G} collapsed={false} onToggle={() => toggleSection(sec.id)} />
+                  <SectionIndicator G={G} status={status} isProduction={ALWAYS_DONE_SECTIONS.has(sec.id)} productionValue={cells[`${sec.id}.in_production`]?.v || ''} />
+                  <SectionToggle G={G} collapsed={false} onToggle={() => toggleSection(sec.id)} isProduction={ALWAYS_DONE_SECTIONS.has(sec.id)} />
                 </div>
               </div>
               </div>
