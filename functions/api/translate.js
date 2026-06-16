@@ -37,7 +37,7 @@ export async function onRequest({ request, env }) {
           if (out) return json({ ok: true, translation: out, source: 'gemini:' + model })
           lastErr += ` ${model}:empty`
         } else {
-          lastErr += ` ${model}:${r.status}`
+          lastErr += ` ${model}:${r.status}:${(await r.text()).replace(/\s+/g, ' ').slice(0, 300)}`
         }
       } catch (e) { lastErr += ` ${model}:ex:${e.message}` }
     }
