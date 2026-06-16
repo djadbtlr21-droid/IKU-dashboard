@@ -20,14 +20,14 @@ export async function onRequest({ request, env }) {
   // ── 1순위: Gemini API 직접 호출 (gemini-chat.js 와 동일 모델) ──
   let lastErr = ''
   if (apiKey) {
-    // gemini-chat.js 가 쓰는 모델을 우선, 실패 시 안정 모델로 폴백
-    const models = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-1.5-flash']
+    // gemini-chat.js 와 동일 모델. thinkingBudget:0 필수 (없으면 thinking 토큰 소모로 빈 응답).
+    const models = ['gemini-3-flash-preview', 'gemini-2.5-flash']
     for (const model of models) {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
       const body = {
         system_instruction: { parts: [{ text: SYS_PROMPT }] },
         contents: [{ role: 'user', parts: [{ text }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+        generationConfig: { temperature: 0.2, maxOutputTokens: 4000, thinkingConfig: { thinkingBudget: 0 } },
       }
       try {
         const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -35,11 +35,11 @@ export async function onRequest({ request, env }) {
           const data = await r.json()
           const out = (data?.candidates?.[0]?.content?.parts || []).map(p => p?.text || '').join('').trim()
           if (out) return json({ ok: true, translation: out, source: 'gemini:' + model })
-          lastErr = 'empty:' + model
+          lastErr += ` ${model}:empty`
         } else {
-          lastErr = `${model}:${r.status}:${(await r.text()).slice(0, 120)}`
+          lastErr += ` ${model}:${r.status}`
         }
-      } catch (e) { lastErr = `${model}:ex:${e.message}` }
+      } catch (e) { lastErr += ` ${model}:ex:${e.message}` }
     }
   } else {
     lastErr = 'no-key'
