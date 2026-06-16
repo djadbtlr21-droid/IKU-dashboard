@@ -166,12 +166,15 @@ function completionDateOf(sec, cells) {
   const f = completionField(sec)
   return f ? (cells[`${sec.id}.${f.key}`]?.d || '') : ''
 }
-// 완료 판단: 섹션에 完成/已入库/生产完成/报价完成(=DONE_VALUES) 칩이 선택됨.
+// 완료 판단: 선택된 칩이 1개 이상이고 모든 선택된 칩이 완료값(DONE_VALUES)이어야 완성.
+// 하위 항목(패턴/1차샘플/미세조정/사이즈샘플 등)에 중간 상태가 하나라도 있으면 미완성.
 // ⑧생산(ALWAYS_DONE_SECTIONS)은 어떤 상태든 선택되면 완성으로 간주.
 function sectionDone(sec, cells) {
   const chips = sec.fields.filter(f => f.type === 'chip')
   if (ALWAYS_DONE_SECTIONS.has(sec.id)) return chips.some(f => cells[`${sec.id}.${f.key}`]?.v)
-  return chips.some(f => DONE_VALUES.has(cells[`${sec.id}.${f.key}`]?.v))
+  const selected = chips.filter(f => cells[`${sec.id}.${f.key}`]?.v)
+  if (!selected.length) return false
+  return selected.every(f => DONE_VALUES.has(cells[`${sec.id}.${f.key}`]?.v))
 }
 // 접힘 상태 섹션 제목 아래 완성일 행 — 항상 표시, 좌측 정렬, 아이콘 날짜 우측(gap 4).
 //   ① 날짜 미설정+미완성 → "예상 완성일 预计完成日:" 라벨만 회색 (아이콘 없음)
@@ -944,11 +947,11 @@ function MemoBadge({ G, memo }) {
   )
 }
 
-// Section status dot (item ②): green ✅ when complete, red blinking ⚠ when a
+// Section status dot (item ②): green ✅ when complete, amber ⚠ when a
 // mid status is present, nothing when no status is selected.
 function SectionIndicator({ G, status }) {
-  if (status === 'ok') return <CheckCircle2 size={14} style={{ color: G.ok, flexShrink: 0 }} />
-  if (status === 'warn') return <AlertTriangle size={14} className="iku-blink" style={{ color: G.bad, flexShrink: 0 }} />
+  if (status === 'ok') return <CheckCircle2 size={15} style={{ color: '#15803D', flexShrink: 0 }} />
+  if (status === 'warn') return <AlertTriangle size={15} className="iku-blink" style={{ color: '#D97706', flexShrink: 0 }} />
   return null
 }
 
@@ -1112,9 +1115,11 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
   const setFabric = (val) => onDraft(itemNo, { fabric: val })
   const totalQty = fieldStr(mo?.Plan_Total_Quantity)       // 총 수량 (Zoho)
 
-  // ② 경고 항목 요약 — 공정 ①~⑧ 중 중간 상태(完成/已入库 아님)가 선택된 섹션
+  // 경고 항목 요약 — ①~⑦ 섹션 중 중간 상태(완성/완료 아닌 상태)가 선택된 섹션
+  // (⑧생산은 sectionStatus가 항상 'ok'를 반환하므로 warnList에 포함되지 않음)
   const warnList = []
   for (const sec of SECTIONS) {
+    if (ALWAYS_DONE_SECTIONS.has(sec.id)) continue  // ⑧ 생산 제외
     if (sectionStatus(sec, cells) !== 'warn') continue
     const mids = sec.fields
       .filter(f => f.type === 'chip')
@@ -1122,8 +1127,9 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
       .filter(v => v && !DONE_VALUES.has(v))
     warnList.push(`${sec.kr} ${mids.map(statusLabel).join('/')}`.trim())
   }
+  // 전체 완료: ①~⑧ 모든 섹션이 'ok' 상태 (⑧생산 돌입만으로는 전체 완료 아님)
   const allDone = !warnList.length && SECTIONS.every(sec => sectionStatus(sec, cells) === 'ok')
-  // ⑧생산(이하) 섹션에 어떤 상태든 선택되면 "생산 돌입" — 헤더 요약 최우선 표시
+  // ⑧생산 섹션에 어떤 상태든 선택되면 생산 돌입
   const productionEntered = SECTIONS.some(sec => ALWAYS_DONE_SECTIONS.has(sec.id)
     && sec.fields.some(f => f.type === 'chip' && cells[`${sec.id}.${f.key}`]?.v))
 
@@ -1210,12 +1216,12 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
               {displayFabric && <span>🧵 {displayFabric}</span>}
             </div>
           )}
-          {/* ② 경고 항목 요약 — 각 경고를 독립 행(세로 병렬)으로 표시 (빨강 깜빡) / 전체 완료 (초록 정적) */}
-          {productionEntered ? (
+          {/* 경고(①~⑦) + 생산돌입(⑧) 동시 표시 가능. 전체완료는 ①~⑧ 모두 완료일 때만. */}
+          {allDone ? (
             <div style={{ fontSize: 13.3, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              ✅ 생산 돌입 · 已进入生产
+              ✅ 전체 완료 · 全部完成
             </div>
-          ) : warnList.length ? (
+          ) : (warnList.length > 0 || productionEntered) ? (
             <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
               {warnList.map((w, i) => (
                 <div key={i} className="iku-blink" title={`⚠ ${w}`}
@@ -1223,10 +1229,11 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
                   ⚠ {w}
                 </div>
               ))}
-            </div>
-          ) : allDone ? (
-            <div style={{ fontSize: 13.3, fontWeight: 700, color: G.ok, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              ✅ 전체 완료 · 全部完成
+              {productionEntered && (
+                <div style={{ fontSize: 13.3, fontWeight: 700, color: G.ok, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  ✅ 생산 돌입 · 已进入生产
+                </div>
+              )}
             </div>
           ) : null}
         </div>
