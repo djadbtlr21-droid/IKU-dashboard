@@ -11,8 +11,8 @@ import {
 // 이미지 오버레이 없음 — 모든 정보는 이미지 아래 텍스트 영역에 표시.
 // ──────────────────────────────────────────────────────────
 export default function UnorderedStyleCard({
-  G, style, factory, note, editMode, draftFactory, draftNote,
-  onChangeFactory, onChangeNote, onConvert, onDelete, onZoom, onOpenDetail,
+  G, style, factory, note, price, editMode, draftFactory, draftNote, draftPrice,
+  onChangeFactory, onChangeNote, onChangePrice, onConvert, onDelete, onZoom, onOpenDetail,
 }) {
   const sku = styleKey(style)
   const chi = pick(style, F.chi)
@@ -87,13 +87,13 @@ export default function UnorderedStyleCard({
             <div style={{ fontSize: 10.3, color: G.tx, fontWeight: factory ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={factory || ''}>{factory || ''}</div>
           )}
         </div>
-        {/* 9. 비고 备注 (빈값 빈칸) */}
+        {/* 9. 예상단가 预算单价 */}
         <div style={{ marginTop: 2 }}>
-          <div style={{ fontSize: 9.3, color: G.fa, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>비고 备注</div>
+          <div style={{ fontSize: 13.95, color: '#EA580C', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>예상단가 预算单价</div>
           {editMode ? (
-            <textarea value={draftNote ?? (note || '')} maxLength={300} rows={2} onClick={stop} onChange={e => onChangeNote(sku, e.target.value)} placeholder="비고 输入备注" style={{ ...inputStyle, resize: 'vertical' }} />
+            <input value={draftPrice ?? (price || '')} maxLength={100} onClick={stop} onChange={e => onChangePrice(sku, e.target.value)} placeholder="예상단가 입력 · 输入预算单价" style={{ ...inputStyle, border: '1px solid #EA580C', fontSize: 15 }} />
           ) : (
-            <div style={{ fontSize: 10.3, color: G.tx, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={note || ''}>{note || ''}</div>
+            <div style={{ fontSize: 15.45, color: '#EA580C', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={price || ''}>{price || ''}</div>
           )}
         </div>
         {/* ④ 미오더 배지 — 오더 전환 버튼 바로 위, 중앙 정렬 (폰트 +3%) */}

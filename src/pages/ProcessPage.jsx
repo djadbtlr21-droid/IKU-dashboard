@@ -7,7 +7,7 @@ import {
 import { fetchMoList } from '../api/client'
 import {
   fetchProcessData, verifyProcessPassword, saveProcessItem,
-  fetchStyleList, fetchStyleMeta, saveStyleFactory, saveStyleNote, hideStyle,
+  fetchStyleList, fetchStyleMeta, saveStyleFactory, saveStyleNote, saveStylePrice, hideStyle,
   fetchMoFabric, saveMoFabric,
   fetchDeletions, deleteMo, deleteStyle,
   translateText,
@@ -962,7 +962,7 @@ function MemoBadge({ G, memo }) {
 function SectionIndicator({ G, status, isProduction = false, productionValue = '' }) {
   if (isProduction && status === 'ok') {
     const label = productionValue === '生产完成' ? '[생산완료]' : '[생산 중]'
-    return <span style={{ fontSize: 11, fontWeight: 700, color: '#1D4ED8', flexShrink: 0 }}>{label}</span>
+    return <span style={{ fontSize: 11, fontWeight: 600, color: '#5B8DEF', flexShrink: 0 }}>{label}</span>
   }
   if (status === 'ok') return <CheckCircle2 size={15} style={{ color: '#15803D', flexShrink: 0 }} />
   if (status === 'warn') return <AlertTriangle size={15} className="iku-blink" style={{ color: '#D97706', flexShrink: 0 }} />
@@ -971,12 +971,9 @@ function SectionIndicator({ G, status, isProduction = false, productionValue = '
 
 // Collapse / expand toggle for a section (item ①) — bilingual label.
 function SectionToggle({ G, collapsed, onToggle, isProduction = false }) {
-  const btnColor = isProduction ? '#1D4ED8' : G.mu
-  const btnBorder = isProduction ? '#3B82F6' : G.border
-  const btnBg = isProduction ? (G.dk ? 'rgba(59,130,246,0.14)' : '#EFF6FF') : 'none'
   return (
     <button type="button" onClick={onToggle} title={collapsed ? '펴기 展开' : '접기 收起'}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: btnBg, border: `1px solid ${btnBorder}`, borderRadius: 6, cursor: 'pointer', color: btnColor, padding: '3px 8px', fontSize: 13.2, fontWeight: 600, fontFamily: 'inherit' }}>
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: 'none', border: `1px solid ${G.border}`, borderRadius: 6, cursor: 'pointer', color: G.mu, padding: '3px 8px', fontSize: 13.2, fontWeight: 600, fontFamily: 'inherit' }}>
       {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
       {collapsed ? '펴기 展开' : '접기 收起'}
     </button>
@@ -1277,7 +1274,7 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
                   </>
                 )}
                 {prodVal && (
-                  <div style={{ fontSize: 13.3, fontWeight: 700, color: '#1D4ED8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: 13.3, fontWeight: 700, color: '#5B8DEF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     🏭 {prodStatusObj?.ko || prodVal} · {prodStatusObj?.cn || prodVal}
                   </div>
                 )}
@@ -1302,11 +1299,11 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
           const status = sectionStatus(sec, cells)   // item ② aggregate status
           const isCollapsed = collapsedFor(sec.id)   // item ① collapse state (parent-owned)
           return (
-            <div key={sec.id} style={{ paddingBottom: 20, borderBottom: `1px solid ${G.hair}`, ...(ALWAYS_DONE_SECTIONS.has(sec.id) ? { background: G.dk ? 'rgba(59,130,246,0.12)' : '#EFF6FF', borderLeft: '4px solid #3B82F6', borderRadius: 6, paddingLeft: 10, marginLeft: -4 } : {}) }}>
+            <div key={sec.id} style={{ paddingBottom: 20, borderBottom: `1px solid ${G.hair}` }}>
               {/* section title (number scales with it); flexWrap so right-side
                   items drop below instead of overlapping on narrow cards */}
-              <div style={{ fontSize: 15.18, fontWeight: 700, color: ALWAYS_DONE_SECTIONS.has(sec.id) ? '#1D4ED8' : G.tx, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.2 }}>
-                <span><span style={{ color: ALWAYS_DONE_SECTIONS.has(sec.id) ? '#3B82F6' : G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: ALWAYS_DONE_SECTIONS.has(sec.id) ? '#93C5FD' : G.mu, fontWeight: 500 }}>{sec.cn}</span></span>
+              <div style={{ fontSize: 15.18, fontWeight: 700, color: G.tx, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.2 }}>
+                <span><span style={{ color: G.accent, marginRight: 5 }}>{sec.no}</span>{sec.kr} <span style={{ color: G.mu, fontWeight: 500 }}>{sec.cn}</span></span>
                 {!editable && <MemoBadge G={G} memo={memo} />}
                 {/* ⑥ 원단명/성분 (read): Zoho 자동값 + KV 오버라이드 우선 — 제목 우측 */}
                 {sec.id === 'fabric' && !editable && displayFabric && (
@@ -1333,7 +1330,7 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
                 const pv = cells[`${sec.id}.in_production`]?.v || ''
                 if (!pv) return null
                 const pso = ALL_STATUS.find(x => x.v === pv)
-                return <div style={{ fontSize: 11, fontWeight: 700, color: '#1D4ED8', marginTop: 3 }}>{pv === '生产完成' ? '[생산완료]' : '[생산 중]'}: {pso?.ko} {pso?.cn}</div>
+                return <div style={{ fontSize: 11, fontWeight: 600, color: '#5B8DEF', marginTop: 3 }}>{pv === '生产完成' ? '[생산완료]' : '[생산 중]'}: {pso?.ko} {pso?.cn}</div>
               })() : <CompletionBadge G={G} sec={sec} cells={cells} />)}
               {/* collapsible body (item ① — smooth grid-rows animation) */}
               <div style={{ display: 'grid', gridTemplateRows: isCollapsed ? '0fr' : '1fr', transition: 'grid-template-rows .25s ease' }}>
@@ -1344,7 +1341,7 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
                   const cellKey = `${sec.id}.${f.key}`
                   const cell = cells[cellKey]
                   const st = f.type === 'chip' ? chipStatus(cell, sec.id) : 'none'
-                  const labelColor = ALWAYS_DONE_SECTIONS.has(sec.id) ? '#1D4ED8' : (st === 'done' ? G.ok : (st === 'mid' ? G.bad : G.mu))
+                  const labelColor = st === 'done' ? G.ok : (st === 'mid' ? G.bad : G.mu)
                   return (
                     <div key={cellKey} style={{ display: 'grid', gridTemplateColumns: '104px 1fr', gap: 8, alignItems: editable ? 'start' : 'center' }}>
                       <div style={{ fontSize: 13.97, paddingTop: editable ? 7 : 0, lineHeight: 1.3 }}>
@@ -1354,7 +1351,7 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
                           <span style={{ color: st === 'none' ? G.fa : labelColor, fontSize: 12.7 }}>{f.cn}</span>
                         </span>
                       </div>
-                      <CellEditor G={G} field={f} cell={cell} editable={editable} allowStock={allowStock} alwaysDone={ALWAYS_DONE_SECTIONS.has(sec.id)} isBlue={ALWAYS_DONE_SECTIONS.has(sec.id)} onChange={(val) => setCell(cellKey, val)} />
+                      <CellEditor G={G} field={f} cell={cell} editable={editable} allowStock={allowStock} alwaysDone={ALWAYS_DONE_SECTIONS.has(sec.id)} onChange={(val) => setCell(cellKey, val)} />
                     </div>
                   )
                 })}
@@ -1471,7 +1468,7 @@ export default function ProcessPage({ G }) {
   const [styleList, setStyleList] = useState([])
   const [styleLoading, setStyleLoading] = useState(true)
   const [styleErr, setStyleErr] = useState(null)
-  const [styleMeta, setStyleMeta] = useState({ factory: {}, note: {}, hidden: [] })
+  const [styleMeta, setStyleMeta] = useState({ factory: {}, note: {}, hidden: [], price: {} })
 
   // ⑥ MO 원단명 오버라이드 (key fabric:{MO_ID}) — KV값 우선
   const [moFabric, setMoFabric] = useState({})
@@ -1523,10 +1520,10 @@ export default function ProcessPage({ G }) {
     setStyleLoading(true); setStyleErr(null)
     Promise.all([
       fetchStyleList({ maxRecords: 200 }),
-      fetchStyleMeta().catch(() => ({ factory: {}, note: {}, hidden: [] })),
+      fetchStyleMeta().catch(() => ({ factory: {}, note: {}, hidden: [], price: {} })),
     ]).then(([list, meta]) => {
       setStyleList(list?.data || list?.records || list?.result || [])
-      setStyleMeta({ factory: meta?.factory || {}, note: meta?.note || {}, hidden: meta?.hidden || [] })
+      setStyleMeta({ factory: meta?.factory || {}, note: meta?.note || {}, hidden: meta?.hidden || [], price: meta?.price || {} })
     }).catch(err => { console.error('[ProcessPage] styles', err); setStyleErr(err.message || String(err)) })
       .finally(() => setStyleLoading(false))
   }, [])
@@ -1774,6 +1771,9 @@ export default function ProcessPage({ G }) {
   const onChangeStyleNote = useCallback((sku, value) => {
     setStyleDrafts(prev => ({ ...prev, [sku]: { ...prev[sku], note: value } }))
   }, [])
+  const onChangeStylePrice = useCallback((sku, value) => {
+    setStyleDrafts(prev => ({ ...prev, [sku]: { ...prev[sku], price: value } }))
+  }, [])
   const styleDirty = Object.keys(styleDrafts).length > 0
   const exitStyleEdit = () => { setStyleEditMode(false); setStyleDrafts({}); setStyleExitConfirm(false) }
   // ① 미오더 일괄저장 — 편집모드 유지, 스피너
@@ -1782,6 +1782,7 @@ export default function ProcessPage({ G }) {
     const tasks = []
     const nextFactory = { ...styleMeta.factory }
     const nextNote = { ...styleMeta.note }
+    const nextPrice = { ...styleMeta.price }
     for (const [sku, d] of Object.entries(drafts)) {
       if (d.factory !== undefined && d.factory.trim() !== (styleMeta.factory[sku] || '')) {
         const v = d.factory.trim(); nextFactory[sku] = v; tasks.push(saveStyleFactory(sku, v))
@@ -1789,8 +1790,11 @@ export default function ProcessPage({ G }) {
       if (d.note !== undefined && d.note.trim() !== (styleMeta.note[sku] || '')) {
         const v = d.note.trim(); nextNote[sku] = v; tasks.push(saveStyleNote(sku, v))
       }
+      if (d.price !== undefined && d.price.trim() !== (styleMeta.price[sku] || '')) {
+        const v = d.price.trim(); nextPrice[sku] = v; tasks.push(saveStylePrice(sku, v))
+      }
     }
-    setStyleMeta(prev => ({ ...prev, factory: nextFactory, note: nextNote }))
+    setStyleMeta(prev => ({ ...prev, factory: nextFactory, note: nextNote, price: nextPrice }))
     if (!tasks.length) { setStyleDrafts({}); showToast('변경 없음 · 无更改', 'ok'); return true }
     setStyleSaving(true)
     try {
@@ -2147,11 +2151,14 @@ export default function ProcessPage({ G }) {
                   key={sk} G={G} style={st}
                   factory={styleMeta.factory[sk] || ''}
                   note={styleMeta.note[sk] || ''}
+                  price={styleMeta.price[sk] || ''}
                   editMode={styleEditMode}
                   draftFactory={styleDrafts[sk]?.factory}
                   draftNote={styleDrafts[sk]?.note}
+                  draftPrice={styleDrafts[sk]?.price}
                   onChangeFactory={onChangeStyleFactory}
                   onChangeNote={onChangeStyleNote}
+                  onChangePrice={onChangeStylePrice}
                   onZoom={setZoomSrc}
                   onConvert={onConvertStyle}
                   onDelete={handleDeleteStyle}
