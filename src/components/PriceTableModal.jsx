@@ -82,8 +82,8 @@ function PriceInput({ value, onChange, G, color = C_OS, readOnly }) {
   )
 }
 
-function BulkTransBtn({ status, onClick, readOnly }) {
-  if (readOnly) return null
+// ① 읽기/수정 모드 양쪽에서 항상 표시 (readOnly 가드 제거)
+function BulkTransBtn({ status, onClick }) {
   const label = status === 'busy'
     ? '번역 중... · 翻译中...'
     : status === 'done'
@@ -119,24 +119,32 @@ function SubSlot({ children, justify = 'center', visible = true }) {
   )
 }
 
-// 인라인 확인 다이얼로그
-function ConfirmDialog({ G, msg, onOk, onCancel }) {
+// ③ buttons 배열 지원 — 3버튼 다이얼로그용
+function ConfirmDialog({ G, msg, onOk, onCancel, buttons }) {
+  const btns = buttons || [
+    { label: '취소 取消', onClick: onCancel, danger: false },
+    { label: '확인 确认', onClick: onOk, danger: true },
+  ]
   return (
     <div
-      onClick={e => { if (e.target === e.currentTarget) onCancel() }}
+      onClick={e => { if (e.target === e.currentTarget) (onCancel || btns[0]?.onClick)?.() }}
       style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 100, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
     >
-      <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, padding: 20, boxShadow: G.cardShadow, textAlign: 'center', maxWidth: 320 }}>
+      <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, padding: 20, boxShadow: G.cardShadow, textAlign: 'center', maxWidth: 360 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: G.tx, marginBottom: 16, lineHeight: 1.5 }}>{msg}</div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-          <button type="button" onClick={onCancel}
-            style={{ padding: '8px 18px', fontSize: 12, fontWeight: 500, borderRadius: 7, border: `1px solid ${G.border}`, background: 'transparent', color: G.tx, cursor: 'pointer', fontFamily: 'inherit' }}>
-            취소 取消
-          </button>
-          <button type="button" onClick={onOk}
-            style={{ padding: '8px 18px', fontSize: 12, fontWeight: 700, borderRadius: 7, border: '1px solid #DC2626', background: '#DC2626', color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
-            확인 确认
-          </button>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+          {btns.map((btn, i) => (
+            <button key={i} type="button" onClick={btn.onClick}
+              style={{
+                padding: '8px 16px', fontSize: 12, fontWeight: btn.danger || btn.primary ? 700 : 500,
+                borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit',
+                border: btn.danger ? '1px solid #DC2626' : btn.primary ? '1px solid #EA580C' : `1px solid ${G.border}`,
+                background: btn.danger ? '#DC2626' : btn.primary ? '#EA580C' : 'transparent',
+                color: (btn.danger || btn.primary) ? '#fff' : G.tx,
+              }}>
+              {btn.label}
+            </button>
+          ))}
         </div>
       </div>
     </div>
@@ -153,10 +161,9 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
   const [toast, setToast] = useState(null)
   const toastRef = useRef(null)
 
-  // 읽기/수정 모드
   const [readOnly, setReadOnly] = useState(true)
   const [originalData, setOriginalData] = useState(null)
-  const [confirmDialog, setConfirmDialog] = useState(null) // { msg, onOk }
+  const [confirmDialog, setConfirmDialog] = useState(null)
 
   const [procTrans, setProcTrans] = useState({})
   const [procOpen, setProcOpen] = useState({})
@@ -192,12 +199,9 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
             note: r.note || '',
           }))
           setRows(loadedRows)
-          const f2 = d.factory2 || ''
-          const f3 = d.factory3 || ''
-          const f4 = d.factory4 || ''
-          if (f2) setFactory2(f2)
-          if (f3) setFactory3(f3)
-          if (f4) setFactory4(f4)
+          if (d.factory2) setFactory2(d.factory2)
+          if (d.factory3) setFactory3(d.factory3)
+          if (d.factory4) setFactory4(d.factory4)
         }
       })
       .catch(() => {})
@@ -230,17 +234,6 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
     setFactory4(originalData.factory4)
   }, [originalData])
 
-  const handleCancelEdit = () => {
-    if (isDirty(rows, factory2, factory3, factory4)) {
-      setConfirmDialog({
-        msg: '저장하지 않은 변경사항이 있습니다. 취소하시겠습니까? · 有未保存的更改，确认退出？',
-        onOk: () => { restoreOriginal(); setReadOnly(true); setConfirmDialog(null) },
-      })
-    } else {
-      setReadOnly(true)
-    }
-  }
-
   const handleClearAll = () => {
     setConfirmDialog({
       msg: '모든 데이터를 삭제하시겠습니까? · 确认删除所有数据？',
@@ -251,6 +244,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
         setFactory4('')
         setConfirmDialog(null)
       },
+      onCancel: () => setConfirmDialog(null),
     })
   }
 
@@ -289,10 +283,10 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
     setTimeout(() => setBulkSt('idle'), 3000)
   }, [rows])
 
-  const handleSave = async () => {
+  // ② 저장 후 모달 닫지 않고 읽기 모드로 전환
+  const handleSave = useCallback(async () => {
     setSaving(true)
     try {
-      // 빈 행 제거 후 저장 (전체삭제 → rows:[])
       const cleanRows = stripId(rows).filter(r => PRICE_FIELDS.some(f => (r[f] || '').trim()))
       const data = {
         factory2: factory2.trim(),
@@ -307,7 +301,9 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
         onSavePrice?.(sku, jsonStr)
         onSaved?.()
         showToast('ok', '저장됨 · 已保存')
-        setTimeout(() => onClose(), 900)
+        // 모달 닫지 않고 읽기 모드로 전환
+        setReadOnly(true)
+        setOriginalData(null)
       } else {
         showToast('bad', '저장 실패 · 保存失败')
       }
@@ -316,7 +312,36 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
     } finally {
       setSaving(false)
     }
-  }
+  }, [rows, factory2, factory3, factory4, sku, onSavePrice, onSaved])
+
+  // ③ 수정종료 버튼 — 변경사항 없으면 즉시, 있으면 3버튼 확인
+  const handleEndEdit = useCallback(() => {
+    if (!isDirty(rows, factory2, factory3, factory4)) {
+      restoreOriginal()
+      setReadOnly(true)
+      return
+    }
+    setConfirmDialog({
+      msg: '저장하지 않은 변경사항이 있습니다. 수정을 종료하시겠습니까? · 有未保存的更改，确认结束修改？',
+      buttons: [
+        {
+          label: '저장 후 종료 · 保存并退出',
+          primary: true,
+          onClick: () => { setConfirmDialog(null); handleSave() },
+        },
+        {
+          label: '저장 없이 종료 · 直接退出',
+          danger: false,
+          onClick: () => { restoreOriginal(); setReadOnly(true); setConfirmDialog(null) },
+        },
+        {
+          label: '취소 · 取消',
+          danger: false,
+          onClick: () => setConfirmDialog(null),
+        },
+      ],
+    })
+  }, [isDirty, rows, factory2, factory3, factory4, restoreOriginal, handleSave])
 
   const thBase = {
     padding: '7px 5px', fontSize: 11.6, fontWeight: 700,
@@ -350,13 +375,13 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
           border: `1px solid ${G.border}`,
         }}
       >
-        {/* 인라인 확인 다이얼로그 */}
         {confirmDialog && (
           <ConfirmDialog
             G={G}
             msg={confirmDialog.msg}
             onOk={confirmDialog.onOk}
-            onCancel={() => setConfirmDialog(null)}
+            onCancel={confirmDialog.onCancel || (() => setConfirmDialog(null))}
+            buttons={confirmDialog.buttons}
           />
         )}
 
@@ -421,9 +446,9 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
                       </th>
                       <th style={{ ...thBase, whiteSpace: 'normal' }}>
                         <div>공정명 工序名</div>
+                        {/* ① 읽기/수정 모드 모두 번역 버튼 표시 */}
                         <SubSlot>
                           <BulkTransBtn
-                            readOnly={readOnly}
                             status={procBulkSt}
                             onClick={() => bulkTranslate('process', setProcBulkSt, setProcTrans, setProcOpen)}
                           />
@@ -479,9 +504,9 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
                       </th>
                       <th style={{ ...thBase, whiteSpace: 'normal' }}>
                         <div>비고 · 备注</div>
+                        {/* ① 읽기/수정 모드 모두 번역 버튼 표시 */}
                         <SubSlot>
                           <BulkTransBtn
-                            readOnly={readOnly}
                             status={noteBulkSt}
                             onClick={() => bulkTranslate('note', setNoteBulkSt, setNoteTrans, setNoteOpen)}
                           />
@@ -575,7 +600,6 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
                 </table>
               </div>
 
-              {/* 행 추가 버튼 — 수정 모드만 */}
               {!readOnly && (
                 <button
                   type="button"
@@ -594,38 +618,43 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
           )}
         </div>
 
-        {/* 하단 버튼 */}
+        {/* ③ 하단 버튼 재배치 */}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', padding: '13px 18px', borderTop: `1px solid ${G.border}`, flexShrink: 0 }}>
-          {/* 전체삭제 — 수정 모드만, 좌측 */}
-          {!readOnly && (
+          {readOnly ? (
+            /* 읽기 모드: 닫기 버튼만 */
             <button
               type="button"
-              onClick={handleClearAll}
-              style={{ marginRight: 'auto', padding: '9px 16px', fontSize: 12, fontWeight: 600, borderRadius: 8, border: '1px solid #EF4444', background: 'transparent', color: '#EF4444', cursor: 'pointer', fontFamily: 'inherit' }}
+              onClick={onClose}
+              style={{ padding: '9px 21px', fontSize: 13.2, fontWeight: 500, borderRadius: 8, border: `1px solid ${G.border}`, background: 'transparent', color: G.tx, cursor: 'pointer', fontFamily: 'inherit' }}
             >
-              전체삭제 全部删除
+              닫기 关闭
             </button>
-          )}
-
-          {/* 닫기(읽기) / 취소(수정) */}
-          <button
-            type="button"
-            onClick={readOnly ? onClose : handleCancelEdit}
-            style={{ padding: '9px 21px', fontSize: 13.2, fontWeight: 500, borderRadius: 8, border: `1px solid ${G.border}`, background: 'transparent', color: G.tx, cursor: 'pointer', fontFamily: 'inherit' }}
-          >
-            {readOnly ? '닫기 关闭' : '취소 取消'}
-          </button>
-
-          {/* 저장 — 수정 모드만 */}
-          {!readOnly && (
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              style={{ padding: '9px 21px', fontSize: 13.2, fontWeight: 700, borderRadius: 8, border: '1px solid #EA580C', background: '#EA580C', color: '#fff', cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: saving ? 0.7 : 1 }}
-            >
-              {saving ? '저장 중 · 保存中...' : '저장 保存'}
-            </button>
+          ) : (
+            /* 수정 모드: [전체삭제][수정종료] ... [저장] */
+            <>
+              <button
+                type="button"
+                onClick={handleClearAll}
+                style={{ marginRight: 4, padding: '9px 16px', fontSize: 12, fontWeight: 600, borderRadius: 8, border: '1px solid #EF4444', background: 'transparent', color: '#EF4444', cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                전체삭제 全部删除
+              </button>
+              <button
+                type="button"
+                onClick={handleEndEdit}
+                style={{ marginRight: 'auto', padding: '9px 16px', fontSize: 12, fontWeight: 500, borderRadius: 8, border: `1px solid ${G.border}`, background: 'transparent', color: G.tx, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                수정종료 结束修改
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                style={{ padding: '9px 21px', fontSize: 13.2, fontWeight: 700, borderRadius: 8, border: '1px solid #EA580C', background: '#EA580C', color: '#fff', cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: saving ? 0.7 : 1 }}
+              >
+                {saving ? '저장 중 · 保存中...' : '저장 保存'}
+              </button>
+            </>
           )}
         </div>
       </div>
