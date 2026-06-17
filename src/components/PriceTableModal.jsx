@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { fetchStylePriceTable, saveStylePriceTable, translateText } from '../api/client'
 
-// ④ 기본 공정 제거 — 신규 SKU는 빈 행 3개만 표시
+// 신규 SKU는 빈 행 3개만 표시
 let _rowId = 0
 function makeRow(process = '') {
   return { id: ++_rowId, process, iku: '', p1: '', p2: '', p3: '', p4: '', note: '' }
@@ -10,57 +10,26 @@ function makeDefaultRows() {
   return [makeRow(), makeRow(), makeRow()]
 }
 
-// ── 번역 버튼이 달린 입력칸 ──
-function TranslatableInput({ value, onChange, placeholder, G }) {
-  const [busy, setBusy] = useState(false)
-  const [translation, setTranslation] = useState(null)
-  const [open, setOpen] = useState(false)
-
-  const toggle = async () => {
-    if (open) { setOpen(false); return }
-    if (!value.trim() || busy) return
-    setBusy(true)
-    try {
-      const res = await translateText(value)
-      if (res?.translation) { setTranslation(res.translation); setOpen(true) }
-    } catch { /* silent */ } finally { setBusy(false) }
-  }
-
-  const btnDisabled = busy || (!open && !value.trim())
-  const btnLabel = busy ? '번역 중 翻译中...' : open ? '닫기 关闭' : '번역 翻译'
-
+// ── 단순 입력칸 (번역 결과 슬라이드 포함, 버튼 없음) ──
+function TransCell({ value, onChange, translation, showTrans, onCloseTranslation, placeholder, G }) {
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-        <input
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder={placeholder}
-          style={{
-            flex: 1, minWidth: 0, padding: '4px 5px', fontSize: 12.1,
-            border: '1px solid #E5E7EB', borderRadius: 4,
-            background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit',
-          }}
-        />
-        <button
-          type="button"
-          onClick={toggle}
-          disabled={btnDisabled}
-          style={{
-            flexShrink: 0, fontSize: 11, padding: '2px 6px', whiteSpace: 'nowrap',
-            border: '1px solid #D1D5DB', borderRadius: 3, background: '#F9FAFB',
-            color: '#6B7280', cursor: btnDisabled ? 'default' : 'pointer',
-            fontFamily: 'inherit', opacity: btnDisabled && !open ? 0.45 : 1,
-          }}
-        >
-          {btnLabel}
-        </button>
-      </div>
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          width: '100%', boxSizing: 'border-box',
+          padding: '4px 5px', fontSize: 12.1,
+          border: '1px solid #E5E7EB', borderRadius: 4,
+          background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit',
+        }}
+      />
       {/* 슬라이드 다운 번역 결과 */}
       <div style={{
         overflow: 'hidden',
-        maxHeight: open && translation ? '80px' : '0',
-        opacity: open && translation ? 1 : 0,
+        maxHeight: (showTrans && translation) ? '80px' : '0',
+        opacity: (showTrans && translation) ? 1 : 0,
         transition: 'max-height 0.25s ease, opacity 0.25s ease',
       }}>
         <div style={{
@@ -68,10 +37,10 @@ function TranslatableInput({ value, onChange, placeholder, G }) {
           background: '#EFF6FF', display: 'flex', alignItems: 'flex-start', gap: 4,
         }}>
           <span style={{ fontSize: 11, flexShrink: 0, lineHeight: 1.7 }}>🇰🇷</span>
-          <span style={{ fontSize: 12.1, flex: 1, color: '#1E40AF', lineHeight: 1.5 }}>{translation}</span>
+          <span style={{ fontSize: 12.1, flex: 1, color: '#1E40AF', lineHeight: 1.5 }}>{translation || ''}</span>
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={onCloseTranslation}
             style={{ flexShrink: 0, fontSize: 13.2, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, fontFamily: 'inherit' }}
           >×</button>
         </div>
@@ -101,21 +70,49 @@ function PriceInput({ value, onChange, G }) {
   )
 }
 
+// ── 열 일괄 번역 버튼 ──
+function BulkTransBtn({ status, onClick }) {
+  const label = status === 'busy'
+    ? '번역 중... · 翻译中...'
+    : status === 'done'
+    ? '번역완료 · 已翻译'
+    : '전체번역 全部翻译'
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={status === 'busy'}
+      style={{
+        marginLeft: 5, fontSize: 10, padding: '2px 6px', whiteSpace: 'nowrap',
+        border: '1px solid #D1D5DB', borderRadius: 3, background: '#F9FAFB',
+        color: '#6B7280', cursor: status === 'busy' ? 'default' : 'pointer',
+        fontFamily: 'inherit', opacity: status === 'busy' ? 0.6 : 1,
+        verticalAlign: 'middle',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
 // ── 예상단가 표 모달 (메인 컴포넌트) ──
-// Props:
-//   G         — 테마 오브젝트
-//   sku       — 스타일 SKU (로드/저장 키)
-//   onClose   — 닫기 콜백
-//   onSavePrice — (sku, jsonString) 저장 성공 시 부모 상태 업데이트 콜백
 export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
   const [rows, setRows] = useState(makeDefaultRows)
   const [factory2, setFactory2] = useState('')
   const [factory3, setFactory3] = useState('')
-  const [factory4, setFactory4] = useState('')   // ③ 신규
+  const [factory4, setFactory4] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
   const toastRef = useRef(null)
+
+  // ② 일괄 번역 상태 — { [rowId]: translation string }
+  const [procTrans, setProcTrans] = useState({})   // 공정명 번역 결과
+  const [procOpen, setProcOpen] = useState({})     // 공정명 번역 표시 여부
+  const [noteTrans, setNoteTrans] = useState({})   // 비고 번역 결과
+  const [noteOpen, setNoteOpen] = useState({})     // 비고 번역 표시 여부
+  const [procBulkSt, setProcBulkSt] = useState('idle')  // 'idle'|'busy'|'done'
+  const [noteBulkSt, setNoteBulkSt] = useState('idle')
 
   // ESC 닫기
   useEffect(() => {
@@ -126,7 +123,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
 
   useEffect(() => () => clearTimeout(toastRef.current), [])
 
-  // KV 로드 — factory4/p4 없으면 빈값으로 호환 처리
+  // KV 로드
   useEffect(() => {
     let alive = true
     setLoading(true)
@@ -142,12 +139,12 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
             p1: r.p1 || '',
             p2: r.p2 || '',
             p3: r.p3 || '',
-            p4: r.p4 || '',      // ③ 호환: 없으면 빈값
+            p4: r.p4 || '',
             note: r.note || '',
           })))
           if (d.factory2) setFactory2(d.factory2)
           if (d.factory3) setFactory3(d.factory3)
-          if (d.factory4) setFactory4(d.factory4)   // ③ 호환
+          if (d.factory4) setFactory4(d.factory4)
         }
       })
       .catch(() => {})
@@ -175,13 +172,35 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
     return Number.isInteger(total) ? String(total) : total.toFixed(2).replace(/\.?0+$/, '')
   }
 
+  // ② 일괄 번역 — 공정명 / 비고 공통 핸들러
+  const bulkTranslate = useCallback(async (field, setBulkSt, setTrans, setOpen) => {
+    setBulkSt('busy')
+    const targets = rows.filter(r => (r[field] || '').trim())
+    const results = await Promise.all(
+      targets.map(r =>
+        translateText(r[field])
+          .then(res => ({ id: r.id, text: res?.translation || null }))
+          .catch(() => ({ id: r.id, text: '번역실패 · 翻译失败' }))
+      )
+    )
+    const newTrans = {}
+    const newOpen = {}
+    results.forEach(({ id, text }) => {
+      if (text) { newTrans[id] = text; newOpen[id] = true }
+    })
+    setTrans(prev => ({ ...prev, ...newTrans }))
+    setOpen(prev => ({ ...prev, ...newOpen }))
+    setBulkSt('done')
+    setTimeout(() => setBulkSt('idle'), 3000)
+  }, [rows])
+
   const handleSave = async () => {
     setSaving(true)
     try {
       const data = {
         factory2: factory2.trim(),
         factory3: factory3.trim(),
-        factory4: factory4.trim(),    // ③ 신규
+        factory4: factory4.trim(),
         rows: rows.map(({ id, ...r }) => r),
         updatedAt: new Date().toISOString(),
       }
@@ -201,7 +220,6 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
     }
   }
 
-  // ⑥ font × 1.10
   const thStyle = {
     padding: '7px 5px', fontSize: 11.6, fontWeight: 700, color: G.tx,
     background: G.cardAlt || '#F9FAFB', borderBottom: `1px solid ${G.border || '#E5E7EB'}`,
@@ -226,7 +244,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
         onClick={e => e.stopPropagation()}
         style={{
           background: G.card, borderRadius: 12,
-          width: '92%', maxWidth: 1265, maxHeight: '92vh',  // ⑥ × 1.15
+          width: '92%', maxWidth: 1265, maxHeight: '92vh',
           display: 'flex', flexDirection: 'column',
           boxShadow: '0 8px 40px rgba(0,0,0,0.28)',
           border: `1px solid ${G.border}`,
@@ -267,11 +285,21 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                   <thead>
                     <tr>
                       <th style={thStyle}>#</th>
-                      <th style={thStyle}>공정명 工序名</th>
+                      {/* ② 공정명 헤더 — 일괄 번역 버튼 */}
+                      <th style={{ ...thStyle, whiteSpace: 'normal' }}>
+                        <span>공정명 工序名</span>
+                        <BulkTransBtn
+                          status={procBulkSt}
+                          onClick={() => bulkTranslate('process', setProcBulkSt, setProcTrans, setProcOpen)}
+                        />
+                      </th>
                       <th style={thStyle}>IKU 단가<br /><span style={{ fontWeight: 500, fontSize: 10.5 }}>公司单价</span></th>
-                      {/* ② HEXIANG 고정 — 서브라벨 없음, 공장명 입력 없음 */}
-                      <th style={thStyle}>1. HEXIANG 合祥单价</th>
-                      {/* ③ 외주단가 2 */}
+                      {/* ① HEXIANG 헤더 2줄 */}
+                      <th style={{ ...thStyle, whiteSpace: 'normal', wordBreak: 'keep-all' }}>
+                        <div>1. HEXIANG단가</div>
+                        <div style={{ fontWeight: 500, fontSize: 10.5 }}>合祥单价</div>
+                      </th>
+                      {/* 외주단가 2 */}
                       <th style={thStyle}>
                         <div>2. 외주단가 外发单价</div>
                         <input
@@ -281,7 +309,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                           style={headerInputStyle}
                         />
                       </th>
-                      {/* ③ 외주단가 3 */}
+                      {/* 외주단가 3 */}
                       <th style={thStyle}>
                         <div>3. 외주단가 外发单价</div>
                         <input
@@ -291,7 +319,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                           style={headerInputStyle}
                         />
                       </th>
-                      {/* ③ 외주단가 4 — 신규 */}
+                      {/* 외주단가 4 */}
                       <th style={thStyle}>
                         <div>4. 외주단가 外发单价</div>
                         <input
@@ -301,7 +329,14 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                           style={headerInputStyle}
                         />
                       </th>
-                      <th style={thStyle}>비고 · 备注</th>
+                      {/* ② 비고 헤더 — 일괄 번역 버튼 */}
+                      <th style={{ ...thStyle, whiteSpace: 'normal' }}>
+                        <span>비고 · 备注</span>
+                        <BulkTransBtn
+                          status={noteBulkSt}
+                          onClick={() => bulkTranslate('note', setNoteBulkSt, setNoteTrans, setNoteOpen)}
+                        />
+                      </th>
                       <th style={thStyle}></th>
                     </tr>
                   </thead>
@@ -309,10 +344,14 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                     {rows.map((row, i) => (
                       <tr key={row.id}>
                         <td style={{ ...tdStyle, textAlign: 'center', fontSize: 11.6, color: G.fa, paddingTop: 6 }}>{i + 1}</td>
+                        {/* ② 공정명 — 개별 번역 버튼 없음, 일괄 번역 결과만 표시 */}
                         <td style={tdStyle}>
-                          <TranslatableInput
+                          <TransCell
                             value={row.process}
                             onChange={v => updateRow(row.id, 'process', v)}
+                            translation={procTrans[row.id]}
+                            showTrans={!!procOpen[row.id]}
+                            onCloseTranslation={() => setProcOpen(s => ({ ...s, [row.id]: false }))}
                             placeholder="공정명 工序名"
                             G={G}
                           />
@@ -329,14 +368,17 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                         <td style={tdStyle}>
                           <PriceInput value={row.p3} onChange={v => updateRow(row.id, 'p3', v)} G={G} />
                         </td>
-                        {/* ③ p4 신규 */}
                         <td style={tdStyle}>
                           <PriceInput value={row.p4} onChange={v => updateRow(row.id, 'p4', v)} G={G} />
                         </td>
+                        {/* ② 비고 — 개별 번역 버튼 없음, 일괄 번역 결과만 표시 */}
                         <td style={tdStyle}>
-                          <TranslatableInput
+                          <TransCell
                             value={row.note}
                             onChange={v => updateRow(row.id, 'note', v)}
+                            translation={noteTrans[row.id]}
+                            showTrans={!!noteOpen[row.id]}
+                            onCloseTranslation={() => setNoteOpen(s => ({ ...s, [row.id]: false }))}
                             placeholder="비고 · 备注"
                             G={G}
                           />
@@ -367,7 +409,6 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                       <td style={{ ...tdStyle, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
                         <span style={{ fontSize: 12.1, fontWeight: 700, color: '#EA580C' }}>¥{sumField('p3')}</span>
                       </td>
-                      {/* ③ p4 합계 */}
                       <td style={{ ...tdStyle, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
                         <span style={{ fontSize: 12.1, fontWeight: 700, color: '#EA580C' }}>¥{sumField('p4')}</span>
                       </td>

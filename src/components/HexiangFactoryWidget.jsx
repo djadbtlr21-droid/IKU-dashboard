@@ -70,10 +70,10 @@ function SewingWorker({ idx, lineIdx }) {
   const fc       = FABRIC[ci % 8]
   const hc       = HAIR_COLORS[ci % 6]
   const isFemale = (lineIdx + idx) % 2 === 0
-  const isPants  = ci % 2 === 1
+  const fabricType = ci % 4
 
   const nd = `-${(idx * 41 + lineIdx * 97) % 450}ms`
-  const bd = `-${(idx * 41 + lineIdx * 97 + 300) % 1400}ms`
+  const bd = `-${(idx * 41 + lineIdx * 97 + 300) % 1260}ms`
   const ad = `-${(idx * 41 + lineIdx * 97 + 100) % 800}ms`
 
   const femaleHair = () => {
@@ -149,7 +149,7 @@ function SewingWorker({ idx, lineIdx }) {
       aria-hidden="true">
 
       {/* ── 공인 전체 — bob 애니메이션 (재봉틀·옷감·바늘은 밖에 고정) ── */}
-      <g style={{ animation: `hxBob 1.4s ease-in-out ${bd} infinite`, transformBox: 'view-box', transformOrigin: '22px 36px' }}>
+      <g style={{ animation: `hxBob 1.26s ease-in-out ${bd} infinite`, transformBox: 'view-box', transformOrigin: '22px 36px' }}>
 
       {/* ── Layer 1: 헤어 (머리 뒤) ── */}
       {isFemale ? femaleHair() : maleHair()}
@@ -218,24 +218,39 @@ function SewingWorker({ idx, lineIdx }) {
       <ellipse cx="20" cy="54" rx="2.3" ry="1.3" fill="#CBD5E1"/>
       <ellipse cx="28" cy="54" rx="2.3" ry="1.3" fill="#CBD5E1"/>
 
-      {/* ── Layer 7: 옷감 (상판 위) ── */}
-      {isPants ? (
-        <>
-          <rect x="10" y="45" width="24" height="4" rx="1.5" fill={fc} opacity="0.95"/>
-          <rect x="10" y="48.5" width="10.5" height="8" rx="1.5" fill={fc} opacity="0.93"/>
-          <rect x="23.5" y="48.5" width="10.5" height="8" rx="1.5" fill={fc} opacity="0.93"/>
-          <line x1="22" y1="49" x2="22" y2="56.5" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="1.5,2"/>
-          <line x1="29" y1="45" x2="29" y2="56.5" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="2,2"/>
-        </>
-      ) : (
-        <>
-          <rect x="10" y="47" width="24" height="10" rx="1.5" fill={fc} opacity="0.93"/>
-          <path d="M10,47 Q7,46 6,49 Q7,51 10,51 Z" fill={fc} opacity="0.93"/>
-          <path d="M34,47 Q37,46 38,49 Q37,51 34,51 Z" fill={fc} opacity="0.93"/>
-          <path d="M16,47 Q22,44.5 28,47" stroke="rgba(255,255,255,0.2)" strokeWidth="0.9" fill="none"/>
-          <line x1="29" y1="47" x2="29" y2="57" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="2,2"/>
-        </>
-      )}
+      {/* ── Layer 7: 옷감 (상판 위) — 4종류 ── */}
+      {fabricType === 0 && <>
+        {/* 티셔츠 (상의+소매) */}
+        <rect x="11" y="48" width="22" height="9" rx="1.5" fill={fc} opacity="0.92"/>
+        <path d="M11,48 Q7,47 6,50 Q7,52 11,52 Z" fill={fc} opacity="0.92"/>
+        <path d="M33,48 Q37,47 38,50 Q37,52 33,52 Z" fill={fc} opacity="0.92"/>
+        <path d="M17,48 Q22,45.5 27,48" stroke="rgba(255,255,255,0.2)" strokeWidth="0.9" fill="none"/>
+        <line x1="29" y1="48" x2="29" y2="57" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="2,2"/>
+      </>}
+      {fabricType === 1 && <>
+        {/* 바지 (하의) */}
+        <rect x="11" y="46" width="22" height="3.5" rx="1.5" fill={fc} opacity="0.95"/>
+        <rect x="11" y="49" width="9.5" height="8" rx="1.5" fill={fc} opacity="0.92"/>
+        <rect x="23.5" y="49" width="9.5" height="8" rx="1.5" fill={fc} opacity="0.92"/>
+        <line x1="22" y1="49.5" x2="22" y2="57" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="1.5,2"/>
+        <line x1="29" y1="46" x2="29" y2="57" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="2,2"/>
+      </>}
+      {fabricType === 2 && <>
+        {/* 원단 롤 */}
+        <rect x="8" y="50" width="28" height="7" rx="3.5" fill={fc} opacity="0.85"/>
+        <ellipse cx="22" cy="50" rx="14" ry="3" fill={fc} opacity="0.95"/>
+        <line x1="10" y1="50" x2="34" y2="50" stroke="rgba(255,255,255,0.2)" strokeWidth="0.5" strokeDasharray="3,2"/>
+        <line x1="10" y1="52" x2="34" y2="52" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" strokeDasharray="3,2"/>
+        <line x1="29" y1="48" x2="29" y2="57" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="2,2"/>
+      </>}
+      {fabricType === 3 && <>
+        {/* 조끼/민소매 */}
+        <rect x="14" y="47" width="16" height="10" rx="1.5" fill={fc} opacity="0.92"/>
+        <rect x="15" y="45" width="4" height="4" rx="1" fill={fc} opacity="0.9"/>
+        <rect x="25" y="45" width="4" height="4" rx="1" fill={fc} opacity="0.9"/>
+        <path d="M17,47 L22,51 L27,47" stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" fill="none"/>
+        <line x1="29" y1="47" x2="29" y2="57" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="2,2"/>
+      </>}
 
       {/* ── Layer 8: 바늘 어셈블리 (은색) ── */}
       <rect x="17" y="47" width="13" height="2" rx="1" fill="#64748B"/>
