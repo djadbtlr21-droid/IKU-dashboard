@@ -352,6 +352,9 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
     padding: '4px 4px', borderBottom: `1px solid ${G.border || '#E5E7EB'}`,
     verticalAlign: 'top',
   }
+  // 단가 열 세로 구분선 (헤더/데이터/합계 행 공통)
+  const thDIV = { ...thBase, borderLeft: '1px solid #E5E7EB' }
+  const tdDIV = { ...tdStyle, borderLeft: '1px solid #E5E7EB' }
   const factoryInputStyle = {
     width: '100%', boxSizing: 'border-box', padding: '2px 4px', fontSize: 11,
     border: 'none', borderBottom: readOnly ? 'none' : '1px dashed #9CA3AF',
@@ -429,13 +432,13 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
                 <table style={{ width: '100%', minWidth: 820, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                   <colgroup>
                     <col style={{ width: 28 }} />
-                    <col style={{ width: '20%' }} />
-                    <col style={{ width: '9%' }} />
-                    <col style={{ width: '9%' }} />
-                    <col style={{ width: '10%' }} />
-                    <col style={{ width: '10%' }} />
-                    <col style={{ width: '10%' }} />
-                    <col />
+                    <col style={{ width: '18.35%' }} />
+                    <col style={{ width: '9.65%' }} />
+                    <col style={{ width: '9.65%' }} />
+                    <col style={{ width: '10.65%' }} />
+                    <col style={{ width: '10.65%' }} />
+                    <col style={{ width: '10.65%' }} />
+                    <col style={{ width: '30.4%' }} />
                     {!readOnly && <col style={{ width: 26 }} />}
                   </colgroup>
                   <thead>
@@ -454,19 +457,19 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
                           />
                         </SubSlot>
                       </th>
-                      <th style={{ ...thBase, whiteSpace: 'normal', color: C_IKU }}>
+                      <th style={{ ...thDIV, whiteSpace: 'normal', color: C_IKU }}>
                         <div>IKU 단가</div>
                         <SubSlot>
                           <span style={{ fontWeight: 500, fontSize: 10.5 }}>公司单价</span>
                         </SubSlot>
                       </th>
-                      <th style={{ ...thBase, whiteSpace: 'normal', wordBreak: 'keep-all', color: C_HX }}>
+                      <th style={{ ...thDIV, whiteSpace: 'normal', wordBreak: 'keep-all', color: C_HX }}>
                         <div>1. HEXIANG단가</div>
                         <SubSlot>
                           <span style={{ fontWeight: 500, fontSize: 10.5 }}>合祥单价</span>
                         </SubSlot>
                       </th>
-                      <th style={{ ...thBase, whiteSpace: 'normal', color: C_OS }}>
+                      <th style={{ ...thDIV, whiteSpace: 'normal', color: C_OS }}>
                         <div>2. 외주단가 外发单价</div>
                         <SubSlot justify="stretch">
                           <input
@@ -478,7 +481,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
                           />
                         </SubSlot>
                       </th>
-                      <th style={{ ...thBase, whiteSpace: 'normal', color: C_OS }}>
+                      <th style={{ ...thDIV, whiteSpace: 'normal', color: C_OS }}>
                         <div>3. 외주단가 外发单价</div>
                         <SubSlot justify="stretch">
                           <input
@@ -490,7 +493,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
                           />
                         </SubSlot>
                       </th>
-                      <th style={{ ...thBase, whiteSpace: 'normal', color: C_OS }}>
+                      <th style={{ ...thDIV, whiteSpace: 'normal', color: C_OS }}>
                         <div>4. 외주단가 外发单价</div>
                         <SubSlot justify="stretch">
                           <input
@@ -535,19 +538,19 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
                             readOnly={readOnly}
                           />
                         </td>
-                        <td style={tdStyle}>
+                        <td style={tdDIV}>
                           <PriceInput value={row.iku} onChange={v => updateRow(row.id, 'iku', v)} G={G} color={C_IKU} readOnly={readOnly} />
                         </td>
-                        <td style={tdStyle}>
+                        <td style={tdDIV}>
                           <PriceInput value={row.p1} onChange={v => updateRow(row.id, 'p1', v)} G={G} color={C_HX} readOnly={readOnly} />
                         </td>
-                        <td style={tdStyle}>
+                        <td style={tdDIV}>
                           <PriceInput value={row.p2} onChange={v => updateRow(row.id, 'p2', v)} G={G} color={C_OS} readOnly={readOnly} />
                         </td>
-                        <td style={tdStyle}>
+                        <td style={tdDIV}>
                           <PriceInput value={row.p3} onChange={v => updateRow(row.id, 'p3', v)} G={G} color={C_OS} readOnly={readOnly} />
                         </td>
-                        <td style={tdStyle}>
+                        <td style={tdDIV}>
                           <PriceInput value={row.p4} onChange={v => updateRow(row.id, 'p4', v)} G={G} color={C_OS} readOnly={readOnly} />
                         </td>
                         <td style={tdStyle}>
@@ -579,19 +582,19 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved 
                       <td colSpan={2} style={{ ...tdStyle, borderBottom: 'none', paddingLeft: 8 }}>
                         <span style={{ fontSize: 12.1, fontWeight: 700, color: G.tx }}>합계 合計</span>
                       </td>
-                      <td style={{ ...tdStyle, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
+                      <td style={{ ...tdDIV, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
                         <span style={{ fontSize: 12.1, fontWeight: 700, color: C_IKU }}>¥{sumField('iku')}</span>
                       </td>
-                      <td style={{ ...tdStyle, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
+                      <td style={{ ...tdDIV, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
                         <span style={{ fontSize: 12.1, fontWeight: 700, color: C_HX }}>¥{sumField('p1')}</span>
                       </td>
-                      <td style={{ ...tdStyle, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
+                      <td style={{ ...tdDIV, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
                         <span style={{ fontSize: 12.1, fontWeight: 700, color: C_OS }}>¥{sumField('p2')}</span>
                       </td>
-                      <td style={{ ...tdStyle, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
+                      <td style={{ ...tdDIV, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
                         <span style={{ fontSize: 12.1, fontWeight: 700, color: C_OS }}>¥{sumField('p3')}</span>
                       </td>
-                      <td style={{ ...tdStyle, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
+                      <td style={{ ...tdDIV, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
                         <span style={{ fontSize: 12.1, fontWeight: 700, color: C_OS }}>¥{sumField('p4')}</span>
                       </td>
                       <td colSpan={readOnly ? 1 : 2} style={{ ...tdStyle, borderBottom: 'none' }}></td>

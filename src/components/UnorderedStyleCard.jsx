@@ -131,7 +131,7 @@ export default function UnorderedStyleCard({
         {row('원단', '面料', fabric)}
 
         {/* 샘플 상태 */}
-        <div style={{ marginTop: 2 }}>
+        <div style={{ marginTop: 14 }}>
           <div style={bigLabelStyle}>샘플 상태 打样状态</div>
           <div
             className={!sampleDone ? 'g-blink' : undefined}
