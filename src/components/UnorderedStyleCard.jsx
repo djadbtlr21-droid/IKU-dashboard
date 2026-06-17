@@ -1,7 +1,8 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Trash2 } from 'lucide-react'
 import ZohoImage from './ZohoImage'
 import PriceTableModal from './PriceTableModal'
+import { fetchStylePriceTable } from '../api/client'
 import {
   F, pick, styleKey, imageField, styleImageUrl, statusInfo,
 } from '../utils/styleFields'
@@ -26,6 +27,7 @@ export default function UnorderedStyleCard({
   onToggleSampleAlert, onToggleOrderAlert,
   onSavePrice,
   onDelete, onZoom, onOpenDetail,
+  borderColor,
 }) {
   const sku = styleKey(style)
   const chi = pick(style, F.chi)
@@ -42,32 +44,28 @@ export default function UnorderedStyleCard({
 
   // ── 예상단가 모달 상태 ──
   const [priceModal, setPriceModal] = useState(false)
+  // KV 가격 데이터 존재 여부 (null=로딩 중, 'ok'=있음, 'empty'=없음)
+  const [priceKvStatus, setPriceKvStatus] = useState(null)
 
-  // 저장된 price JSON 파싱
-  const priceData = useMemo(() => {
-    if (!price) return null
-    try { return JSON.parse(price) } catch { return null }
-  }, [price])
+  useEffect(() => {
+    let cancelled = false
+    fetchStylePriceTable(sku)
+      .then(res => {
+        if (cancelled) return
+        const rows = res?.data?.rows
+        const hasVal = rows?.length > 0 && rows.some(r => r.iku || r.p1 || r.p2 || r.p3)
+        setPriceKvStatus(hasVal ? 'ok' : 'empty')
+      })
+      .catch(() => { if (!cancelled) setPriceKvStatus('empty') })
+    return () => { cancelled = true }
+  }, [sku])
 
   const openPriceModal = (e) => {
     e.stopPropagation()
     setPriceModal(true)
   }
 
-  // 예상단가 버튼 라벨 — 신규(rows) 및 구형(ikuPrice) 포맷 모두 지원
-  const priceBtnLabel = useMemo(() => {
-    if (!priceData) return '예상단가 预算单价 (미입력 · 未填写)'
-    if (Array.isArray(priceData.rows) && priceData.rows.length > 0) {
-      const ikuSum = priceData.rows.reduce((acc, r) => {
-        const v = parseFloat(r.iku); return acc + (isNaN(v) ? 0 : v)
-      }, 0)
-      return ikuSum > 0
-        ? `예상단가 预算单价 | IKU 합계: ¥${Number.isInteger(ikuSum) ? ikuSum : ikuSum.toFixed(2).replace(/\.?0+$/, '')}`
-        : '예상단가 预算单价 (입력됨 · 已填写)'
-    }
-    if (priceData.ikuPrice) return `예상단가 预算单价 | IKU: ${priceData.ikuPrice}`
-    return '예상단가 预算单价 (미입력 · 未填写)'
-  }, [priceData])
+  const priceBtnLabel = priceKvStatus === null ? '...' : priceKvStatus === 'ok' ? '예상단가 预算单价 ✅' : '예상단가 预算单价 ⚠'
 
   const inputStyle = { width: '100%', boxSizing: 'border-box', padding: '4px 6px', fontSize: 10, border: `1px solid ${G.border}`, borderRadius: 5, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }
 
@@ -111,7 +109,7 @@ export default function UnorderedStyleCard({
   })
 
   return (
-    <div className="card" style={{ padding: 0, overflow: 'visible', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+    <div className="card" style={{ padding: 0, overflow: 'visible', display: 'flex', flexDirection: 'column', position: 'relative', ...(borderColor ? { border: `1px solid ${borderColor}` } : {}) }}>
       {/* alertBlink 인라인 CSS */}
       <style>{ALERT_BLINK_CSS}</style>
 
@@ -152,14 +150,9 @@ export default function UnorderedStyleCard({
           )}
         </div>
 
-        {/* ④ 미오더 배지 */}
-        <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', justifyContent: 'center' }}>
-          <span style={{ fontSize: 9.3, fontWeight: 700, color: '#fff', background: G.bad, padding: '2px 10px', borderRadius: 999 }}>미오더 · 未下单</span>
-        </div>
-
         {/* ⑤ 예상단가 버튼 — editMode 무관 항상 클릭 가능 */}
         <button type="button" onClick={openPriceModal}
-          style={{ marginTop: 4, width: '100%', minHeight: 33, padding: '7px 10px', fontSize: 11.3, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 999, border: '1px solid #EA580C', background: '#FEF3C7', color: '#EA580C', cursor: 'pointer', fontFamily: 'inherit', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+          style={{ ...alertBtnStyle(false), fontWeight: 700 }}>
           {priceBtnLabel}
         </button>
 

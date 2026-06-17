@@ -70,6 +70,9 @@ const ALWAYS_DONE_SECTIONS = new Set(['production'])
 // Raw-material sections that may use the 입고완료 已入库 chip (item ③).
 const RAW_SECTIONS = new Set(['fabric', 'sub_material', 'label', 'wash_label'])
 
+// 미오더 샘플 완료 판별 키워드 (대소문자 무시)
+const SAMPLE_DONE_KEYS = ['已完成', '완료', 'completed', 'approved', '샘플 제작완료']
+
 const SECTIONS = [
   {
     id: 'self_sample', no: '①', kr: '자체샘플', cn: '自体样品', fields: [
@@ -1664,6 +1667,21 @@ export default function ProcessPage({ G }) {
       return true
     })
   }, [unorderedStyles, styleTab, search])
+  // 샘플 완료 그룹 / 샘플 제작 중 그룹
+  const completedStyles = useMemo(
+    () => visibleStyles.filter(st => {
+      const v = (pick(st, SF.sampleStatus) || '').toLowerCase()
+      return SAMPLE_DONE_KEYS.some(k => v.includes(k.toLowerCase()))
+    }),
+    [visibleStyles]
+  )
+  const inProgressStyles = useMemo(
+    () => visibleStyles.filter(st => {
+      const v = (pick(st, SF.sampleStatus) || '').toLowerCase()
+      return !SAMPLE_DONE_KEYS.some(k => v.includes(k.toLowerCase()))
+    }),
+    [visibleStyles]
+  )
 
   // ── edit flow ──
   const onEditClick = () => {
@@ -2166,32 +2184,83 @@ export default function ProcessPage({ G }) {
             <div style={{ fontSize: 12, color: G.fa, marginTop: 4 }}>위 미오더 탭을 선택하거나 검색해 보세요 · 请选择未下单标签或搜索</div>
           </div>
         ) : (
-          <div className="mio-grid">
-            {visibleStyles.map(st => {
-              const sk = styleKey(st)
-              return (
-                <UnorderedStyleCard
-                  key={sk} G={G} style={st}
-                  factory={styleMeta.factory[sk] || ''}
-                  note={styleMeta.note[sk] || ''}
-                  price={styleMeta.price[sk] || ''}
-                  editMode={styleEditMode}
-                  draftFactory={styleDrafts[sk]?.factory}
-                  draftNote={styleDrafts[sk]?.note}
-                  onChangeFactory={onChangeStyleFactory}
-                  onChangeNote={onChangeStyleNote}
-                  onSavePrice={onSaveStylePrice}
-                  sampleAlert={styleMeta.sample_alert[sk] === '1'}
-                  orderAlert={styleMeta.order_alert[sk] === '1'}
-                  onToggleSampleAlert={onToggleSampleAlert}
-                  onToggleOrderAlert={onToggleOrderAlert}
-                  onZoom={setZoomSrc}
-                  onDelete={handleDeleteStyle}
-                  onOpenDetail={(st) => setSelectedStyle(st)}
-                />
-              )
-            })}
-          </div>
+          <>
+            {completedStyles.length > 0 && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: '#3B6D11', background: '#EAF3DE', border: '1px solid #97C459', padding: '3px 10px', borderRadius: 999 }}>샘플 완료 · 已完成</span>
+                  <span style={{ fontSize: 11, color: G.mu }}>{completedStyles.length}개 · {completedStyles.length}款</span>
+                  <div style={{ flex: 1, height: 1, background: '#C0DD97' }} />
+                </div>
+                <div className="mio-grid">
+                  {completedStyles.map(st => {
+                    const sk = styleKey(st)
+                    return (
+                      <UnorderedStyleCard
+                        key={sk} G={G} style={st}
+                        factory={styleMeta.factory[sk] || ''}
+                        note={styleMeta.note[sk] || ''}
+                        price={styleMeta.price[sk] || ''}
+                        editMode={styleEditMode}
+                        draftFactory={styleDrafts[sk]?.factory}
+                        draftNote={styleDrafts[sk]?.note}
+                        onChangeFactory={onChangeStyleFactory}
+                        onChangeNote={onChangeStyleNote}
+                        onSavePrice={onSaveStylePrice}
+                        sampleAlert={styleMeta.sample_alert[sk] === '1'}
+                        orderAlert={styleMeta.order_alert[sk] === '1'}
+                        onToggleSampleAlert={onToggleSampleAlert}
+                        onToggleOrderAlert={onToggleOrderAlert}
+                        onZoom={setZoomSrc}
+                        onDelete={handleDeleteStyle}
+                        onOpenDetail={(s) => setSelectedStyle(s)}
+                        borderColor="#C0DD97"
+                      />
+                    )
+                  })}
+                </div>
+              </>
+            )}
+            {completedStyles.length > 0 && inProgressStyles.length > 0 && (
+              <div style={{ height: 40 }} />
+            )}
+            {inProgressStyles.length > 0 && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: '#A32D2D', background: '#FCEBEB', border: '1px solid #F09595', padding: '3px 10px', borderRadius: 999 }}>샘플 제작 중 · 打样中</span>
+                  <span style={{ fontSize: 11, color: G.mu }}>{inProgressStyles.length}개 · {inProgressStyles.length}款</span>
+                  <div style={{ flex: 1, height: 1, background: '#F7C1C1' }} />
+                </div>
+                <div className="mio-grid">
+                  {inProgressStyles.map(st => {
+                    const sk = styleKey(st)
+                    return (
+                      <UnorderedStyleCard
+                        key={sk} G={G} style={st}
+                        factory={styleMeta.factory[sk] || ''}
+                        note={styleMeta.note[sk] || ''}
+                        price={styleMeta.price[sk] || ''}
+                        editMode={styleEditMode}
+                        draftFactory={styleDrafts[sk]?.factory}
+                        draftNote={styleDrafts[sk]?.note}
+                        onChangeFactory={onChangeStyleFactory}
+                        onChangeNote={onChangeStyleNote}
+                        onSavePrice={onSaveStylePrice}
+                        sampleAlert={styleMeta.sample_alert[sk] === '1'}
+                        orderAlert={styleMeta.order_alert[sk] === '1'}
+                        onToggleSampleAlert={onToggleSampleAlert}
+                        onToggleOrderAlert={onToggleOrderAlert}
+                        onZoom={setZoomSrc}
+                        onDelete={handleDeleteStyle}
+                        onOpenDetail={(s) => setSelectedStyle(s)}
+                        borderColor="#F7C1C1"
+                      />
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </>
         )}
       </>
       )}
