@@ -36,8 +36,8 @@ const LEG_DARK = {
 const LEGO_YELLOW = '#F5CD2F'
 // 헤어 색상 6가지 순환
 const HAIR_COLORS = ['#1F2937','#92400E','#111827','#7C3AED','#78350F','#1D4ED8']
-// 옷감 색상 (다크 계열)
-const FABRIC = ['#1a1a2e','#16213e','#1f2937','#2d1b69','#1e3a5f','#374151','#1a2744','#2d1f3d']
+// ⑤ 옷감 색상 6가지 (검/회/흰/분홍/파랑/초록)
+const FABRIC_COLORS = ['#1F2937','#9CA3AF','#F1F5F9','#FBCFE8','#BFDBFE','#BBF7D0']
 
 // 위상 오프셋 — 공인마다 애니메이션 시작점을 다르게.
 const phase = (idx, lineIdx, mod) => `-${(idx * 41 + lineIdx * 97) % mod}ms`
@@ -67,13 +67,20 @@ function SewingWorker({ idx, lineIdx }) {
   const ci       = lineIdx * 7 + idx
   const suit     = SUITS[ci % 8]
   const leg      = LEG_DARK[suit]
-  const fc       = FABRIC[ci % 8]
+  const fc       = FABRIC_COLORS[ci % 6]
   const hc       = HAIR_COLORS[ci % 6]
   const isFemale = (lineIdx + idx) % 2 === 0
   const fabricType = ci % 4
 
+  // ⑤ 흰색 계열 옷감은 stroke 윤곽선으로 구분
+  const isWhiteFabric = fc === '#F1F5F9'
+  const seamColor     = isWhiteFabric ? 'rgba(100,116,139,0.4)' : 'rgba(255,255,255,0.18)'
+  const fStroke       = isWhiteFabric ? '#CBD5E1' : 'none'
+  const fSW           = isWhiteFabric ? '0.8' : '0'
+
   const nd = `-${(idx * 41 + lineIdx * 97) % 450}ms`
-  const bd = `-${(idx * 41 + lineIdx * 97 + 300) % 1260}ms`
+  // ④ bob 주기 1.13s
+  const bd = `-${(idx * 41 + lineIdx * 97 + 300) % 1130}ms`
   const ad = `-${(idx * 41 + lineIdx * 97 + 100) % 800}ms`
 
   const femaleHair = () => {
@@ -149,7 +156,7 @@ function SewingWorker({ idx, lineIdx }) {
       aria-hidden="true">
 
       {/* ── 공인 전체 — bob 애니메이션 (재봉틀·옷감·바늘은 밖에 고정) ── */}
-      <g style={{ animation: `hxBob 1.26s ease-in-out ${bd} infinite`, transformBox: 'view-box', transformOrigin: '22px 36px' }}>
+      <g style={{ animation: `hxBob 1.13s ease-in-out ${bd} infinite`, transformBox: 'view-box', transformOrigin: '22px 36px' }}>
 
       {/* ── Layer 1: 헤어 (머리 뒤) ── */}
       {isFemale ? femaleHair() : maleHair()}
@@ -218,38 +225,38 @@ function SewingWorker({ idx, lineIdx }) {
       <ellipse cx="20" cy="54" rx="2.3" ry="1.3" fill="#CBD5E1"/>
       <ellipse cx="28" cy="54" rx="2.3" ry="1.3" fill="#CBD5E1"/>
 
-      {/* ── Layer 7: 옷감 (상판 위) — 4종류 ── */}
+      {/* ── Layer 7: 옷감 (상판 위) — 4형태 × 6색상, 흰색은 윤곽선 추가 ── */}
       {fabricType === 0 && <>
-        {/* 티셔츠 (상의+소매) */}
-        <rect x="11" y="48" width="22" height="9" rx="1.5" fill={fc} opacity="0.92"/>
-        <path d="M11,48 Q7,47 6,50 Q7,52 11,52 Z" fill={fc} opacity="0.92"/>
-        <path d="M33,48 Q37,47 38,50 Q37,52 33,52 Z" fill={fc} opacity="0.92"/>
-        <path d="M17,48 Q22,45.5 27,48" stroke="rgba(255,255,255,0.2)" strokeWidth="0.9" fill="none"/>
-        <line x1="29" y1="48" x2="29" y2="57" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="2,2"/>
+        {/* 티셔츠 */}
+        <rect x="11" y="48" width="22" height="9" rx="1.5" fill={fc} opacity="0.92" stroke={fStroke} strokeWidth={fSW}/>
+        <path d="M11,48 Q7,47 6,50 Q7,52 11,52 Z" fill={fc} opacity="0.92" stroke={fStroke} strokeWidth={fSW}/>
+        <path d="M33,48 Q37,47 38,50 Q37,52 33,52 Z" fill={fc} opacity="0.92" stroke={fStroke} strokeWidth={fSW}/>
+        <path d="M17,48 Q22,45.5 27,48" stroke={seamColor} strokeWidth="0.9" fill="none"/>
+        <line x1="29" y1="48" x2="29" y2="57" stroke={seamColor} strokeWidth="0.6" strokeDasharray="2,2"/>
       </>}
       {fabricType === 1 && <>
-        {/* 바지 (하의) */}
-        <rect x="11" y="46" width="22" height="3.5" rx="1.5" fill={fc} opacity="0.95"/>
-        <rect x="11" y="49" width="9.5" height="8" rx="1.5" fill={fc} opacity="0.92"/>
-        <rect x="23.5" y="49" width="9.5" height="8" rx="1.5" fill={fc} opacity="0.92"/>
-        <line x1="22" y1="49.5" x2="22" y2="57" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="1.5,2"/>
-        <line x1="29" y1="46" x2="29" y2="57" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="2,2"/>
+        {/* 바지 */}
+        <rect x="11" y="46" width="22" height="3.5" rx="1.5" fill={fc} opacity="0.95" stroke={fStroke} strokeWidth={fSW}/>
+        <rect x="11" y="49" width="9.5" height="8" rx="1.5" fill={fc} opacity="0.92" stroke={fStroke} strokeWidth={fSW}/>
+        <rect x="23.5" y="49" width="9.5" height="8" rx="1.5" fill={fc} opacity="0.92" stroke={fStroke} strokeWidth={fSW}/>
+        <line x1="22" y1="49.5" x2="22" y2="57" stroke={seamColor} strokeWidth="0.6" strokeDasharray="1.5,2"/>
+        <line x1="29" y1="46" x2="29" y2="57" stroke={seamColor} strokeWidth="0.6" strokeDasharray="2,2"/>
       </>}
       {fabricType === 2 && <>
         {/* 원단 롤 */}
-        <rect x="8" y="50" width="28" height="7" rx="3.5" fill={fc} opacity="0.85"/>
-        <ellipse cx="22" cy="50" rx="14" ry="3" fill={fc} opacity="0.95"/>
-        <line x1="10" y1="50" x2="34" y2="50" stroke="rgba(255,255,255,0.2)" strokeWidth="0.5" strokeDasharray="3,2"/>
-        <line x1="10" y1="52" x2="34" y2="52" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" strokeDasharray="3,2"/>
-        <line x1="29" y1="48" x2="29" y2="57" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="2,2"/>
+        <rect x="8" y="50" width="28" height="7" rx="3.5" fill={fc} opacity="0.85" stroke={fStroke} strokeWidth={fSW}/>
+        <ellipse cx="22" cy="50" rx="14" ry="3" fill={fc} opacity="0.95" stroke={fStroke} strokeWidth={fSW}/>
+        <line x1="10" y1="50" x2="34" y2="50" stroke={seamColor} strokeWidth="0.5" strokeDasharray="3,2"/>
+        <line x1="10" y1="52" x2="34" y2="52" stroke={isWhiteFabric ? 'rgba(100,116,139,0.3)' : 'rgba(255,255,255,0.15)'} strokeWidth="0.5" strokeDasharray="3,2"/>
+        <line x1="29" y1="48" x2="29" y2="57" stroke={seamColor} strokeWidth="0.6" strokeDasharray="2,2"/>
       </>}
       {fabricType === 3 && <>
         {/* 조끼/민소매 */}
-        <rect x="14" y="47" width="16" height="10" rx="1.5" fill={fc} opacity="0.92"/>
-        <rect x="15" y="45" width="4" height="4" rx="1" fill={fc} opacity="0.9"/>
-        <rect x="25" y="45" width="4" height="4" rx="1" fill={fc} opacity="0.9"/>
-        <path d="M17,47 L22,51 L27,47" stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" fill="none"/>
-        <line x1="29" y1="47" x2="29" y2="57" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="2,2"/>
+        <rect x="14" y="47" width="16" height="10" rx="1.5" fill={fc} opacity="0.92" stroke={fStroke} strokeWidth={fSW}/>
+        <rect x="15" y="45" width="4" height="4" rx="1" fill={fc} opacity="0.9" stroke={fStroke} strokeWidth={fSW}/>
+        <rect x="25" y="45" width="4" height="4" rx="1" fill={fc} opacity="0.9" stroke={fStroke} strokeWidth={fSW}/>
+        <path d="M17,47 L22,51 L27,47" stroke={isWhiteFabric ? 'rgba(100,116,139,0.45)' : 'rgba(255,255,255,0.25)'} strokeWidth="0.8" fill="none"/>
+        <line x1="29" y1="47" x2="29" y2="57" stroke={seamColor} strokeWidth="0.6" strokeDasharray="2,2"/>
       </>}
 
       {/* ── Layer 8: 바늘 어셈블리 (은색) ── */}
