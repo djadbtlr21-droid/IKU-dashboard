@@ -78,9 +78,9 @@ function SewingWorker({ idx, lineIdx }) {
   const fStroke       = isWhiteFabric ? '#CBD5E1' : 'none'
   const fSW           = isWhiteFabric ? '0.8' : '0'
 
-  const nd = `-${(idx * 41 + lineIdx * 97) % 450}ms`
-  // ④ bob 주기 1.13s
-  const bd = `-${(idx * 41 + lineIdx * 97 + 300) % 1130}ms`
+  // ③ needle 주기 0.32s, ② bob 주기 1.07s
+  const nd = `-${(idx * 41 + lineIdx * 97) % 320}ms`
+  const bd = `-${(idx * 41 + lineIdx * 97 + 300) % 1070}ms`
   const ad = `-${(idx * 41 + lineIdx * 97 + 100) % 800}ms`
 
   const femaleHair = () => {
@@ -156,7 +156,7 @@ function SewingWorker({ idx, lineIdx }) {
       aria-hidden="true">
 
       {/* ── 공인 전체 — bob 애니메이션 (재봉틀·옷감·바늘은 밖에 고정) ── */}
-      <g style={{ animation: `hxBob 1.13s ease-in-out ${bd} infinite`, transformBox: 'view-box', transformOrigin: '22px 36px' }}>
+      <g style={{ animation: `hxBob 1.07s ease-in-out ${bd} infinite`, transformBox: 'view-box', transformOrigin: '22px 36px' }}>
 
       {/* ── Layer 1: 헤어 (머리 뒤) ── */}
       {isFemale ? femaleHair() : maleHair()}
@@ -262,7 +262,7 @@ function SewingWorker({ idx, lineIdx }) {
       {/* ── Layer 8: 바늘 어셈블리 (은색) ── */}
       <rect x="17" y="47" width="13" height="2" rx="1" fill="#64748B"/>
       <rect x="28" y="49" width="2.5" height="3" rx="1.25" fill="#64748B"/>
-      <g style={{ animation: `hxNeedle 0.45s ease-in-out ${nd} infinite`, transformBox: 'view-box', transformOrigin: '29.25px 52px' }}>
+      <g style={{ animation: `hxNeedle 0.32s ease-in-out ${nd} infinite`, transformBox: 'view-box', transformOrigin: '29.25px 52px' }}>
         <rect x="28.5" y="52" width="1.5" height="8" rx="0.75" fill="#C0C8D4"/>
         <rect x="28.3" y="52" width="1.9" height="3" rx="0.75" fill="#D8DEE6"/>
         <path d="M28.5,60 L29.25,62.5 L30,60" fill="#A8B4C0"/>

@@ -10,11 +10,14 @@ function makeDefaultRows() {
 }
 
 // 열 색상 상수
-const C_IKU  = '#16A34A'  // 초록
-const C_HX   = '#5B8DEF'  // 파랑
-const C_OS   = '#EA580C'  // 주황 (외주 2/3/4)
+const C_IKU = '#16A34A'
+const C_HX  = '#5B8DEF'
+const C_OS  = '#EA580C'
 
-// ── 단순 입력칸 (번역 결과 슬라이드 포함, 버튼 없음) ──
+// 헤더 2단 구조 — 모든 열의 서브 슬롯 높이 통일 (공장명 입력칸 기준)
+const SUB_H = 24
+
+// ── 단순 입력칸 (번역 결과 슬라이드 포함) ──
 function TransCell({ value, onChange, translation, showTrans, onCloseTranslation, placeholder, G }) {
   return (
     <div>
@@ -52,7 +55,7 @@ function TransCell({ value, onChange, translation, showTrans, onCloseTranslation
   )
 }
 
-// ── 단가 입력칸 (색상 지정 가능) ──
+// ── 단가 입력칸 ──
 function PriceInput({ value, onChange, G, color = C_OS }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -73,7 +76,7 @@ function PriceInput({ value, onChange, G, color = C_OS }) {
   )
 }
 
-// ① 열 일괄 번역 버튼 — 라벨 아래 배치 (block, center)
+// ── 일괄 번역 버튼 (인라인, 부모 컨테이너가 중앙 정렬) ──
 function BulkTransBtn({ status, onClick }) {
   const label = status === 'busy'
     ? '번역 중... · 翻译中...'
@@ -86,7 +89,6 @@ function BulkTransBtn({ status, onClick }) {
       onClick={onClick}
       disabled={status === 'busy'}
       style={{
-        display: 'block', margin: '4px auto 0',
         fontSize: 10, padding: '2px 6px', whiteSpace: 'nowrap',
         border: '1px solid #D1D5DB', borderRadius: 3, background: '#F9FAFB',
         color: '#6B7280', cursor: status === 'busy' ? 'default' : 'pointer',
@@ -98,14 +100,17 @@ function BulkTransBtn({ status, onClick }) {
   )
 }
 
-// ② 헤더 정렬용 — 외주 공장 입력칸과 동일한 높이의 투명 spacer
-function HeaderSpacer() {
+// ── 헤더 서브 슬롯 컨테이너 (SUB_H 고정, 내용 중앙 정렬) ──
+function SubSlot({ children, justify = 'center', visible = true }) {
   return (
     <div style={{
-      visibility: 'hidden', marginTop: 3,
-      padding: '2px 4px', fontSize: 11, lineHeight: 1.4,
-      borderBottom: '1px solid transparent',
-    }}>-</div>
+      height: SUB_H,
+      display: 'flex', alignItems: 'center', justifyContent: justify,
+      visibility: visible ? 'visible' : 'hidden',
+      pointerEvents: visible ? 'auto' : 'none',
+    }}>
+      {children}
+    </div>
   )
 }
 
@@ -230,7 +235,8 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
     }
   }
 
-  // ② 모든 th의 verticalAlign: bottom — 내용 높이가 같으면 라벨 y좌표 일치
+  // ① 모든 th: verticalAlign: bottom + 내부 2단 구조 ([메인라벨] + [SUB_H 슬롯])
+  //    → 모든 열의 메인 라벨 하단 y좌표 일치, 서브 슬롯 하단 y좌표 일치
   const thBase = {
     padding: '7px 5px', fontSize: 11.6, fontWeight: 700,
     background: G.cardAlt || '#F9FAFB', borderBottom: `1px solid ${G.border || '#E5E7EB'}`,
@@ -240,10 +246,10 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
     padding: '4px 4px', borderBottom: `1px solid ${G.border || '#E5E7EB'}`,
     verticalAlign: 'top',
   }
-  // ③ 외주 공장명 입력 스타일 (헤더 내부)
+  // 공장명 입력 (SUB_H 슬롯 내부에서 사용)
   const factoryInputStyle = {
     width: '100%', boxSizing: 'border-box', padding: '2px 4px', fontSize: 11,
-    border: 'none', borderBottom: '1px dashed #9CA3AF', marginTop: 3,
+    border: 'none', borderBottom: '1px dashed #9CA3AF',
     background: 'transparent', color: G.tx, outline: 'none', fontFamily: 'inherit',
   }
 
@@ -296,75 +302,95 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                   </colgroup>
                   <thead>
                     <tr>
-                      {/* # */}
-                      <th style={thBase}>#</th>
 
-                      {/* ① 공정명 — 전체번역 버튼을 라벨 아래에 배치 */}
-                      <th style={{ ...thBase, whiteSpace: 'normal', color: G.tx }}>
-                        <div>공정명 工序名</div>
-                        <BulkTransBtn
-                          status={procBulkSt}
-                          onClick={() => bulkTranslate('process', setProcBulkSt, setProcTrans, setProcOpen)}
-                        />
+                      {/* ① # — 메인 라벨 + 투명 SUB_H 슬롯 */}
+                      <th style={thBase}>
+                        <div>#</div>
+                        <SubSlot visible={false} />
                       </th>
 
-                      {/* ② IKU 단가 — spacer로 외주 열과 동일 높이, ③ 초록 */}
+                      {/* ① 공정명 — 메인 라벨 + 전체번역 버튼 슬롯 */}
+                      <th style={{ ...thBase, whiteSpace: 'normal' }}>
+                        <div>공정명 工序名</div>
+                        <SubSlot>
+                          <BulkTransBtn
+                            status={procBulkSt}
+                            onClick={() => bulkTranslate('process', setProcBulkSt, setProcTrans, setProcOpen)}
+                          />
+                        </SubSlot>
+                      </th>
+
+                      {/* ① IKU — "IKU 단가" + 슬롯에 서브 라벨 */}
                       <th style={{ ...thBase, whiteSpace: 'normal', color: C_IKU }}>
                         <div>IKU 단가</div>
-                        <div style={{ fontWeight: 500, fontSize: 10.5 }}>公司单价</div>
-                        <HeaderSpacer />
+                        <SubSlot>
+                          <span style={{ fontWeight: 500, fontSize: 10.5 }}>公司单价</span>
+                        </SubSlot>
                       </th>
 
-                      {/* ② HEXIANG 단가 — spacer, ③ 파랑 */}
+                      {/* ① HEXIANG — "1. HEXIANG단가" + 슬롯에 서브 라벨 */}
                       <th style={{ ...thBase, whiteSpace: 'normal', wordBreak: 'keep-all', color: C_HX }}>
                         <div>1. HEXIANG단가</div>
-                        <div style={{ fontWeight: 500, fontSize: 10.5 }}>合祥单价</div>
-                        <HeaderSpacer />
+                        <SubSlot>
+                          <span style={{ fontWeight: 500, fontSize: 10.5 }}>合祥单价</span>
+                        </SubSlot>
                       </th>
 
-                      {/* ③ 외주 2 — 주황 */}
+                      {/* ① 외주 2 — "2. 외주단가..." + 슬롯에 공장명 입력 */}
                       <th style={{ ...thBase, whiteSpace: 'normal', color: C_OS }}>
                         <div>2. 외주단가 外发单价</div>
-                        <input
-                          value={factory2}
-                          onChange={e => setFactory2(e.target.value)}
-                          placeholder="공장명 · 工厂名"
-                          style={factoryInputStyle}
-                        />
+                        <SubSlot justify="stretch">
+                          <input
+                            value={factory2}
+                            onChange={e => setFactory2(e.target.value)}
+                            placeholder="공장명 · 工厂名"
+                            style={factoryInputStyle}
+                          />
+                        </SubSlot>
                       </th>
 
-                      {/* ③ 외주 3 — 주황 */}
+                      {/* ① 외주 3 */}
                       <th style={{ ...thBase, whiteSpace: 'normal', color: C_OS }}>
                         <div>3. 외주단가 外发单价</div>
-                        <input
-                          value={factory3}
-                          onChange={e => setFactory3(e.target.value)}
-                          placeholder="공장명 · 工厂名"
-                          style={factoryInputStyle}
-                        />
+                        <SubSlot justify="stretch">
+                          <input
+                            value={factory3}
+                            onChange={e => setFactory3(e.target.value)}
+                            placeholder="공장명 · 工厂名"
+                            style={factoryInputStyle}
+                          />
+                        </SubSlot>
                       </th>
 
-                      {/* ③ 외주 4 — 주황 */}
+                      {/* ① 외주 4 */}
                       <th style={{ ...thBase, whiteSpace: 'normal', color: C_OS }}>
                         <div>4. 외주단가 外发单价</div>
-                        <input
-                          value={factory4}
-                          onChange={e => setFactory4(e.target.value)}
-                          placeholder="공장명 · 工厂名"
-                          style={factoryInputStyle}
-                        />
+                        <SubSlot justify="stretch">
+                          <input
+                            value={factory4}
+                            onChange={e => setFactory4(e.target.value)}
+                            placeholder="공장명 · 工厂名"
+                            style={factoryInputStyle}
+                          />
+                        </SubSlot>
                       </th>
 
-                      {/* ① 비고 — 전체번역 버튼을 라벨 아래에 배치 */}
-                      <th style={{ ...thBase, whiteSpace: 'normal', color: G.tx }}>
+                      {/* ① 비고 — 메인 라벨 + 전체번역 버튼 슬롯 */}
+                      <th style={{ ...thBase, whiteSpace: 'normal' }}>
                         <div>비고 · 备注</div>
-                        <BulkTransBtn
-                          status={noteBulkSt}
-                          onClick={() => bulkTranslate('note', setNoteBulkSt, setNoteTrans, setNoteOpen)}
-                        />
+                        <SubSlot>
+                          <BulkTransBtn
+                            status={noteBulkSt}
+                            onClick={() => bulkTranslate('note', setNoteBulkSt, setNoteTrans, setNoteOpen)}
+                          />
+                        </SubSlot>
                       </th>
 
-                      <th style={thBase}></th>
+                      {/* ① × — 투명 슬롯만 */}
+                      <th style={thBase}>
+                        <SubSlot visible={false} />
+                      </th>
+
                     </tr>
                   </thead>
                   <tbody>
@@ -382,15 +408,12 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                             G={G}
                           />
                         </td>
-                        {/* ③ IKU — 초록 */}
                         <td style={tdStyle}>
                           <PriceInput value={row.iku} onChange={v => updateRow(row.id, 'iku', v)} G={G} color={C_IKU} />
                         </td>
-                        {/* ③ HEXIANG — 파랑 */}
                         <td style={tdStyle}>
                           <PriceInput value={row.p1} onChange={v => updateRow(row.id, 'p1', v)} G={G} color={C_HX} />
                         </td>
-                        {/* ③ 외주 2/3/4 — 주황 */}
                         <td style={tdStyle}>
                           <PriceInput value={row.p2} onChange={v => updateRow(row.id, 'p2', v)} G={G} color={C_OS} />
                         </td>
@@ -421,7 +444,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                       </tr>
                     ))}
 
-                    {/* ③ 합계 행 — 열별 색상 */}
+                    {/* 합계 행 — 열별 색상 */}
                     <tr style={{ background: G.cardAlt || '#F9FAFB' }}>
                       <td colSpan={2} style={{ ...tdStyle, borderBottom: 'none', paddingLeft: 8 }}>
                         <span style={{ fontSize: 12.1, fontWeight: 700, color: G.tx }}>합계 合計</span>
