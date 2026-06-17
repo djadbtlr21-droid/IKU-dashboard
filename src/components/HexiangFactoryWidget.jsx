@@ -19,23 +19,27 @@ const LINES = [
   { id: 'yoga', kr: '4楼挂式车间 · 4층 자동화라인' },
 ]
 
-// 옷감(검정·다크그레이만) 순환 팔레트
-const FABRIC = ['#111827', '#1F2937', '#374151', '#1F2937', '#4B5563', '#374151', '#111827', '#1F2937']
-// 레고 미니피규어 작업복 팔레트 (8가지)
-const LEGO_SUIT = ['#C0392B', '#27AE60', '#2980B9', '#8E44AD', '#E67E22', '#16A085', '#F39C12', '#2C3E50']
-// 다리 색상 — 작업복보다 한 톤 어두운 계열
-const LEGO_LEG  = ['#922B21', '#1E8449', '#1F618D', '#6C3483', '#CA6F1E', '#117A65', '#B7770D', '#212F3D']
-// 레고 표준 노란색 (머리 고정)
+// 작업복 팔레트 (8가지)
+const SUITS = ['#2563EB','#16A34A','#DC2626','#7C3AED','#EA580C','#0891B2','#B45309','#0F766E']
+// 다리 색상 — suit보다 한 톤 어둡게
+const LEG_DARK = {
+  '#2563EB':'#1D4ED8','#16A34A':'#15803D','#DC2626':'#B91C1C',
+  '#7C3AED':'#6D28D9','#EA580C':'#C2410C','#0891B2':'#0E7490',
+  '#B45309':'#92400E','#0F766E':'#0F5659'
+}
+// 레고 표준 노란색
 const LEGO_YELLOW = '#F5CD2F'
 // 헤어 색상 6가지 순환
 const HAIR_COLORS = ['#1F2937','#92400E','#111827','#7C3AED','#78350F','#1D4ED8']
+// 옷감 색상 (다크 계열)
+const FABRIC = ['#1a1a2e','#16213e','#1f2937','#2d1b69','#1e3a5f','#374151','#1a2744','#2d1f3d']
 
 // 위상 오프셋 — 공인마다 애니메이션 시작점을 다르게.
 const phase = (idx, lineIdx, mod) => `-${(idx * 41 + lineIdx * 97) % mod}ms`
 
 // 위젯 전용 CSS (전역 충돌 방지를 위해 hx 프리픽스).
 const WIDGET_CSS = `
-@keyframes hxNeedle { 0%,100%{transform:translateY(0)} 50%{transform:translateY(6px)} }
+@keyframes hxNeedle { 0%,100%{transform:translateY(0)} 50%{transform:translateY(5px)} }
 @keyframes hxBob    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1.5px)} }
 @keyframes hxTilt   { 0%,100%{transform:rotate(-2deg)} 50%{transform:rotate(2deg)} }
 @keyframes hxFadein { from{opacity:0;transform:scale(0.7)} to{opacity:1;transform:scale(1)} }
@@ -52,188 +56,189 @@ const WIDGET_CSS = `
 `
 
 // ──────────────────────────────────────────────────────────
-// 공인 SVG — 레고 미니피규어 스타일 (정면 뷰, viewBox 0 0 44 72)
-// 바늘은 옷감(아래)을 찍는 방향으로만 움직임 (사람 방향 금지).
+// 공인 SVG — 앉은 자세 레고 공인 + 세련된 재봉틀 (viewBox 0 0 44 72)
 // ──────────────────────────────────────────────────────────
 function SewingWorker({ idx, lineIdx }) {
-  const suit     = LEGO_SUIT[idx % LEGO_SUIT.length]
-  const leg      = LEGO_LEG[idx % LEGO_LEG.length]
-  const cloth    = FABRIC[idx % FABRIC.length]
-  const isPants  = idx % 2 === 1
-  const isFemale = idx % 2 === 0
-  const hc       = HAIR_COLORS[idx % 6]
+  const ci       = lineIdx * 7 + idx
+  const suit     = SUITS[ci % 8]
+  const leg      = LEG_DARK[suit]
+  const fc       = FABRIC[ci % 8]
+  const hc       = HAIR_COLORS[ci % 6]
+  const isFemale = (lineIdx + idx) % 2 === 0
+  const isPants  = ci % 2 === 1
 
-  const nd = phase(idx, lineIdx, 400)
-  const bd = phase(idx, lineIdx, 1200)
-
-  const needleStyle = { animationDelay: nd, transformBox: 'view-box', transformOrigin: '31.4px 38px' }
+  const nd = `-${(idx * 41 + lineIdx * 97) % 450}ms`
+  const bd = `-${(idx * 41 + lineIdx * 97 + 200) % 1200}ms`
+  const ad = `-${(idx * 41 + lineIdx * 97 + 100) % 800}ms`
 
   const femaleHair = () => {
-    switch (idx % 5) {
-      case 0: return (
-        <>
-          <path d="M12,8 Q10,16 10,22 Q9,26 12,27" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
-          <path d="M32,8 Q34,16 34,22 Q35,26 32,27" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
-          <rect x="13" y="2" width="18" height="6" rx="3" fill={hc}/>
-        </>
-      )
-      case 1: return (
-        <>
-          <path d="M12,8 Q10,13 11,17 Q12,19 15,19" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
-          <path d="M32,8 Q34,13 33,17 Q32,19 29,19" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
-          <rect x="13" y="2" width="18" height="6" rx="3" fill={hc}/>
-          <path d="M12,17 Q22,21 32,17" stroke={hc} strokeWidth="3" fill="none" strokeLinecap="round"/>
-        </>
-      )
-      case 2: return (
-        <>
-          <rect x="13" y="2" width="18" height="6" rx="3" fill={hc}/>
-          <ellipse cx="22" cy="1" rx="4" ry="3" fill={hc}/>
-          <path d="M22,0 Q30,-3 32,2" stroke={hc} strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-        </>
-      )
-      case 3: return (
-        <>
-          <path d="M13,7 Q9,11 11,15 Q13,19 10,23 Q9,26 12,27" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
-          <path d="M31,7 Q35,11 33,15 Q31,19 34,23 Q35,26 32,27" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
-          <rect x="13" y="2" width="18" height="6" rx="3" fill={hc}/>
-        </>
-      )
-      default: return (
-        <>
-          <path d="M12,8 Q10,13 11,17 Q12,19 15,19" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
-          <path d="M32,8 Q34,13 33,17 Q32,19 29,19" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
-          <rect x="13" y="2" width="18" height="6" rx="3" fill={hc}/>
-          <path d="M12,17 Q22,21 32,17" stroke={hc} strokeWidth="3" fill="none" strokeLinecap="round"/>
-          <circle cx="13" cy="8" r="2.5" fill="#FCA5A5"/>
-          <circle cx="13" cy="8" r="1.2" fill="#FDE68A"/>
-        </>
-      )
+    switch (ci % 5) {
+      case 0: return <>
+        <path d="M13,7 Q10,14 10,20 Q9,24 13,25" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+        <path d="M31,7 Q34,14 34,20 Q35,24 31,25" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+        <rect x="13" y="1" width="18" height="7" rx="3.5" fill={hc}/>
+      </>
+      case 1: return <>
+        <path d="M13,7 Q10,12 11,17" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+        <path d="M31,7 Q34,12 33,17" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+        <rect x="13" y="1" width="18" height="7" rx="3.5" fill={hc}/>
+        <path d="M12,17 Q22,21 32,17" stroke={hc} strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+      </>
+      case 2: return <>
+        <rect x="13" y="1" width="18" height="7" rx="3.5" fill={hc}/>
+        <ellipse cx="22" cy="0" rx="4" ry="2.5" fill={hc}/>
+        <path d="M23,-1 Q31,-4 33,2" stroke={hc} strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+      </>
+      case 3: return <>
+        <path d="M13,7 Q9,11 11,15 Q13,19 10,22" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+        <path d="M31,7 Q35,11 33,15 Q31,19 34,22" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+        <rect x="13" y="1" width="18" height="7" rx="3.5" fill={hc}/>
+      </>
+      default: return <>
+        <path d="M13,7 Q10,11 11,16" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+        <path d="M31,7 Q34,11 33,16" stroke={hc} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+        <rect x="13" y="1" width="18" height="7" rx="3.5" fill={hc}/>
+        <path d="M12,16 Q22,20 32,16" stroke={hc} strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+        <circle cx="13" cy="7" r="2.5" fill="#FCA5A5"/>
+        <circle cx="13" cy="7" r="1.2" fill="#FDE68A"/>
+      </>
     }
   }
 
   const maleHair = () => {
-    switch (idx % 6) {
-      case 0: return (
-        <>
-          <rect x="13" y="2" width="18" height="7" rx="3.5" fill={hc}/>
-          <rect x="12" y="6" width="20" height="3" rx="1" fill={hc}/>
-        </>
-      )
-      case 1: return (
-        <>
-          <rect x="13" y="2" width="18" height="7" rx="3.5" fill={hc}/>
-          <rect x="11" y="6" width="5" height="6" rx="2" fill={hc}/>
-          <rect x="28" y="6" width="5" height="6" rx="2" fill={hc}/>
-        </>
-      )
-      case 2: return (
-        <>
-          <rect x="13" y="4" width="18" height="5" rx="2" fill={hc}/>
-          <rect x="19" y="0" width="6" height="6" rx="3" fill={hc}/>
-        </>
-      )
-      case 3: return (
-        <>
-          <rect x="13" y="2" width="18" height="7" rx="3.5" fill={hc}/>
-          <path d="M22,2 L20,9" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
-          <rect x="11" y="6" width="4" height="4" rx="2" fill={hc}/>
-        </>
-      )
-      case 4: return (
-        <>
-          <circle cx="16" cy="5" r="3.5" fill={hc}/>
-          <circle cx="22" cy="3" r="3.5" fill={hc}/>
-          <circle cx="28" cy="5" r="3.5" fill={hc}/>
-          <rect x="13" y="5" width="18" height="4" rx="1" fill={hc}/>
-        </>
-      )
-      default: return (
-        <>
-          <rect x="13" y="2" width="18" height="7" rx="3.5" fill={hc}/>
-          <path d="M13,6 Q10,8 10,12" stroke={hc} strokeWidth="3" fill="none" strokeLinecap="round"/>
-        </>
-      )
+    switch (ci % 6) {
+      case 0: return <>
+        <rect x="13" y="1" width="18" height="8" rx="4" fill={hc}/>
+        <rect x="12" y="6" width="20" height="3" rx="1" fill={hc}/>
+      </>
+      case 1: return <>
+        <rect x="13" y="1" width="18" height="8" rx="4" fill={hc}/>
+        <rect x="11" y="5" width="5" height="5" rx="2" fill={hc}/>
+        <rect x="28" y="5" width="5" height="5" rx="2" fill={hc}/>
+      </>
+      case 2: return <>
+        <rect x="13" y="3" width="18" height="6" rx="2" fill={hc}/>
+        <rect x="19" y="0" width="6" height="6" rx="3" fill={hc}/>
+      </>
+      case 3: return <>
+        <rect x="13" y="1" width="18" height="8" rx="4" fill={hc}/>
+        <path d="M22,1 L20,9" stroke="rgba(255,255,255,0.5)" strokeWidth="1.2" strokeLinecap="round"/>
+        <rect x="11" y="5" width="4" height="4" rx="2" fill={hc}/>
+      </>
+      case 4: return <>
+        <circle cx="16" cy="5" r="4" fill={hc}/>
+        <circle cx="22" cy="2.5" r="4" fill={hc}/>
+        <circle cx="28" cy="5" r="4" fill={hc}/>
+        <rect x="13" y="5" width="18" height="4" rx="1" fill={hc}/>
+      </>
+      default: return <>
+        <rect x="13" y="1" width="18" height="8" rx="4" fill={hc}/>
+        <path d="M13,5 Q10,7 10,11" stroke={hc} strokeWidth="3" fill="none" strokeLinecap="round"/>
+      </>
     }
   }
 
   return (
-    <svg viewBox="0 0 44 72" width="56" height="72" style={{ display: 'block', margin: '0 auto', overflow: 'visible' }} aria-hidden="true">
+    <svg viewBox="0 0 44 72" width="56" height="72"
+      style={{ display: 'block', margin: '14px auto 0', overflow: 'visible' }}
+      aria-hidden="true">
 
-      {/* ── 레고 재봉틀 (하단) ── */}
-      <rect x="3" y="47" width="38" height="18" rx="3" fill="#D1D5DB" />
-      <rect x="5" y="49" width="34" height="10" rx="2" fill="#E5E7EB" />
-      <circle cx="12" cy="47" r="2.5" fill="#9CA3AF" />
-      <circle cx="22" cy="47" r="2.5" fill="#9CA3AF" />
-      <circle cx="32" cy="47" r="2.5" fill="#9CA3AF" />
-      <rect x="8" y="65" width="28" height="4" rx="2" fill="#9CA3AF" />
+      {/* ── Layer 1: 헤어 (머리 뒤) ── */}
+      {isFemale ? femaleHair() : maleHair()}
 
-      {/* ── 옷감 (상판 위) — 검정·다크그레이만 ── */}
-      {isPants ? (
-        <g>
-          <rect x="10" y="43" width="24" height="6" rx="2" fill={cloth} stroke="#555" strokeWidth="0.5" />
-          <rect x="10" y="49" width="10" height="10" rx="1" fill={cloth} stroke="#555" strokeWidth="0.5" />
-          <rect x="22" y="49" width="10" height="10" rx="1" fill={cloth} stroke="#555" strokeWidth="0.5" />
-          <line x1="22" y1="49" x2="22" y2="59" stroke="rgba(255,255,255,0.3)" strokeDasharray="2,2" strokeWidth="0.7" />
-        </g>
+      {/* ── Layer 2: 얼굴 ── */}
+      <rect x="13" y="6" width="18" height="15" rx="5" fill={LEGO_YELLOW}/>
+      <path d="M17,11 Q19,10 21,11" stroke="#78350F" strokeWidth="0.8" fill="none"/>
+      <path d="M23,11 Q25,10 27,11" stroke="#78350F" strokeWidth="0.8" fill="none"/>
+      <ellipse cx="19" cy="13.5" rx="1.8" ry="2" fill="#1F2937"/>
+      <ellipse cx="25" cy="13.5" rx="1.8" ry="2" fill="#1F2937"/>
+      <circle cx="19.7" cy="12.8" r="0.65" fill="white"/>
+      <circle cx="25.7" cy="12.8" r="0.65" fill="white"/>
+      {isFemale ? (
+        <>
+          <path d="M18.5,18 Q22,20.5 25.5,18" stroke="#B45309" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+          <circle cx="18.5" cy="16" r="0.75" fill="#F97316" opacity="0.45"/>
+          <circle cx="25.5" cy="16" r="0.75" fill="#F97316" opacity="0.45"/>
+        </>
       ) : (
-        <g>
-          <path d="M10,43 Q22,40 34,43 L36,47 L30,47 L30,59 L14,59 L14,47 L8,47 Z" fill={cloth} stroke="#555" strokeWidth="0.5" opacity="0.92" />
-          <line x1="22" y1="47" x2="22" y2="59" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" strokeDasharray="2,2" />
-        </g>
+        <path d="M19,18 Q22,20 25,18" stroke="#92400E" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
       )}
-      <line x1="15" y1="53" x2="29" y2="53" stroke="white" strokeWidth="0.7" strokeDasharray="2,2" opacity="0.4" />
 
-      {/* ── 바늘 어셈블리 ── */}
-      <rect x="18" y="35" width="14" height="2.5" rx="1.2" fill="#4B5563" />
-      <rect x="30" y="35" width="2.5" height="6" rx="1" fill="#4B5563" />
-      <g className="hxw-needle" style={needleStyle}>
-        <rect x="30.5" y="41" width="1.8" height="8" rx="0.9" fill="#374151" />
-        <rect x="30" y="48" width="2.8" height="2" rx="0.5" fill="#111827" />
-        <circle cx="31.4" cy="51" r="1.3" fill="white" opacity="0.35" />
+      {/* ── Layer 3: 목+어깨+몸통 ── */}
+      <rect x="19.5" y="21" width="5" height="3" rx="1" fill={LEGO_YELLOW}/>
+      <rect x="10" y="23" width="24" height="3" rx="1.5" fill={suit}/>
+      <rect x="13" y="25" width="18" height="12" rx="2.5" fill={suit}/>
+      <rect x="13" y="25" width="18" height="4" rx="2.5" fill="rgba(255,255,255,0.1)"/>
+      <line x1="22" y1="27" x2="22" y2="36" stroke="rgba(255,255,255,0.2)" strokeWidth="0.8"/>
+      <circle cx="22" cy="29" r="0.9" fill="rgba(255,255,255,0.35)"/>
+      <circle cx="22" cy="32" r="0.9" fill="rgba(255,255,255,0.35)"/>
+      <circle cx="22" cy="35" r="0.9" fill="rgba(255,255,255,0.35)"/>
+
+      {/* ── Layer 4: 팔+손 (앞으로 뻗어 재봉틀 위) ── */}
+      <path d="M13,27 Q9,33 8,40" stroke={suit} strokeWidth="5" strokeLinecap="round" fill="none"
+        style={{ animation: `hxTilt 0.9s ease-in-out ${ad} infinite`, transformBox: 'view-box', transformOrigin: '13px 27px' }}/>
+      <path d="M31,27 Q35,33 36,40" stroke={suit} strokeWidth="5" strokeLinecap="round" fill="none"
+        style={{ animation: `hxTilt 0.9s ease-in-out ${ad} infinite reverse`, transformBox: 'view-box', transformOrigin: '31px 27px' }}/>
+      <circle cx="8" cy="41" r="3" fill={LEGO_YELLOW}/>
+      <circle cx="36" cy="41" r="3" fill={LEGO_YELLOW}/>
+
+      {/* ── Layer 5: 다리+발+의자시트 (앉은 자세) ── */}
+      <rect x="9" y="37" width="11" height="5" rx="2" fill={leg}/>
+      <rect x="24" y="37" width="11" height="5" rx="2" fill={leg}/>
+      <rect x="9" y="42" width="5" height="9" rx="2" fill={leg}/>
+      <rect x="30" y="42" width="5" height="9" rx="2" fill={leg}/>
+      <rect x="7" y="50" width="9" height="3.5" rx="1.8" fill="#1C1917"/>
+      <rect x="28" y="50" width="9" height="3.5" rx="1.8" fill="#1C1917"/>
+      <rect x="8" y="50" width="4" height="1.5" rx="0.75" fill="rgba(255,255,255,0.1)"/>
+      <rect x="29" y="50" width="4" height="1.5" rx="0.75" fill="rgba(255,255,255,0.1)"/>
+      <rect x="8" y="42" width="28" height="1.5" rx="0.75" fill="#94A3B8" opacity="0.4"/>
+
+      {/* ── Layer 6: 재봉틀 본체 (세련된 버전) ── */}
+      <rect x="2" y="55" width="40" height="14" rx="3.5" fill="#E2E8F0"/>
+      <rect x="3" y="56" width="38" height="12" rx="3" fill="#CBD5E1"/>
+      <rect x="4" y="54" width="36" height="9" rx="2.5" fill="#F1F5F9"/>
+      <rect x="5" y="54.5" width="16" height="2.5" rx="1.25" fill="rgba(255,255,255,0.65)"/>
+      <rect x="30" y="55.5" width="9" height="6" rx="1.5" fill="#94A3B8"/>
+      <rect x="31" y="56.5" width="3" height="1.2" rx="0.6" fill="#475569"/>
+      <rect x="31" y="58.5" width="3" height="1.2" rx="0.6" fill="#475569"/>
+      <circle cx="38" cy="59" r="3" fill="#64748B"/>
+      <circle cx="38" cy="59" r="1.8" fill="#94A3B8"/>
+      <circle cx="38" cy="59" r="0.7" fill="#475569"/>
+      <ellipse cx="12" cy="54" rx="2.3" ry="1.3" fill="#CBD5E1"/>
+      <ellipse cx="20" cy="54" rx="2.3" ry="1.3" fill="#CBD5E1"/>
+      <ellipse cx="28" cy="54" rx="2.3" ry="1.3" fill="#CBD5E1"/>
+
+      {/* ── Layer 7: 옷감 (상판 위) ── */}
+      {isPants ? (
+        <>
+          <rect x="10" y="45" width="24" height="4" rx="1.5" fill={fc} opacity="0.95"/>
+          <rect x="10" y="48.5" width="10.5" height="8" rx="1.5" fill={fc} opacity="0.93"/>
+          <rect x="23.5" y="48.5" width="10.5" height="8" rx="1.5" fill={fc} opacity="0.93"/>
+          <line x1="22" y1="49" x2="22" y2="56.5" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="1.5,2"/>
+          <line x1="29" y1="45" x2="29" y2="56.5" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="2,2"/>
+        </>
+      ) : (
+        <>
+          <rect x="10" y="47" width="24" height="10" rx="1.5" fill={fc} opacity="0.93"/>
+          <path d="M10,47 Q7,46 6,49 Q7,51 10,51 Z" fill={fc} opacity="0.93"/>
+          <path d="M34,47 Q37,46 38,49 Q37,51 34,51 Z" fill={fc} opacity="0.93"/>
+          <path d="M16,47 Q22,44.5 28,47" stroke="rgba(255,255,255,0.2)" strokeWidth="0.9" fill="none"/>
+          <line x1="29" y1="47" x2="29" y2="57" stroke="rgba(255,255,255,0.18)" strokeWidth="0.6" strokeDasharray="2,2"/>
+        </>
+      )}
+
+      {/* ── Layer 8: 바늘 어셈블리 (은색) ── */}
+      <rect x="17" y="47" width="13" height="2" rx="1" fill="#64748B"/>
+      <rect x="28" y="49" width="2.5" height="3" rx="1.25" fill="#64748B"/>
+      <g style={{ animation: `hxNeedle 0.45s ease-in-out ${nd} infinite`, transformBox: 'view-box', transformOrigin: '29.25px 52px' }}>
+        <rect x="28.5" y="52" width="1.5" height="8" rx="0.75" fill="#C0C8D4"/>
+        <rect x="28.3" y="52" width="1.9" height="3" rx="0.75" fill="#D8DEE6"/>
+        <path d="M28.5,60 L29.25,62.5 L30,60" fill="#A8B4C0"/>
+        <circle cx="29.25" cy="61.5" r="0.9" fill="white" opacity="0.4"/>
       </g>
 
-      {/* ── 레고 미니피규어 (전체 bob 애니메이션) ── */}
-      <g className="hxw-bob" style={{ animationDelay: bd }}>
-
-        {/* 다리 */}
-        <rect x="14" y="36" width="7" height="11" rx="2" fill={leg} />
-        <rect x="23" y="36" width="7" height="11" rx="2" fill={leg} />
-        <rect x="13" y="45" width="9" height="4" rx="2" fill="#1A1A1A" />
-        <rect x="22" y="45" width="9" height="4" rx="2" fill="#1A1A1A" />
-
-        {/* 몸통 */}
-        <rect x="11" y="22" width="22" height="3" rx="1.5" fill={suit} />
-        <rect x="13" y="23" width="18" height="14" rx="2" fill={suit} />
-        <line x1="22" y1="26" x2="22" y2="35" stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" strokeDasharray="2,2" />
-        <circle cx="22" cy="27.5" r="1" fill="rgba(255,255,255,0.35)" />
-        <circle cx="22" cy="31.5" r="1" fill="rgba(255,255,255,0.35)" />
-
-        {/* 팔/손 */}
-        <rect x="7" y="24" width="5" height="12" rx="2.5" fill={suit} />
-        <rect x="32" y="24" width="5" height="12" rx="2.5" fill={suit} />
-        <circle cx="9.5" cy="37" r="3" fill={LEGO_YELLOW} />
-        <circle cx="34.5" cy="37" r="3" fill={LEGO_YELLOW} />
-
-        {/* ── 헤어 (성별·스타일) ── */}
-        {isFemale ? femaleHair() : maleHair()}
-
-        {/* ── 얼굴 ── */}
-        <rect x="13" y="7" width="18" height="14" rx="4" fill={LEGO_YELLOW}/>
-        <circle cx="18" cy="13" r="1.6" fill="#1F2937"/>
-        <circle cx="26" cy="13" r="1.6" fill="#1F2937"/>
-        <circle cx="18.6" cy="12.4" r="0.5" fill="white"/>
-        <circle cx="26.6" cy="12.4" r="0.5" fill="white"/>
-        {isFemale ? (
-          <>
-            <path d="M18,17 Q22,20 26,17" stroke="#B45309" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
-            <circle cx="17" cy="15.5" r="0.7" fill="#F97316" opacity="0.5"/>
-            <circle cx="27" cy="15.5" r="0.7" fill="#F97316" opacity="0.5"/>
-          </>
-        ) : (
-          <path d="M18,17 Q22,19.5 26,17" stroke="#92400E" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
-        )}
-      </g>
+      {/* ── Layer 9: 실 장식 ── */}
+      <path d="M18,47 Q16,42 17,38" stroke="#94A3B8" strokeWidth="0.5" fill="none" strokeDasharray="1.5,2" opacity="0.5"/>
     </svg>
   )
 }
