@@ -7,7 +7,8 @@ import {
 import { fetchMoList } from '../api/client'
 import {
   fetchProcessData, verifyProcessPassword, saveProcessItem,
-  fetchStyleList, fetchStyleMeta, saveStyleFactory, saveStyleNote, saveStylePrice, hideStyle,
+  fetchStyleList, fetchStyleMeta, saveStyleFactory, saveStyleNote, saveStylePrice,
+  saveStyleSampleAlert, saveStyleOrderAlert, hideStyle,
   fetchMoFabric, saveMoFabric,
   fetchDeletions, deleteMo, deleteStyle,
   translateText,
@@ -1212,8 +1213,8 @@ function ProcessCard({ G, mo, record, editable, onZoom, showToast,
           {/* 오더번호 + 상태배지 동일 행 (수정 모드: 우측에 삭제버튼 추가) */}
           {editable ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}>
-              <span className="num" title={getMoNumber(mo)} style={{ fontSize: 14.5, fontWeight: 700, color: G.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: '1 1 auto', minWidth: 0 }}>{getMoNumber(mo)}</span>
-              <span style={{ fontSize: 10.5, fontWeight: 700, color: '#fff', background: badge.color, padding: '2.2px 7.7px', borderRadius: 999, flexShrink: 0, minWidth: 58, textAlign: 'center', whiteSpace: 'nowrap' }}>
+              <span className="num" title={getMoNumber(mo)} style={{ fontSize: 16, fontWeight: 700, color: G.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: '1 1 auto', minWidth: 0 }}>{getMoNumber(mo)}</span>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: '#fff', background: badge.color, padding: '2.4px 8.5px', borderRadius: 999, flexShrink: 0, minWidth: 64, textAlign: 'center', whiteSpace: 'nowrap' }}>
                 {badge.kr}{badge.cn ? ` · ${badge.cn}` : ''}
               </span>
               {isShipped(mo) && <span style={{ fontSize: 9.5, color: G.ok, border: `1px solid ${G.ok}`, padding: '1px 6px', borderRadius: 999, flexShrink: 0, whiteSpace: 'nowrap' }}>출고 已出货</span>}
@@ -1468,7 +1469,7 @@ export default function ProcessPage({ G }) {
   const [styleList, setStyleList] = useState([])
   const [styleLoading, setStyleLoading] = useState(true)
   const [styleErr, setStyleErr] = useState(null)
-  const [styleMeta, setStyleMeta] = useState({ factory: {}, note: {}, hidden: [], price: {} })
+  const [styleMeta, setStyleMeta] = useState({ factory: {}, note: {}, hidden: [], price: {}, sample_alert: {}, order_alert: {} })
 
   // ⑥ MO 원단명 오버라이드 (key fabric:{MO_ID}) — KV값 우선
   const [moFabric, setMoFabric] = useState({})
@@ -1520,10 +1521,10 @@ export default function ProcessPage({ G }) {
     setStyleLoading(true); setStyleErr(null)
     Promise.all([
       fetchStyleList({ maxRecords: 200 }),
-      fetchStyleMeta().catch(() => ({ factory: {}, note: {}, hidden: [], price: {} })),
+      fetchStyleMeta().catch(() => ({ factory: {}, note: {}, hidden: [], price: {}, sample_alert: {}, order_alert: {} })),
     ]).then(([list, meta]) => {
       setStyleList(list?.data || list?.records || list?.result || [])
-      setStyleMeta({ factory: meta?.factory || {}, note: meta?.note || {}, hidden: meta?.hidden || [], price: meta?.price || {} })
+      setStyleMeta({ factory: meta?.factory || {}, note: meta?.note || {}, hidden: meta?.hidden || [], price: meta?.price || {}, sample_alert: meta?.sample_alert || {}, order_alert: meta?.order_alert || {} })
     }).catch(err => { console.error('[ProcessPage] styles', err); setStyleErr(err.message || String(err)) })
       .finally(() => setStyleLoading(false))
   }, [])
@@ -1774,6 +1775,22 @@ export default function ProcessPage({ G }) {
   const onChangeStylePrice = useCallback((sku, value) => {
     setStyleDrafts(prev => ({ ...prev, [sku]: { ...prev[sku], price: value } }))
   }, [])
+
+  // 알림 버튼 토글 — 즉시 KV 저장 (편집 모드 불필요)
+  const onToggleSampleAlert = useCallback((sku) => {
+    const current = styleMeta.sample_alert[sku] === '1'
+    const next = current ? '' : '1'
+    setStyleMeta(prev => ({ ...prev, sample_alert: { ...prev.sample_alert, [sku]: next } }))
+    saveStyleSampleAlert(sku, next).catch(() => {})
+  }, [styleMeta.sample_alert])
+
+  const onToggleOrderAlert = useCallback((sku) => {
+    const current = styleMeta.order_alert[sku] === '1'
+    const next = current ? '' : '1'
+    setStyleMeta(prev => ({ ...prev, order_alert: { ...prev.order_alert, [sku]: next } }))
+    saveStyleOrderAlert(sku, next).catch(() => {})
+  }, [styleMeta.order_alert])
+
   const styleDirty = Object.keys(styleDrafts).length > 0
   const exitStyleEdit = () => { setStyleEditMode(false); setStyleDrafts({}); setStyleExitConfirm(false) }
   // ① 미오더 일괄저장 — 편집모드 유지, 스피너
@@ -2159,8 +2176,11 @@ export default function ProcessPage({ G }) {
                   onChangeFactory={onChangeStyleFactory}
                   onChangeNote={onChangeStyleNote}
                   onChangePrice={onChangeStylePrice}
+                  sampleAlert={styleMeta.sample_alert[sk] === '1'}
+                  orderAlert={styleMeta.order_alert[sk] === '1'}
+                  onToggleSampleAlert={onToggleSampleAlert}
+                  onToggleOrderAlert={onToggleOrderAlert}
                   onZoom={setZoomSrc}
-                  onConvert={onConvertStyle}
                   onDelete={handleDeleteStyle}
                   onOpenDetail={(st) => setSelectedStyle(st)}
                 />

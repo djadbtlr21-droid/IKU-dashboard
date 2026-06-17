@@ -19,10 +19,14 @@ const LINES = [
   { id: 'yoga', kr: '4楼挂式车间 · 4층 자동화라인' },
 ]
 
-// 옷감(검정·다크그레이만) / 작업복 / 피부색 순환 팔레트
+// 옷감(검정·다크그레이만) 순환 팔레트
 const FABRIC = ['#111827', '#1F2937', '#374151', '#1F2937', '#4B5563', '#374151', '#111827', '#1F2937']
-const WORKWEAR = ['#2563EB', '#16A34A', '#DC2626', '#7C3AED', '#EA580C', '#0891B2', '#B45309', '#0F766E']
-const SKIN = ['#FBBF24', '#F97316', '#FCD34D', '#D97706']
+// 레고 미니피규어 작업복 팔레트 (8가지)
+const LEGO_SUIT = ['#C0392B', '#27AE60', '#2980B9', '#8E44AD', '#E67E22', '#16A085', '#F39C12', '#2C3E50']
+// 다리 색상 — 작업복보다 한 톤 어두운 계열
+const LEGO_LEG  = ['#922B21', '#1E8449', '#1F618D', '#6C3483', '#CA6F1E', '#117A65', '#B7770D', '#212F3D']
+// 레고 표준 노란색 (머리 고정)
+const LEGO_YELLOW = '#F5CD2F'
 
 // 위상 오프셋 — 공인마다 애니메이션 시작점을 다르게.
 const phase = (idx, lineIdx, mod) => `-${(idx * 41 + lineIdx * 97) % mod}ms`
@@ -46,81 +50,101 @@ const WIDGET_CSS = `
 `
 
 // ──────────────────────────────────────────────────────────
-// 공인 SVG — 재봉틀에 앉아 작업 중 (viewBox 0 0 44 72)
+// 공인 SVG — 레고 미니피규어 스타일 (정면 뷰, viewBox 0 0 44 72)
 // 바늘은 옷감(아래)을 찍는 방향으로만 움직임 (사람 방향 금지).
 // ──────────────────────────────────────────────────────────
 function SewingWorker({ idx, lineIdx }) {
-  const skin = SKIN[idx % SKIN.length]
-  const wear = WORKWEAR[idx % WORKWEAR.length]
+  const suit  = LEGO_SUIT[idx % LEGO_SUIT.length]
+  const leg   = LEGO_LEG[idx % LEGO_LEG.length]
   const cloth = FABRIC[idx % FABRIC.length]
-  const isPants = idx % 2 === 1   // 짝수=티셔츠, 홀수=바지
+  const isPants = idx % 2 === 1
 
   const nd = phase(idx, lineIdx, 400)   // needle delay
   const bd = phase(idx, lineIdx, 1200)  // bob delay
-  const td = phase(idx, lineIdx, 800)   // tilt delay
 
-  // 바늘 그룹: 바늘 상단(31.4,38) 고정, 아래로만 translateY
   const needleStyle = { animationDelay: nd, transformBox: 'view-box', transformOrigin: '31.4px 38px' }
-  // tilt: rotate 이므로 회전 피벗을 viewBox 좌표(22,32)로 고정
-  const tiltStyle = { animationDelay: td, transformBox: 'view-box', transformOrigin: '22px 32px' }
 
   return (
     <svg viewBox="0 0 44 72" width="56" height="72" style={{ display: 'block', margin: '0 auto', overflow: 'visible' }} aria-hidden="true">
-      {/* 1. 재봉틀 본체 (하단) */}
-      <rect x="3" y="44" width="38" height="24" rx="3" fill="#9CA3AF" />
-      <rect x="5" y="46" width="34" height="16" rx="2" fill="#D1D5DB" />
-      <rect x="5" y="46" width="34" height="3" rx="1" fill="#B0B7C3" />
-      <circle cx="38" cy="50" r="2.5" fill="#6B7280" />
-      <circle cx="38" cy="50" r="1.2" fill="#9CA3AF" />
-      <rect x="8" y="64" width="28" height="4" rx="2" fill="#6B7280" />
 
-      {/* 2. 옷감 (상판 위) — 검정·다크그레이만 */}
+      {/* ── 레고 재봉틀 (하단) ── */}
+      {/* 기계 본체 */}
+      <rect x="3" y="47" width="38" height="18" rx="3" fill="#D1D5DB" />
+      {/* 상판 */}
+      <rect x="5" y="49" width="34" height="10" rx="2" fill="#E5E7EB" />
+      {/* 레고 블록 스터드 3개 */}
+      <circle cx="12" cy="47" r="2.5" fill="#9CA3AF" />
+      <circle cx="22" cy="47" r="2.5" fill="#9CA3AF" />
+      <circle cx="32" cy="47" r="2.5" fill="#9CA3AF" />
+      {/* 기계 다리 */}
+      <rect x="8" y="65" width="28" height="4" rx="2" fill="#9CA3AF" />
+
+      {/* ── 옷감 (상판 위) — 검정·다크그레이만 ── */}
       {isPants ? (
         <g>
-          <rect x="10" y="40" width="24" height="6" rx="2" fill={cloth} stroke="#555" strokeWidth="0.5" />
-          <rect x="10" y="46" width="10" height="12" rx="1" fill={cloth} stroke="#555" strokeWidth="0.5" />
-          <rect x="22" y="46" width="10" height="12" rx="1" fill={cloth} stroke="#555" strokeWidth="0.5" />
-          <line x1="22" y1="46" x2="22" y2="58" stroke="rgba(255,255,255,0.3)" strokeDasharray="2,2" />
+          <rect x="10" y="43" width="24" height="6" rx="2" fill={cloth} stroke="#555" strokeWidth="0.5" />
+          <rect x="10" y="49" width="10" height="10" rx="1" fill={cloth} stroke="#555" strokeWidth="0.5" />
+          <rect x="22" y="49" width="10" height="10" rx="1" fill={cloth} stroke="#555" strokeWidth="0.5" />
+          <line x1="22" y1="49" x2="22" y2="59" stroke="rgba(255,255,255,0.3)" strokeDasharray="2,2" strokeWidth="0.7" />
         </g>
       ) : (
         <g>
-          <path d="M10,40 Q22,37 34,40 L36,44 L30,44 L30,57 L14,57 L14,44 L8,44 Z" fill={cloth} stroke="#555" strokeWidth="0.5" opacity="0.92" />
-          <line x1="22" y1="44" x2="22" y2="57" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" strokeDasharray="2,2" />
+          <path d="M10,43 Q22,40 34,43 L36,47 L30,47 L30,59 L14,59 L14,47 L8,47 Z" fill={cloth} stroke="#555" strokeWidth="0.5" opacity="0.92" />
+          <line x1="22" y1="47" x2="22" y2="59" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" strokeDasharray="2,2" />
         </g>
       )}
-      <line x1="15" y1="50" x2="29" y2="50" stroke="white" strokeWidth="0.7" strokeDasharray="2,2" opacity="0.4" />
+      <line x1="15" y1="53" x2="29" y2="53" stroke="white" strokeWidth="0.7" strokeDasharray="2,2" opacity="0.4" />
 
-      {/* 3. 바늘 어셈블리 — 옷감 위에서 아래로 수직 찌르기 (왼쪽 수직 파이프 기둥 제거) */}
-      {/* 바늘암 수평봉 (옷감 위 공간, 사람 방향 아님) */}
-      <rect x="18" y="32" width="14" height="2.5" rx="1.2" fill="#4B5563" />
-      {/* 바늘암 수직 고정봉 (정적) */}
-      <rect x="30" y="32" width="2.5" height="6" rx="1" fill="#4B5563" />
-      {/* 바늘 본체 + 팁 + 스티치 도트 (하나의 g, 아래로만 이동) */}
+      {/* ── 바늘 어셈블리 — 옷감 위에서 아래로 수직 찌르기 ── */}
+      <rect x="18" y="35" width="14" height="2.5" rx="1.2" fill="#4B5563" />
+      <rect x="30" y="35" width="2.5" height="6" rx="1" fill="#4B5563" />
       <g className="hxw-needle" style={needleStyle}>
-        <rect x="30.5" y="38" width="1.8" height="10" rx="0.9" fill="#374151" />
-        <rect x="30" y="47" width="2.8" height="2" rx="0.5" fill="#111827" />
-        <circle cx="31.4" cy="50" r="1.3" fill="white" opacity="0.35" />
+        <rect x="30.5" y="41" width="1.8" height="8" rx="0.9" fill="#374151" />
+        <rect x="30" y="48" width="2.8" height="2" rx="0.5" fill="#111827" />
+        <circle cx="31.4" cy="51" r="1.3" fill="white" opacity="0.35" />
       </g>
 
-      {/* 4 + 5. 공인 (상체 + 머리) — 전체를 bob 으로 감쌈 */}
+      {/* ── 레고 미니피규어 (전체 bob 애니메이션) ── */}
       <g className="hxw-bob" style={{ animationDelay: bd }}>
-        {/* 4. 상체 (앞으로 숙인 작업 자세, 다리 없음) — tilt 는 상체 g 에만 */}
-        <g className="hxw-tilt" style={tiltStyle}>
-          <line x1="15" y1="31" x2="7" y2="40" stroke={wear} strokeWidth="5" strokeLinecap="round" />
-          <line x1="29" y1="31" x2="37" y2="40" stroke={wear} strokeWidth="5" strokeLinecap="round" />
-          <rect x="15" y="24" width="14" height="14" rx="5" fill={wear} />
-          <circle cx="7" cy="41" r="3.2" fill={skin} />
-          <circle cx="37" cy="41" r="3.2" fill={skin} />
-        </g>
 
-        {/* 5. 머리 */}
-        <circle cx="22" cy="17" r="8" fill={skin} />
-        <ellipse cx="22" cy="10" rx="7.5" ry="5" fill="#1F2937" />
-        <ellipse cx="19" cy="18" rx="1.2" ry="1.5" fill="#1F2937" />
-        <ellipse cx="25" cy="18" rx="1.2" ry="1.5" fill="#1F2937" />
-        <path d="M17.5 14.5 L21 14" stroke="#1F2937" strokeWidth="0.8" fill="none" strokeLinecap="round" />
-        <path d="M23 14 L26.5 14.5" stroke="#1F2937" strokeWidth="0.8" fill="none" strokeLinecap="round" />
-        <path d="M20 21.5 Q22 23 24 21.5" stroke="#92400E" strokeWidth="0.8" fill="none" strokeLinecap="round" />
+        {/* 다리 — 레고 분리 두 다리 */}
+        <rect x="14" y="36" width="7" height="11" rx="2" fill={leg} />
+        <rect x="23" y="36" width="7" height="11" rx="2" fill={leg} />
+        {/* 발 — 검정 */}
+        <rect x="13" y="45" width="9" height="4" rx="2" fill="#1A1A1A" />
+        <rect x="22" y="45" width="9" height="4" rx="2" fill="#1A1A1A" />
+
+        {/* 몸통 — 레고 사다리꼴 (어깨부분 더 넓음) */}
+        <rect x="11" y="22" width="22" height="3" rx="1.5" fill={suit} />
+        <rect x="13" y="23" width="18" height="14" rx="2" fill={suit} />
+        {/* 몸통 중앙 장식선 */}
+        <line x1="22" y1="26" x2="22" y2="35" stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" strokeDasharray="2,2" />
+        {/* 단추 */}
+        <circle cx="22" cy="27.5" r="1" fill="rgba(255,255,255,0.35)" />
+        <circle cx="22" cy="31.5" r="1" fill="rgba(255,255,255,0.35)" />
+
+        {/* 왼팔 */}
+        <rect x="7" y="24" width="5" height="12" rx="2.5" fill={suit} />
+        {/* 오른팔 */}
+        <rect x="32" y="24" width="5" height="12" rx="2.5" fill={suit} />
+        {/* 왼손 (레고 클로) */}
+        <circle cx="9.5" cy="37" r="3" fill={LEGO_YELLOW} />
+        {/* 오른손 (레고 클로) */}
+        <circle cx="34.5" cy="37" r="3" fill={LEGO_YELLOW} />
+
+        {/* 머리 — 레고 노란색 원형 */}
+        <circle cx="22" cy="14" r="9" fill={LEGO_YELLOW} />
+        {/* 머리 위 스터드 (레고 특징) */}
+        <circle cx="22" cy="5" r="3" fill={LEGO_YELLOW} />
+        <circle cx="22" cy="5" r="2.2" fill="#E8B800" />
+        {/* 눈 */}
+        <circle cx="18.5" cy="13" r="1.5" fill="#1A1A1A" />
+        <circle cx="25.5" cy="13" r="1.5" fill="#1A1A1A" />
+        {/* 눈동자 하이라이트 */}
+        <circle cx="19" cy="12.5" r="0.5" fill="white" />
+        <circle cx="26" cy="12.5" r="0.5" fill="white" />
+        {/* 미소 */}
+        <path d="M18 17 Q22 20 26 17" stroke="#1A1A1A" strokeWidth="1.2" fill="none" strokeLinecap="round" />
       </g>
     </svg>
   )

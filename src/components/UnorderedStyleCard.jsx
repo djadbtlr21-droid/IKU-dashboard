@@ -1,9 +1,15 @@
 import { useState } from 'react'
-import { Check, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import ZohoImage from './ZohoImage'
 import {
   F, pick, styleKey, imageField, styleImageUrl, statusInfo,
 } from '../utils/styleFields'
+
+// alertBlink 애니메이션 (전역 충돌 방지 위해 mio 접두어)
+const ALERT_BLINK_CSS = `
+@keyframes mioAlertBlink { 0%,100%{opacity:1} 50%{opacity:0.5} }
+.mio-alert-blink { animation: mioAlertBlink 0.8s ease-in-out infinite; }
+`
 
 // ──────────────────────────────────────────────────────────
 // 미오더 스타일 카드 (未下单)
@@ -11,8 +17,12 @@ import {
 // 이미지 오버레이 없음 — 모든 정보는 이미지 아래 텍스트 영역에 표시.
 // ──────────────────────────────────────────────────────────
 export default function UnorderedStyleCard({
-  G, style, factory, note, price, editMode, draftFactory, draftNote, draftPrice,
-  onChangeFactory, onChangeNote, onChangePrice, onConvert, onDelete, onZoom, onOpenDetail,
+  G, style, factory, note, price,
+  sampleAlert, orderAlert,
+  editMode, draftFactory, draftNote, draftPrice,
+  onChangeFactory, onChangeNote, onChangePrice,
+  onToggleSampleAlert, onToggleOrderAlert,
+  onDelete, onZoom, onOpenDetail,
 }) {
   const sku = styleKey(style)
   const chi = pick(style, F.chi)
@@ -20,18 +30,16 @@ export default function UnorderedStyleCard({
   const gender = pick(style, F.gender)
   const category = pick(style, F.category)
   const fabric = pick(style, F.fabric)
-  const styleSt = pick(style, F.styleStatus)    // 샘플 상태 (打样状态)
-  const sampleSt = pick(style, F.sampleStatus)  // 승인 상태 (审批状态)
-  const imgUrl = styleImageUrl(style)
-  const sInfo = statusInfo(G, styleSt)
+  // 승인 상태(sampleStatus) 값을 "샘플 상태 打样状态" 행에 표시
+  const sampleSt = pick(style, F.sampleStatus)
   const aInfo = statusInfo(G, sampleSt)
+  const imgUrl = styleImageUrl(style)
 
-  const [confirmConvert, setConfirmConvert] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const inputStyle = { width: '100%', boxSizing: 'border-box', padding: '4px 6px', fontSize: 10, border: `1px solid ${G.border}`, borderRadius: 5, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }
 
-  // 상태: 라벨(뮤트) 줄 + 값 줄(② 1줄 고정 nowrap+ellipsis+tooltip, 상태색/깜빡) — 폰트 +3%
+  // 상태: 라벨(뮤트) 줄 + 값 줄(1줄 고정 nowrap+ellipsis+tooltip, 상태색/깜빡) — 폰트 +3%
   const statusBlock = (kr, cn, val, info) => (
     <div style={{ marginTop: 2 }}>
       <div style={{ fontSize: 9.3, color: G.fa, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{kr} {cn}</div>
@@ -39,6 +47,7 @@ export default function UnorderedStyleCard({
         style={{ fontSize: 9.5, color: info?.color || G.tx, fontWeight: info ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35 }}>{val || ''}</div>
     </div>
   )
+
   // ③ 항목명(뮤트) : 값(기본) — Style 탭 카드와 동일 패턴 (폰트 +3%, 빈값 빈칸)
   const row = (kr, cn, val) => (
     <div style={{ fontSize: 9.8, lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -48,8 +57,32 @@ export default function UnorderedStyleCard({
   )
   const stop = (e) => e.stopPropagation()
 
+  // 알림 버튼 공통 스타일
+  const alertBtnStyle = (active) => ({
+    marginTop: 4,
+    width: '100%',
+    minHeight: 33,
+    padding: '7px 5px',
+    fontSize: 11.3,
+    fontWeight: active ? 700 : 500,
+    whiteSpace: 'nowrap',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    borderRadius: 999,
+    border: `1px solid ${active ? '#DC2626' : '#D1D5DB'}`,
+    background: active ? '#DC2626' : G.bg,
+    color: active ? '#fff' : G.tx,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  })
+
   return (
     <div className="card" style={{ padding: 0, overflow: 'visible', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      {/* alertBlink 인라인 CSS */}
+      <style>{ALERT_BLINK_CSS}</style>
+
       {/* ③ 이미지 — 오버레이 없음, 고정 높이, object-fit cover, 클릭 시 라이트박스 */}
       <div style={{ width: '100%', height: 185, background: G.cardAlt, borderTopLeftRadius: 12, borderTopRightRadius: 12, overflow: 'hidden', cursor: imgUrl ? 'zoom-in' : 'default' }}
         onClick={() => { if (imgUrl) onZoom(imgUrl) }}>
@@ -75,9 +108,8 @@ export default function UnorderedStyleCard({
         {row('성별', '性别', gender)}
         {row('분류', '分类', category)}
         {row('원단', '面料', fabric)}
-        {/* ③ 샘플 상태 · 승인 상태 (2줄) */}
-        {statusBlock('샘플 상태', '打样状态', styleSt, sInfo)}
-        {statusBlock('승인 상태', '审批状态', sampleSt, aInfo)}
+        {/* ③ 샘플 상태 (통합 1줄 — 승인 상태 값 표시) */}
+        {statusBlock('샘플 상태', '打样状态', sampleSt, aInfo)}
         {/* 8. 오더예정공장 预计下单工厂 */}
         <div style={{ marginTop: 2 }}>
           <div style={{ fontSize: 9.3, color: G.fa, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>오더예정공장 预计下单工厂</div>
@@ -96,31 +128,26 @@ export default function UnorderedStyleCard({
             <div style={{ fontSize: 15.45, color: '#EA580C', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={price || ''}>{price || ''}</div>
           )}
         </div>
-        {/* ④ 미오더 배지 — 오더 전환 버튼 바로 위, 중앙 정렬 (폰트 +3%) */}
+
+        {/* ④ 미오더 배지 */}
         <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', justifyContent: 'center' }}>
           <span style={{ fontSize: 9.3, fontWeight: 700, color: '#fff', background: G.bad, padding: '2px 10px', borderRadius: 999 }}>미오더 · 未下单</span>
         </div>
-        {/* ⑤ 오더 전환 버튼 — 1줄, 100% 폭 (폰트 +3%) */}
-        <button type="button" onClick={(e) => { stop(e); setConfirmConvert(true) }} className="btn-ghost"
-          style={{ marginTop: 4, width: '100%', minHeight: 33, padding: '7px 5px', fontSize: 11.3, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-          <Check size={13} /> 오더 전환 · 转为已下单
+
+        {/* ⑤ 샘플 완성 알림 버튼 */}
+        <button type="button" onClick={(e) => { stop(e); onToggleSampleAlert?.(sku) }}
+          className={sampleAlert ? 'mio-alert-blink' : undefined}
+          style={alertBtnStyle(sampleAlert)}>
+          🔔 {sampleAlert ? '샘플 완성 알림 ON · 提醒开启' : '샘플 완성 알림 · 提醒样品完成'}
+        </button>
+
+        {/* ⑥ 오더 전환 알림 버튼 */}
+        <button type="button" onClick={(e) => { stop(e); onToggleOrderAlert?.(sku) }}
+          className={orderAlert ? 'mio-alert-blink' : undefined}
+          style={alertBtnStyle(orderAlert)}>
+          📦 {orderAlert ? '오더 전환 알림 ON · 提醒开启' : '오더 전환 알림 · 提醒已下单'}
         </button>
       </div>
-
-      {/* 오더 전환 확인 모달 */}
-      {confirmConvert && (
-        <div onClick={e => { if (e.target === e.currentTarget) setConfirmConvert(false) }}
-          style={{ position: 'absolute', inset: 0, background: G.overlayBg, borderRadius: 12, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
-          <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, padding: 14, boxShadow: G.cardShadow, textAlign: 'center', maxWidth: 200 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: G.tx, marginBottom: 4 }}>이 스타일이 오더되었나요?</div>
-            <div style={{ fontSize: 10.5, color: G.mu, marginBottom: 12 }}>该款式已下单了吗？<br /><span style={{ fontSize: 9.5, color: G.fa }}>목록에서 숨겨집니다 (Zoho 변경 없음)</span></div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-              <button type="button" onClick={() => setConfirmConvert(false)} className="btn-ghost" style={{ minHeight: 30, padding: '6px 12px', fontSize: 11 }}>취소 取消</button>
-              <button type="button" onClick={() => { setConfirmConvert(false); onConvert(sku) }} className="btn-primary" style={{ minHeight: 30, padding: '6px 12px', fontSize: 11 }}>확인 确认</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 삭제 확인 모달 */}
       {confirmDelete && (

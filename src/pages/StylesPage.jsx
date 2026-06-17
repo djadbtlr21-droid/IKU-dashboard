@@ -199,9 +199,8 @@ function StyleCard({ G, rec, group, onOpen, onZoom }) {
         {row('성별', '性别', gender)}
         {row('분류', '分类', category)}
         {row('원단', '面料', fabric)}
-        {/* 5~6. 샘플/승인 상태 (2줄) */}
-        {statusBlock('샘플 상태', '打样状态', styleSt, sampleInfo)}
-        {statusBlock('승인 상태', '审批状态', sampleSt, approvalInfo)}
+        {/* 5. 샘플 상태 (통합 1줄 — 승인 상태 값 표시) */}
+        {statusBlock('샘플 상태', '打样状态', sampleSt, approvalInfo)}
         {/* 9. 그룹 배지 (중앙) — 오더완료 已下单 / 샘플 완료 已完成 / 제작 중 打样中 */}
         <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', justifyContent: 'center' }}>
           <span style={{ fontSize: 9, fontWeight: 700, color: group.text, background: group.badgeBg, border: `1px solid ${group.line}`, padding: '2px 10px', borderRadius: 999 }}>{group.badgeKr} · {group.badgeCn}</span>

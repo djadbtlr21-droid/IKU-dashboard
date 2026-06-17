@@ -2,18 +2,22 @@
 // Style 미오더 메타데이터 store (EdgeOne Pages KV)
 //
 // KV binding: PROCESS_KV (재사용). 신규 키 (기존 process:* 구조 불변):
-//   style_factory:{SKU}  → 오더 예정 공장명 (문자열)
-//   style_note:{SKU}     → 스타일 비고 (문자열)
-//   style_price:{SKU}    → 예상단가 (문자열, 신규)
-//   style_hidden         → 숨긴 SKU 배열 (JSON)
+//   style_factory:{SKU}      → 오더 예정 공장명 (문자열)
+//   style_note:{SKU}         → 스타일 비고 (문자열)
+//   style_price:{SKU}        → 예상단가 (문자열)
+//   style_sample_alert:{SKU} → 샘플 완성 알림 활성 ('1'=활성, 없음=비활성)
+//   style_order_alert:{SKU}  → 오더 전환 알림 활성 ('1'=활성, 없음=비활성)
+//   style_hidden             → 숨긴 SKU 배열 (JSON)
 //
-// GET  → { ok, factory:{[SKU]:val}, note:{[SKU]:val}, price:{[SKU]:val}, hidden:[SKU] }
+// GET  → { ok, factory, note, price, sample_alert, order_alert, hidden }
 // POST → 비밀번호 불필요 (자주 바뀌는 공개 설정값). actions:
-//   { action:'factory', sku, value }
-//   { action:'note',    sku, value }
-//   { action:'price',   sku, value }
-//   { action:'hide',    sku }   ← 오더 전환(숨김)
-//   { action:'unhide',  sku }
+//   { action:'factory',      sku, value }
+//   { action:'note',         sku, value }
+//   { action:'price',        sku, value }
+//   { action:'sample_alert', sku, value } ← '1' 저장 / '' 삭제
+//   { action:'order_alert',  sku, value } ← '1' 저장 / '' 삭제
+//   { action:'hide',         sku }   ← 오더 전환(숨김)
+//   { action:'unhide',       sku }
 // ─────────────────────────────────────────────────────────────
 
 import { json, preflight } from './_resp.js';
@@ -22,6 +26,8 @@ import { getKV } from './_kv.js';
 const FACTORY_PREFIX = 'style_factory:';
 const NOTE_PREFIX = 'style_note:';
 const PRICE_PREFIX = 'style_price:';
+const SAMPLE_ALERT_PREFIX = 'style_sample_alert:';
+const ORDER_ALERT_PREFIX = 'style_order_alert:';
 const HIDDEN_KEY = 'style_hidden';
 const MAX_VAL = 300;
 
@@ -50,24 +56,28 @@ export async function onRequest(context) {
 
   // ── GET — read all style meta ──
   if (request.method === 'GET') {
-    if (!kv) return json({ ok: true, factory: {}, note: {}, price: {}, hidden: [], _warn: 'PROCESS_KV not bound' });
+    if (!kv) return json({ ok: true, factory: {}, note: {}, price: {}, sample_alert: {}, order_alert: {}, hidden: [], _warn: 'PROCESS_KV not bound' });
     try {
-      const factory = {}, note = {}, price = {};
+      const factory = {}, note = {}, price = {}, sample_alert = {}, order_alert = {};
       let hidden = [];
-      let fKeys = [], nKeys = [], pKeys = [];
-      try { fKeys = await listKeys(kv, FACTORY_PREFIX); } catch (e) { console.error('[style-meta] list factory', e); }
-      try { nKeys = await listKeys(kv, NOTE_PREFIX); } catch (e) { console.error('[style-meta] list note', e); }
-      try { pKeys = await listKeys(kv, PRICE_PREFIX); } catch (e) { console.error('[style-meta] list price', e); }
-      const all = [...fKeys, ...nKeys, ...pKeys, HIDDEN_KEY];
+      let fKeys = [], nKeys = [], pKeys = [], saKeys = [], oaKeys = [];
+      try { fKeys  = await listKeys(kv, FACTORY_PREFIX);      } catch (e) { console.error('[style-meta] list factory', e); }
+      try { nKeys  = await listKeys(kv, NOTE_PREFIX);         } catch (e) { console.error('[style-meta] list note', e); }
+      try { pKeys  = await listKeys(kv, PRICE_PREFIX);        } catch (e) { console.error('[style-meta] list price', e); }
+      try { saKeys = await listKeys(kv, SAMPLE_ALERT_PREFIX); } catch (e) { console.error('[style-meta] list sample_alert', e); }
+      try { oaKeys = await listKeys(kv, ORDER_ALERT_PREFIX);  } catch (e) { console.error('[style-meta] list order_alert', e); }
+      const all = [...fKeys, ...nKeys, ...pKeys, ...saKeys, ...oaKeys, HIDDEN_KEY];
       const vals = await Promise.all(all.map(async (k) => { try { return [k, await kv.get(k)]; } catch { return [k, null]; } }));
       for (const [k, raw] of vals) {
         if (raw == null) continue;
         if (k === HIDDEN_KEY) { try { const a = JSON.parse(raw); if (Array.isArray(a)) hidden = a; } catch { /* ignore */ } continue; }
-        if (k.startsWith(FACTORY_PREFIX)) factory[k.slice(FACTORY_PREFIX.length)] = raw;
-        else if (k.startsWith(NOTE_PREFIX)) note[k.slice(NOTE_PREFIX.length)] = raw;
-        else if (k.startsWith(PRICE_PREFIX)) price[k.slice(PRICE_PREFIX.length)] = raw;
+        if (k.startsWith(FACTORY_PREFIX))      factory[k.slice(FACTORY_PREFIX.length)] = raw;
+        else if (k.startsWith(NOTE_PREFIX))    note[k.slice(NOTE_PREFIX.length)] = raw;
+        else if (k.startsWith(PRICE_PREFIX))   price[k.slice(PRICE_PREFIX.length)] = raw;
+        else if (k.startsWith(SAMPLE_ALERT_PREFIX)) sample_alert[k.slice(SAMPLE_ALERT_PREFIX.length)] = raw;
+        else if (k.startsWith(ORDER_ALERT_PREFIX))  order_alert[k.slice(ORDER_ALERT_PREFIX.length)] = raw;
       }
-      return json({ ok: true, factory, note, price, hidden }, 200, { 'Cache-Control': 'no-store' });
+      return json({ ok: true, factory, note, price, sample_alert, order_alert, hidden }, 200, { 'Cache-Control': 'no-store' });
     } catch (err) {
       console.error('[style-meta] GET error', err);
       return json({ ok: false, error: 'read_failed', message: 'KV 읽기 실패 · KV 读取失败' }, 500);
@@ -88,11 +98,12 @@ export async function onRequest(context) {
   const action = body?.action;
   const sku = body?.sku;
   try {
-    if (action === 'factory' || action === 'note' || action === 'price') {
+    if (action === 'factory' || action === 'note' || action === 'price' || action === 'sample_alert' || action === 'order_alert') {
       if (!validSku(sku)) return json({ ok: false, error: 'invalid_sku' }, 400);
       let value = typeof body.value === 'string' ? body.value : '';
       if (value.length > MAX_VAL) value = value.slice(0, MAX_VAL);
-      const key = (action === 'factory' ? FACTORY_PREFIX : action === 'note' ? NOTE_PREFIX : PRICE_PREFIX) + sku;
+      const PREFIX_MAP = { factory: FACTORY_PREFIX, note: NOTE_PREFIX, price: PRICE_PREFIX, sample_alert: SAMPLE_ALERT_PREFIX, order_alert: ORDER_ALERT_PREFIX };
+      const key = PREFIX_MAP[action] + sku;
       if (value) await kv.put(key, value); else await kv.delete(key);
       return json({ ok: true, action, sku, value });
     }
