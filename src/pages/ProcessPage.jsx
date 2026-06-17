@@ -621,9 +621,6 @@ const PAGE_CSS = `
 @media(max-width:900px){.mio-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:768px){.mio-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:520px){.mio-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-/* ⑤ 상태 깜빡임 (opacity 1↔0.25) */
-@keyframes mioBlink {0%,100%{opacity:1}50%{opacity:.25}}
-.mio-blink{animation:mioBlink 1.6s ease-in-out infinite}
 `
 
 // ──────────────────────────────────────────────────────────
