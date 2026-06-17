@@ -72,6 +72,8 @@ const RAW_SECTIONS = new Set(['fabric', 'sub_material', 'label', 'wash_label'])
 
 // 미오더 샘플 완료 판별 키워드 (대소문자 무시)
 const SAMPLE_DONE_KEYS = ['已完成', '완료', 'completed', 'approved', '샘플 제작완료']
+// 대기 중 판별 키워드
+const SAMPLE_WAIT_KEYS = ['等待中', '대기 중', 'waiting', 'pending', '待审核', '보류']
 
 const SECTIONS = [
   {
@@ -1667,7 +1669,7 @@ export default function ProcessPage({ G }) {
       return true
     })
   }, [unorderedStyles, styleTab, search])
-  // 샘플 완료 그룹 / 샘플 제작 중 그룹
+  // 샘플 완료 / 대기 중 / 샘플 제작 중 그룹
   const completedStyles = useMemo(
     () => visibleStyles.filter(st => {
       const v = (pick(st, SF.sampleStatus) || '').toLowerCase()
@@ -1675,10 +1677,19 @@ export default function ProcessPage({ G }) {
     }),
     [visibleStyles]
   )
+  const waitingStyles = useMemo(
+    () => visibleStyles.filter(st => {
+      const v = (pick(st, SF.sampleStatus) || '').toLowerCase()
+      return !SAMPLE_DONE_KEYS.some(k => v.includes(k.toLowerCase())) &&
+        SAMPLE_WAIT_KEYS.some(k => v.includes(k.toLowerCase()))
+    }),
+    [visibleStyles]
+  )
   const inProgressStyles = useMemo(
     () => visibleStyles.filter(st => {
       const v = (pick(st, SF.sampleStatus) || '').toLowerCase()
-      return !SAMPLE_DONE_KEYS.some(k => v.includes(k.toLowerCase()))
+      return !SAMPLE_DONE_KEYS.some(k => v.includes(k.toLowerCase())) &&
+        !SAMPLE_WAIT_KEYS.some(k => v.includes(k.toLowerCase()))
     }),
     [visibleStyles]
   )
@@ -2208,6 +2219,7 @@ export default function ProcessPage({ G }) {
                         onChangeNote={onChangeStyleNote}
                         onSavePrice={onSaveStylePrice}
                         sampleDone={true}
+                        waiting={false}
                         sampleAlert={styleMeta.sample_alert[sk] === '1'}
                         orderAlert={styleMeta.order_alert[sk] === '1'}
                         onToggleSampleAlert={onToggleSampleAlert}
@@ -2222,7 +2234,7 @@ export default function ProcessPage({ G }) {
                 </div>
               </>
             )}
-            {completedStyles.length > 0 && inProgressStyles.length > 0 && (
+            {(completedStyles.length > 0) && (inProgressStyles.length > 0 || waitingStyles.length > 0) && (
               <div style={{ height: 40 }} />
             )}
             {inProgressStyles.length > 0 && (
@@ -2248,6 +2260,7 @@ export default function ProcessPage({ G }) {
                         onChangeNote={onChangeStyleNote}
                         onSavePrice={onSaveStylePrice}
                         sampleDone={false}
+                        waiting={false}
                         sampleAlert={styleMeta.sample_alert[sk] === '1'}
                         orderAlert={styleMeta.order_alert[sk] === '1'}
                         onToggleSampleAlert={onToggleSampleAlert}
@@ -2256,6 +2269,45 @@ export default function ProcessPage({ G }) {
                         onDelete={handleDeleteStyle}
                         onOpenDetail={(s) => setSelectedStyle(s)}
                         borderColor="#F7C1C1"
+                      />
+                    )
+                  })}
+                </div>
+              </>
+            )}
+            {waitingStyles.length > 0 && (
+              <>
+                <div style={{ height: 40 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: '#6B21A8', background: '#F3E8FF', border: '1px solid #A855F7', padding: '3px 10px', borderRadius: 999 }}>대기 중 · 等待中</span>
+                  <span style={{ fontSize: 11, color: G.mu }}>{waitingStyles.length}개 · {waitingStyles.length}款</span>
+                  <div style={{ flex: 1, height: 1, background: '#A855F7' }} />
+                </div>
+                <div className="mio-grid">
+                  {waitingStyles.map(st => {
+                    const sk = styleKey(st)
+                    return (
+                      <UnorderedStyleCard
+                        key={sk} G={G} style={st}
+                        factory={styleMeta.factory[sk] || ''}
+                        note={styleMeta.note[sk] || ''}
+                        price={styleMeta.price[sk] || ''}
+                        editMode={styleEditMode}
+                        draftFactory={styleDrafts[sk]?.factory}
+                        draftNote={styleDrafts[sk]?.note}
+                        onChangeFactory={onChangeStyleFactory}
+                        onChangeNote={onChangeStyleNote}
+                        onSavePrice={onSaveStylePrice}
+                        sampleDone={false}
+                        waiting={true}
+                        sampleAlert={styleMeta.sample_alert[sk] === '1'}
+                        orderAlert={styleMeta.order_alert[sk] === '1'}
+                        onToggleSampleAlert={onToggleSampleAlert}
+                        onToggleOrderAlert={onToggleOrderAlert}
+                        onZoom={setZoomSrc}
+                        onDelete={handleDeleteStyle}
+                        onOpenDetail={(s) => setSelectedStyle(s)}
+                        borderColor="#D8B4FE"
                       />
                     )
                   })}

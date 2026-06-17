@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Trash2 } from 'lucide-react'
 import ZohoImage from './ZohoImage'
 import PriceTableModal from './PriceTableModal'
@@ -7,19 +7,18 @@ import {
   F, pick, styleKey, imageField, styleImageUrl,
 } from '../utils/styleFields'
 
-const BLINK_CSS = `
-@keyframes mioBlink { 0%,100%{opacity:1} 50%{opacity:0.45} }
-@keyframes mioBlinkSlow { 0%,100%{opacity:1} 50%{opacity:0.3} }
-@keyframes mioPriceBlink { 0%,100%{opacity:1} 50%{opacity:0.4} }
-.mio-blink { animation: mioBlink 0.75s ease-in-out infinite; }
-.mio-blink-slow { animation: mioBlinkSlow 1.6s ease-in-out infinite; }
-.mio-price-blink { animation: mioPriceBlink 1.4s ease-in-out infinite; }
-`
+const PRICE_FIELDS = ['process', 'iku', 'p1', 'p2', 'p3', 'p4', 'note']
 
-// ① sampleDone: true=샘플완료그룹, false=샘플제작중그룹
+function hasRealData(d) {
+  const rows = d?.rows
+  return Array.isArray(rows) && rows.length >= 1 &&
+    rows.some(r => PRICE_FIELDS.some(f => (r[f] || '').trim() !== ''))
+}
+
 export default function UnorderedStyleCard({
   G, style, factory, note, price,
   sampleDone,
+  waiting,
   sampleAlert, orderAlert,
   editMode, draftFactory, draftNote,
   onChangeFactory, onChangeNote,
@@ -41,17 +40,20 @@ export default function UnorderedStyleCard({
   const [priceModal, setPriceModal] = useState(false)
   const [priceKvStatus, setPriceKvStatus] = useState(null)
 
+  const fetchPriceStatus = useCallback(() => {
+    fetchStylePriceTable(sku)
+      .then(res => {
+        setPriceKvStatus(hasRealData(res?.data) ? 'ok' : 'empty')
+      })
+      .catch(() => setPriceKvStatus('empty'))
+  }, [sku])
+
   useEffect(() => {
     let cancelled = false
     fetchStylePriceTable(sku)
       .then(res => {
         if (cancelled) return
-        const d = res?.data
-        const rows = d?.rows
-        // ① 어떠한 데이터라도 존재하면 완료
-        const hasVal = (Array.isArray(rows) && rows.length >= 1) ||
-          !!(d?.factory2 || d?.factory3 || d?.factory4)
-        setPriceKvStatus(hasVal ? 'ok' : 'empty')
+        setPriceKvStatus(hasRealData(res?.data) ? 'ok' : 'empty')
       })
       .catch(() => { if (!cancelled) setPriceKvStatus('empty') })
     return () => { cancelled = true }
@@ -60,7 +62,6 @@ export default function UnorderedStyleCard({
   const openPriceModal = (e) => { e.stopPropagation(); setPriceModal(true) }
   const stop = (e) => e.stopPropagation()
 
-  // ② 예상단가 버튼 상태
   const priceLoading = priceKvStatus === null
   const priceOk = priceKvStatus === 'ok'
   const priceIcon = priceOk ? '✅' : '⚠'
@@ -69,7 +70,6 @@ export default function UnorderedStyleCard({
   const priceBorderColor = priceLoading ? G.border : priceOk ? '#97C459' : '#F09595'
   const priceBlink = !priceLoading && !priceOk
 
-  // ③ 알림 버튼 공통 스타일
   const alertBtnStyle = (active) => ({
     marginTop: 4, width: '100%', minHeight: 33,
     padding: '7px 5px', fontSize: 11.3,
@@ -83,17 +83,14 @@ export default function UnorderedStyleCard({
     cursor: 'pointer', fontFamily: 'inherit',
   })
 
-  // ③ 강조 라벨 스타일 (샘플상태/공장 라벨 ×1.2, center)
   const bigLabelStyle = {
     fontSize: 11.2, fontWeight: 700, color: G.fa,
     textAlign: 'center',
     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
   }
 
-  // ⑤ 샘플 상태 값 색상
-  const sampleValColor = sampleDone ? '#16A34A' : '#DC2626'
+  const sampleValColor = sampleDone ? '#16A34A' : waiting ? '#7C3AED' : '#DC2626'
 
-  // 일반 정보 행
   const row = (kr, cn, val) => (
     <div style={{ fontSize: 9.8, lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
       <span style={{ color: G.fa }}>{kr} {cn}: </span>
@@ -103,7 +100,6 @@ export default function UnorderedStyleCard({
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'visible', display: 'flex', flexDirection: 'column', position: 'relative', ...(borderColor ? { border: `1px solid ${borderColor}` } : {}) }}>
-      <style>{BLINK_CSS}</style>
 
       {/* 이미지 */}
       <div style={{ width: '100%', height: 185, background: G.cardAlt, borderTopLeftRadius: 12, borderTopRightRadius: 12, overflow: 'hidden', cursor: imgUrl ? 'zoom-in' : 'default' }}
@@ -127,18 +123,18 @@ export default function UnorderedStyleCard({
           )}
         </div>
 
-        {/* 일반 정보 행 (비강조) */}
+        {/* 일반 정보 행 */}
         {row('아이템명', '货号', chi)}
         {row('브랜드', '品牌', brand)}
         {row('성별', '性别', gender)}
         {row('분류', '分类', category)}
         {row('원단', '面料', fabric)}
 
-        {/* ③ 샘플 상태 — 강조 ×1.2, center */}
+        {/* 샘플 상태 */}
         <div style={{ marginTop: 2 }}>
           <div style={bigLabelStyle}>샘플 상태 打样状态</div>
           <div
-            className={!sampleDone ? 'mio-blink-slow' : undefined}
+            className={!sampleDone ? 'g-blink' : undefined}
             title={sampleSt || ''}
             style={{
               fontSize: 11.4, fontWeight: 700, color: sampleValColor,
@@ -148,7 +144,7 @@ export default function UnorderedStyleCard({
           >{sampleSt || ''}</div>
         </div>
 
-        {/* ③ 오더예정공장 — 강조 ×1.2, center, 그룹간 14px gap */}
+        {/* 오더예정공장 */}
         <div style={{ marginTop: 14 }}>
           <div style={bigLabelStyle}>오더예정공장 预计下单工厂</div>
           {editMode ? (
@@ -160,7 +156,7 @@ export default function UnorderedStyleCard({
             />
           ) : (
             <div
-              className={!factory ? 'mio-blink-slow' : undefined}
+              className={!factory ? 'g-blink' : undefined}
               title={factory || ''}
               style={{
                 fontSize: 12.4, fontWeight: 700,
@@ -174,11 +170,11 @@ export default function UnorderedStyleCard({
           )}
         </div>
 
-        {/* ② 예상단가 버튼 — 아이콘 좌측, margin-top 12px */}
+        {/* 예상단가 버튼 */}
         <button
           type="button"
           onClick={openPriceModal}
-          className={priceBlink ? 'mio-price-blink' : undefined}
+          className={priceBlink ? 'g-blink' : undefined}
           style={{
             marginTop: 12, width: '100%', minHeight: 33,
             padding: '7px 5px', fontSize: 11.3, fontWeight: 700,
@@ -194,19 +190,17 @@ export default function UnorderedStyleCard({
           {priceLoading && <span style={{ fontSize: 10, color: G.fa }}>...</span>}
         </button>
 
-        {/* ① 그룹별 알림 버튼 1개 */}
+        {/* 그룹별 알림 버튼 */}
         {sampleDone ? (
-          /* 샘플 완료 그룹 → 오더 전환 알림만 */
           <button type="button" onClick={(e) => { stop(e); onToggleOrderAlert?.(sku) }}
-            className={orderAlert ? 'mio-blink' : undefined}
+            className={orderAlert ? 'g-blink' : undefined}
             style={alertBtnStyle(orderAlert)}>
             <span>{orderAlert ? '⚠' : '🔔'}</span>
             <span>{orderAlert ? '오더 전환 알림 ON · 提醒开启' : '오더 전환 알림 · 提醒已下单'}</span>
           </button>
         ) : (
-          /* 샘플 제작 중 그룹 → 샘플 완성 알림만 */
           <button type="button" onClick={(e) => { stop(e); onToggleSampleAlert?.(sku) }}
-            className={sampleAlert ? 'mio-blink' : undefined}
+            className={sampleAlert ? 'g-blink' : undefined}
             style={alertBtnStyle(sampleAlert)}>
             <span>{sampleAlert ? '⚠' : '🔔'}</span>
             <span>{sampleAlert ? '샘플 완성 알림 ON · 提醒开启' : '샘플 완성 알림 · 提醒样品完成'}</span>
@@ -230,13 +224,14 @@ export default function UnorderedStyleCard({
         </div>
       )}
 
-      {/* 예상단가 표 모달 */}
+      {/* 예상단가 모달 */}
       {priceModal && (
         <PriceTableModal
           G={G}
           sku={sku}
           onClose={() => setPriceModal(false)}
           onSavePrice={onSavePrice}
+          onSaved={fetchPriceStatus}
         />
       )}
     </div>

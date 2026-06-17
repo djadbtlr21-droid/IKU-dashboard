@@ -9,27 +9,31 @@ function makeDefaultRows() {
   return [makeRow(), makeRow(), makeRow()]
 }
 
-// 열 색상 상수
+const PRICE_FIELDS = ['process', 'iku', 'p1', 'p2', 'p3', 'p4', 'note']
+function stripId(rows) {
+  return rows.map(({ id, ...r }) => r)
+}
+
 const C_IKU = '#16A34A'
 const C_HX  = '#5B8DEF'
 const C_OS  = '#EA580C'
-
-// 헤더 2단 구조 — 모든 열의 서브 슬롯 높이 통일 (공장명 입력칸 기준)
 const SUB_H = 24
 
-// ── 단순 입력칸 (번역 결과 슬라이드 포함) ──
-function TransCell({ value, onChange, translation, showTrans, onCloseTranslation, placeholder, G }) {
+function TransCell({ value, onChange, translation, showTrans, onCloseTranslation, placeholder, G, readOnly }) {
   return (
     <div>
       <input
         value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
+        onChange={e => !readOnly && onChange(e.target.value)}
+        readOnly={readOnly}
+        placeholder={readOnly ? '' : placeholder}
         style={{
           width: '100%', boxSizing: 'border-box',
           padding: '4px 5px', fontSize: 12.1,
-          border: '1px solid #E5E7EB', borderRadius: 4,
-          background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit',
+          border: readOnly ? 'none' : '1px solid #E5E7EB',
+          borderRadius: 4,
+          background: 'transparent', color: G.tx, outline: 'none', fontFamily: 'inherit',
+          cursor: readOnly ? 'default' : 'text',
         }}
       />
       <div style={{
@@ -55,8 +59,7 @@ function TransCell({ value, onChange, translation, showTrans, onCloseTranslation
   )
 }
 
-// ── 단가 입력칸 ──
-function PriceInput({ value, onChange, G, color = C_OS }) {
+function PriceInput({ value, onChange, G, color = C_OS, readOnly }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
       <span style={{ fontSize: 11, color, flexShrink: 0 }}>¥</span>
@@ -64,20 +67,23 @@ function PriceInput({ value, onChange, G, color = C_OS }) {
         type="text"
         inputMode="decimal"
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={e => !readOnly && onChange(e.target.value)}
+        readOnly={readOnly}
         style={{
           flex: 1, minWidth: 0, padding: '4px 3px', fontSize: 12.1,
-          border: '1px solid #E5E7EB', borderRadius: 4,
-          background: G.bg, color, outline: 'none',
+          border: readOnly ? 'none' : '1px solid #E5E7EB',
+          borderRadius: 4,
+          background: 'transparent', color, outline: 'none',
           fontFamily: 'inherit', textAlign: 'right',
+          cursor: readOnly ? 'default' : 'text',
         }}
       />
     </div>
   )
 }
 
-// ── 일괄 번역 버튼 (인라인, 부모 컨테이너가 중앙 정렬) ──
-function BulkTransBtn({ status, onClick }) {
+function BulkTransBtn({ status, onClick, readOnly }) {
+  if (readOnly) return null
   const label = status === 'busy'
     ? '번역 중... · 翻译中...'
     : status === 'done'
@@ -100,7 +106,6 @@ function BulkTransBtn({ status, onClick }) {
   )
 }
 
-// ── 헤더 서브 슬롯 컨테이너 (SUB_H 고정, 내용 중앙 정렬) ──
 function SubSlot({ children, justify = 'center', visible = true }) {
   return (
     <div style={{
@@ -114,8 +119,31 @@ function SubSlot({ children, justify = 'center', visible = true }) {
   )
 }
 
-// ── 예상단가 표 모달 ──
-export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
+// 인라인 확인 다이얼로그
+function ConfirmDialog({ G, msg, onOk, onCancel }) {
+  return (
+    <div
+      onClick={e => { if (e.target === e.currentTarget) onCancel() }}
+      style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 100, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+    >
+      <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 10, padding: 20, boxShadow: G.cardShadow, textAlign: 'center', maxWidth: 320 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: G.tx, marginBottom: 16, lineHeight: 1.5 }}>{msg}</div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+          <button type="button" onClick={onCancel}
+            style={{ padding: '8px 18px', fontSize: 12, fontWeight: 500, borderRadius: 7, border: `1px solid ${G.border}`, background: 'transparent', color: G.tx, cursor: 'pointer', fontFamily: 'inherit' }}>
+            취소 取消
+          </button>
+          <button type="button" onClick={onOk}
+            style={{ padding: '8px 18px', fontSize: 12, fontWeight: 700, borderRadius: 7, border: '1px solid #DC2626', background: '#DC2626', color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
+            확인 确认
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function PriceTableModal({ G, sku, onClose, onSavePrice, onSaved }) {
   const [rows, setRows] = useState(makeDefaultRows)
   const [factory2, setFactory2] = useState('')
   const [factory3, setFactory3] = useState('')
@@ -124,6 +152,11 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
   const toastRef = useRef(null)
+
+  // 읽기/수정 모드
+  const [readOnly, setReadOnly] = useState(true)
+  const [originalData, setOriginalData] = useState(null)
+  const [confirmDialog, setConfirmDialog] = useState(null) // { msg, onOk }
 
   const [procTrans, setProcTrans] = useState({})
   const [procOpen, setProcOpen] = useState({})
@@ -148,7 +181,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
         if (!alive) return
         const d = res?.data
         if (d && Array.isArray(d.rows) && d.rows.length > 0) {
-          setRows(d.rows.map((r) => ({
+          const loadedRows = d.rows.map((r) => ({
             id: ++_rowId,
             process: r.process || '',
             iku: r.iku || '',
@@ -157,10 +190,14 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
             p3: r.p3 || '',
             p4: r.p4 || '',
             note: r.note || '',
-          })))
-          if (d.factory2) setFactory2(d.factory2)
-          if (d.factory3) setFactory3(d.factory3)
-          if (d.factory4) setFactory4(d.factory4)
+          }))
+          setRows(loadedRows)
+          const f2 = d.factory2 || ''
+          const f3 = d.factory3 || ''
+          const f4 = d.factory4 || ''
+          if (f2) setFactory2(f2)
+          if (f3) setFactory3(f3)
+          if (f4) setFactory4(f4)
         }
       })
       .catch(() => {})
@@ -172,6 +209,49 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
     setToast({ type, msg })
     clearTimeout(toastRef.current)
     toastRef.current = setTimeout(() => setToast(null), 2000)
+  }
+
+  const enterEditMode = () => {
+    setOriginalData({ rows: stripId(rows), factory2, factory3, factory4 })
+    setReadOnly(false)
+  }
+
+  const isDirty = useCallback((curRows, f2, f3, f4) => {
+    if (!originalData) return false
+    return JSON.stringify({ rows: stripId(curRows), factory2: f2, factory3: f3, factory4: f4 }) !==
+      JSON.stringify({ rows: originalData.rows, factory2: originalData.factory2, factory3: originalData.factory3, factory4: originalData.factory4 })
+  }, [originalData])
+
+  const restoreOriginal = useCallback(() => {
+    if (!originalData) return
+    setRows(originalData.rows.map(r => ({ id: ++_rowId, ...r })))
+    setFactory2(originalData.factory2)
+    setFactory3(originalData.factory3)
+    setFactory4(originalData.factory4)
+  }, [originalData])
+
+  const handleCancelEdit = () => {
+    if (isDirty(rows, factory2, factory3, factory4)) {
+      setConfirmDialog({
+        msg: '저장하지 않은 변경사항이 있습니다. 취소하시겠습니까? · 有未保存的更改，确认退出？',
+        onOk: () => { restoreOriginal(); setReadOnly(true); setConfirmDialog(null) },
+      })
+    } else {
+      setReadOnly(true)
+    }
+  }
+
+  const handleClearAll = () => {
+    setConfirmDialog({
+      msg: '모든 데이터를 삭제하시겠습니까? · 确认删除所有数据？',
+      onOk: () => {
+        setRows([makeRow(), makeRow(), makeRow()])
+        setFactory2('')
+        setFactory3('')
+        setFactory4('')
+        setConfirmDialog(null)
+      },
+    })
   }
 
   const updateRow = (id, field, val) =>
@@ -212,17 +292,20 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
   const handleSave = async () => {
     setSaving(true)
     try {
+      // 빈 행 제거 후 저장 (전체삭제 → rows:[])
+      const cleanRows = stripId(rows).filter(r => PRICE_FIELDS.some(f => (r[f] || '').trim()))
       const data = {
         factory2: factory2.trim(),
         factory3: factory3.trim(),
         factory4: factory4.trim(),
-        rows: rows.map(({ id, ...r }) => r),
+        rows: cleanRows,
         updatedAt: new Date().toISOString(),
       }
       const res = await saveStylePriceTable(sku, data)
       if (res?.ok) {
         const jsonStr = JSON.stringify(data)
         onSavePrice?.(sku, jsonStr)
+        onSaved?.()
         showToast('ok', '저장됨 · 已保存')
         setTimeout(() => onClose(), 900)
       } else {
@@ -235,8 +318,6 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
     }
   }
 
-  // ① 모든 th: verticalAlign: bottom + 내부 2단 구조 ([메인라벨] + [SUB_H 슬롯])
-  //    → 모든 열의 메인 라벨 하단 y좌표 일치, 서브 슬롯 하단 y좌표 일치
   const thBase = {
     padding: '7px 5px', fontSize: 11.6, fontWeight: 700,
     background: G.cardAlt || '#F9FAFB', borderBottom: `1px solid ${G.border || '#E5E7EB'}`,
@@ -246,11 +327,11 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
     padding: '4px 4px', borderBottom: `1px solid ${G.border || '#E5E7EB'}`,
     verticalAlign: 'top',
   }
-  // 공장명 입력 (SUB_H 슬롯 내부에서 사용)
   const factoryInputStyle = {
     width: '100%', boxSizing: 'border-box', padding: '2px 4px', fontSize: 11,
-    border: 'none', borderBottom: '1px dashed #9CA3AF',
+    border: 'none', borderBottom: readOnly ? 'none' : '1px dashed #9CA3AF',
     background: 'transparent', color: G.tx, outline: 'none', fontFamily: 'inherit',
+    cursor: readOnly ? 'default' : 'text',
   }
 
   return (
@@ -261,6 +342,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
       <div
         onClick={e => e.stopPropagation()}
         style={{
+          position: 'relative',
           background: G.card, borderRadius: 12,
           width: '92%', maxWidth: 1265, maxHeight: '92vh',
           display: 'flex', flexDirection: 'column',
@@ -268,10 +350,41 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
           border: `1px solid ${G.border}`,
         }}
       >
+        {/* 인라인 확인 다이얼로그 */}
+        {confirmDialog && (
+          <ConfirmDialog
+            G={G}
+            msg={confirmDialog.msg}
+            onOk={confirmDialog.onOk}
+            onCancel={() => setConfirmDialog(null)}
+          />
+        )}
+
         {/* 모달 헤더 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '15px 21px', borderBottom: `1px solid ${G.border}`, flexShrink: 0 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15.4, fontWeight: 700, color: G.tx }}>예상단가 입력 · 预算单价输入</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 15.4, fontWeight: 700, color: G.tx }}>
+                {readOnly ? '예상단가 조회 · 预算单价查看' : '예상단가 수정 · 预算单价修改'}
+              </span>
+              {readOnly ? (
+                <button
+                  type="button"
+                  onClick={enterEditMode}
+                  style={{ fontSize: 11.6, fontWeight: 600, padding: '3px 10px', borderRadius: 6, border: '1px solid #EA580C', background: '#FFF7ED', color: '#EA580C', cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  수정 修改
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  style={{ fontSize: 11.6, fontWeight: 600, padding: '3px 10px', borderRadius: 6, border: '1px solid #D1D5DB', background: '#F3F4F6', color: '#9CA3AF', cursor: 'default', fontFamily: 'inherit' }}
+                >
+                  수정 중 修改中
+                </button>
+              )}
+            </div>
             <div style={{ fontSize: 11.6, color: G.fa, marginTop: 2 }}>{sku}</div>
           </div>
           <button
@@ -298,99 +411,87 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                     <col style={{ width: '10%' }} />
                     <col style={{ width: '10%' }} />
                     <col />
-                    <col style={{ width: 26 }} />
+                    {!readOnly && <col style={{ width: 26 }} />}
                   </colgroup>
                   <thead>
                     <tr>
-
-                      {/* ① # — 메인 라벨 + 투명 SUB_H 슬롯 */}
                       <th style={thBase}>
                         <div>#</div>
                         <SubSlot visible={false} />
                       </th>
-
-                      {/* ① 공정명 — 메인 라벨 + 전체번역 버튼 슬롯 */}
                       <th style={{ ...thBase, whiteSpace: 'normal' }}>
                         <div>공정명 工序名</div>
                         <SubSlot>
                           <BulkTransBtn
+                            readOnly={readOnly}
                             status={procBulkSt}
                             onClick={() => bulkTranslate('process', setProcBulkSt, setProcTrans, setProcOpen)}
                           />
                         </SubSlot>
                       </th>
-
-                      {/* ① IKU — "IKU 단가" + 슬롯에 서브 라벨 */}
                       <th style={{ ...thBase, whiteSpace: 'normal', color: C_IKU }}>
                         <div>IKU 단가</div>
                         <SubSlot>
                           <span style={{ fontWeight: 500, fontSize: 10.5 }}>公司单价</span>
                         </SubSlot>
                       </th>
-
-                      {/* ① HEXIANG — "1. HEXIANG단가" + 슬롯에 서브 라벨 */}
                       <th style={{ ...thBase, whiteSpace: 'normal', wordBreak: 'keep-all', color: C_HX }}>
                         <div>1. HEXIANG단가</div>
                         <SubSlot>
                           <span style={{ fontWeight: 500, fontSize: 10.5 }}>合祥单价</span>
                         </SubSlot>
                       </th>
-
-                      {/* ① 외주 2 — "2. 외주단가..." + 슬롯에 공장명 입력 */}
                       <th style={{ ...thBase, whiteSpace: 'normal', color: C_OS }}>
                         <div>2. 외주단가 外发单价</div>
                         <SubSlot justify="stretch">
                           <input
                             value={factory2}
                             onChange={e => setFactory2(e.target.value)}
-                            placeholder="공장명 · 工厂名"
+                            readOnly={readOnly}
+                            placeholder={readOnly ? '' : '공장명 · 工厂名'}
                             style={factoryInputStyle}
                           />
                         </SubSlot>
                       </th>
-
-                      {/* ① 외주 3 */}
                       <th style={{ ...thBase, whiteSpace: 'normal', color: C_OS }}>
                         <div>3. 외주단가 外发单价</div>
                         <SubSlot justify="stretch">
                           <input
                             value={factory3}
                             onChange={e => setFactory3(e.target.value)}
-                            placeholder="공장명 · 工厂名"
+                            readOnly={readOnly}
+                            placeholder={readOnly ? '' : '공장명 · 工厂名'}
                             style={factoryInputStyle}
                           />
                         </SubSlot>
                       </th>
-
-                      {/* ① 외주 4 */}
                       <th style={{ ...thBase, whiteSpace: 'normal', color: C_OS }}>
                         <div>4. 외주단가 外发单价</div>
                         <SubSlot justify="stretch">
                           <input
                             value={factory4}
                             onChange={e => setFactory4(e.target.value)}
-                            placeholder="공장명 · 工厂名"
+                            readOnly={readOnly}
+                            placeholder={readOnly ? '' : '공장명 · 工厂名'}
                             style={factoryInputStyle}
                           />
                         </SubSlot>
                       </th>
-
-                      {/* ① 비고 — 메인 라벨 + 전체번역 버튼 슬롯 */}
                       <th style={{ ...thBase, whiteSpace: 'normal' }}>
                         <div>비고 · 备注</div>
                         <SubSlot>
                           <BulkTransBtn
+                            readOnly={readOnly}
                             status={noteBulkSt}
                             onClick={() => bulkTranslate('note', setNoteBulkSt, setNoteTrans, setNoteOpen)}
                           />
                         </SubSlot>
                       </th>
-
-                      {/* ① × — 투명 슬롯만 */}
-                      <th style={thBase}>
-                        <SubSlot visible={false} />
-                      </th>
-
+                      {!readOnly && (
+                        <th style={thBase}>
+                          <SubSlot visible={false} />
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -406,22 +507,23 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                             onCloseTranslation={() => setProcOpen(s => ({ ...s, [row.id]: false }))}
                             placeholder="공정명 工序名"
                             G={G}
+                            readOnly={readOnly}
                           />
                         </td>
                         <td style={tdStyle}>
-                          <PriceInput value={row.iku} onChange={v => updateRow(row.id, 'iku', v)} G={G} color={C_IKU} />
+                          <PriceInput value={row.iku} onChange={v => updateRow(row.id, 'iku', v)} G={G} color={C_IKU} readOnly={readOnly} />
                         </td>
                         <td style={tdStyle}>
-                          <PriceInput value={row.p1} onChange={v => updateRow(row.id, 'p1', v)} G={G} color={C_HX} />
+                          <PriceInput value={row.p1} onChange={v => updateRow(row.id, 'p1', v)} G={G} color={C_HX} readOnly={readOnly} />
                         </td>
                         <td style={tdStyle}>
-                          <PriceInput value={row.p2} onChange={v => updateRow(row.id, 'p2', v)} G={G} color={C_OS} />
+                          <PriceInput value={row.p2} onChange={v => updateRow(row.id, 'p2', v)} G={G} color={C_OS} readOnly={readOnly} />
                         </td>
                         <td style={tdStyle}>
-                          <PriceInput value={row.p3} onChange={v => updateRow(row.id, 'p3', v)} G={G} color={C_OS} />
+                          <PriceInput value={row.p3} onChange={v => updateRow(row.id, 'p3', v)} G={G} color={C_OS} readOnly={readOnly} />
                         </td>
                         <td style={tdStyle}>
-                          <PriceInput value={row.p4} onChange={v => updateRow(row.id, 'p4', v)} G={G} color={C_OS} />
+                          <PriceInput value={row.p4} onChange={v => updateRow(row.id, 'p4', v)} G={G} color={C_OS} readOnly={readOnly} />
                         </td>
                         <td style={tdStyle}>
                           <TransCell
@@ -432,19 +534,22 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                             onCloseTranslation={() => setNoteOpen(s => ({ ...s, [row.id]: false }))}
                             placeholder="비고 · 备注"
                             G={G}
+                            readOnly={readOnly}
                           />
                         </td>
-                        <td style={{ ...tdStyle, textAlign: 'center', paddingTop: 6 }}>
-                          <button
-                            type="button"
-                            onClick={() => deleteRow(row.id)}
-                            style={{ fontSize: 14.3, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px', fontFamily: 'inherit', lineHeight: 1 }}
-                          >×</button>
-                        </td>
+                        {!readOnly && (
+                          <td style={{ ...tdStyle, textAlign: 'center', paddingTop: 6 }}>
+                            <button
+                              type="button"
+                              onClick={() => deleteRow(row.id)}
+                              style={{ fontSize: 14.3, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px', fontFamily: 'inherit', lineHeight: 1 }}
+                            >×</button>
+                          </td>
+                        )}
                       </tr>
                     ))}
 
-                    {/* 합계 행 — 열별 색상 */}
+                    {/* 합계 행 */}
                     <tr style={{ background: G.cardAlt || '#F9FAFB' }}>
                       <td colSpan={2} style={{ ...tdStyle, borderBottom: 'none', paddingLeft: 8 }}>
                         <span style={{ fontSize: 12.1, fontWeight: 700, color: G.tx }}>합계 合計</span>
@@ -464,45 +569,64 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                       <td style={{ ...tdStyle, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
                         <span style={{ fontSize: 12.1, fontWeight: 700, color: C_OS }}>¥{sumField('p4')}</span>
                       </td>
-                      <td colSpan={2} style={{ ...tdStyle, borderBottom: 'none' }}></td>
+                      <td colSpan={readOnly ? 1 : 2} style={{ ...tdStyle, borderBottom: 'none' }}></td>
                     </tr>
                   </tbody>
                 </table>
               </div>
 
-              <button
-                type="button"
-                onClick={addRow}
-                style={{
-                  marginTop: 8, width: '100%', padding: '9px 0',
-                  fontSize: 13.2, fontWeight: 600, color: G.mu,
-                  background: 'transparent', border: `1px dashed ${G.border || '#D1D5DB'}`,
-                  borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit',
-                }}
-              >
-                ＋ 공정 추가 · 添加工序
-              </button>
+              {/* 행 추가 버튼 — 수정 모드만 */}
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={addRow}
+                  style={{
+                    marginTop: 8, width: '100%', padding: '9px 0',
+                    fontSize: 13.2, fontWeight: 600, color: G.mu,
+                    background: 'transparent', border: `1px dashed ${G.border || '#D1D5DB'}`,
+                    borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  ＋ 공정 추가 · 添加工序
+                </button>
+              )}
             </>
           )}
         </div>
 
         {/* 하단 버튼 */}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', padding: '13px 18px', borderTop: `1px solid ${G.border}`, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', padding: '13px 18px', borderTop: `1px solid ${G.border}`, flexShrink: 0 }}>
+          {/* 전체삭제 — 수정 모드만, 좌측 */}
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={handleClearAll}
+              style={{ marginRight: 'auto', padding: '9px 16px', fontSize: 12, fontWeight: 600, borderRadius: 8, border: '1px solid #EF4444', background: 'transparent', color: '#EF4444', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              전체삭제 全部删除
+            </button>
+          )}
+
+          {/* 닫기(읽기) / 취소(수정) */}
           <button
             type="button"
-            onClick={onClose}
+            onClick={readOnly ? onClose : handleCancelEdit}
             style={{ padding: '9px 21px', fontSize: 13.2, fontWeight: 500, borderRadius: 8, border: `1px solid ${G.border}`, background: 'transparent', color: G.tx, cursor: 'pointer', fontFamily: 'inherit' }}
           >
-            취소 取消
+            {readOnly ? '닫기 关闭' : '취소 取消'}
           </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            style={{ padding: '9px 21px', fontSize: 13.2, fontWeight: 700, borderRadius: 8, border: '1px solid #EA580C', background: '#EA580C', color: '#fff', cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? '저장 중 · 保存中...' : '저장 保存'}
-          </button>
+
+          {/* 저장 — 수정 모드만 */}
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              style={{ padding: '9px 21px', fontSize: 13.2, fontWeight: 700, borderRadius: 8, border: '1px solid #EA580C', background: '#EA580C', color: '#fff', cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: saving ? 0.7 : 1 }}
+            >
+              {saving ? '저장 중 · 保存中...' : '저장 保存'}
+            </button>
+          )}
         </div>
       </div>
 
