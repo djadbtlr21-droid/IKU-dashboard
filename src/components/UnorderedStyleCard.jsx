@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Trash2 } from 'lucide-react'
 import ZohoImage from './ZohoImage'
+import PriceTableModal from './PriceTableModal'
 import {
   F, pick, styleKey, imageField, styleImageUrl, statusInfo,
 } from '../utils/styleFields'
@@ -41,13 +42,6 @@ export default function UnorderedStyleCard({
 
   // ── 예상단가 모달 상태 ──
   const [priceModal, setPriceModal] = useState(false)
-  const [priceForm, setPriceForm] = useState({
-    measurePart: '', ikuPrice: '',
-    outsource1: { factory: '', price: '' },
-    outsource2: { factory: '', price: '' },
-    note: '',
-  })
-  const [priceSaving, setPriceSaving] = useState(false)
 
   // 저장된 price JSON 파싱
   const priceData = useMemo(() => {
@@ -57,42 +51,25 @@ export default function UnorderedStyleCard({
 
   const openPriceModal = (e) => {
     e.stopPropagation()
-    setPriceForm({
-      measurePart: priceData?.measurePart || '',
-      ikuPrice: priceData?.ikuPrice || '',
-      outsource1: { factory: priceData?.outsource1?.factory || '', price: priceData?.outsource1?.price || '' },
-      outsource2: { factory: priceData?.outsource2?.factory || '', price: priceData?.outsource2?.price || '' },
-      note: priceData?.note || '',
-    })
     setPriceModal(true)
   }
 
-  const closePriceModal = () => setPriceModal(false)
-
-  // ESC 키로 모달 닫기
-  useEffect(() => {
-    if (!priceModal) return
-    const handler = (e) => { if (e.key === 'Escape') closePriceModal() }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [priceModal])
-
-  const savePriceModal = async () => {
-    const json = JSON.stringify(priceForm)
-    setPriceSaving(true)
-    try { await onSavePrice?.(sku, json) } catch { /* silent */ }
-    finally { setPriceSaving(false); setPriceModal(false) }
-  }
-
-  // 예상단가 버튼 라벨
-  const priceBtnLabel = priceData?.ikuPrice
-    ? `예상단가 预算单价  |  IKU: ${priceData.ikuPrice}`
-    : '예상단가 预算单价 (미입력 · 未填写)'
+  // 예상단가 버튼 라벨 — 신규(rows) 및 구형(ikuPrice) 포맷 모두 지원
+  const priceBtnLabel = useMemo(() => {
+    if (!priceData) return '예상단가 预算单价 (미입력 · 未填写)'
+    if (Array.isArray(priceData.rows) && priceData.rows.length > 0) {
+      const ikuSum = priceData.rows.reduce((acc, r) => {
+        const v = parseFloat(r.iku); return acc + (isNaN(v) ? 0 : v)
+      }, 0)
+      return ikuSum > 0
+        ? `예상단가 预算单价 | IKU 합계: ¥${Number.isInteger(ikuSum) ? ikuSum : ikuSum.toFixed(2).replace(/\.?0+$/, '')}`
+        : '예상단가 预算单价 (입력됨 · 已填写)'
+    }
+    if (priceData.ikuPrice) return `예상단가 预算单价 | IKU: ${priceData.ikuPrice}`
+    return '예상단가 预算单价 (미입력 · 未填写)'
+  }, [priceData])
 
   const inputStyle = { width: '100%', boxSizing: 'border-box', padding: '4px 6px', fontSize: 10, border: `1px solid ${G.border}`, borderRadius: 5, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }
-
-  // 모달 내 입력칸 공통 스타일
-  const modalInputStyle = { width: '100%', boxSizing: 'border-box', padding: '8px 12px', fontSize: 12, border: '1px solid #D1D5DB', borderRadius: 6, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }
 
   // 상태: 라벨(뮤트) 줄 + 값 줄(1줄 고정 nowrap+ellipsis+tooltip, 상태색/깜빡) — 폰트 +3%
   const statusBlock = (kr, cn, val, info) => (
@@ -217,103 +194,14 @@ export default function UnorderedStyleCard({
         </div>
       )}
 
-      {/* 예상단가 입력 모달 — position:fixed 로 화면 중앙에 표시 */}
+      {/* 예상단가 표 모달 */}
       {priceModal && (
-        <div onClick={closePriceModal}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={e => e.stopPropagation()}
-            style={{ background: G.card, borderRadius: 12, padding: 20, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.3)', border: `1px solid ${G.border}` }}>
-
-            {/* 모달 헤더 */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: G.tx }}>예상단가 입력 · 预算单价输入</div>
-                <div style={{ fontSize: 11, color: G.fa, marginTop: 3 }}>{sku}</div>
-              </div>
-              <button type="button" onClick={closePriceModal}
-                style={{ width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.tx, cursor: 'pointer', fontSize: 14, fontFamily: 'inherit' }}>✕</button>
-            </div>
-
-            {/* 입력 표 */}
-            <div style={{ border: '1px solid #D1D5DB', borderRadius: 8, overflow: 'hidden' }}>
-
-              {/* 행 1: 측정 부위 */}
-              <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: '1px solid #E5E7EB' }}>
-                <div style={{ width: 140, flexShrink: 0, padding: '10px 12px', fontSize: 11, color: G.fa, borderRight: '1px solid #E5E7EB', display: 'flex', alignItems: 'center' }}>측정 부위 测量部位</div>
-                <div style={{ flex: 1, padding: '6px 8px', display: 'flex', alignItems: 'center' }}>
-                  <input value={priceForm.measurePart}
-                    onChange={e => setPriceForm(p => ({ ...p, measurePart: e.target.value }))}
-                    placeholder="측정 부위 입력 · 输入测量部位"
-                    style={modalInputStyle} />
-                </div>
-              </div>
-
-              {/* 행 2: IKU 단가 */}
-              <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: '1px solid #E5E7EB' }}>
-                <div style={{ width: 140, flexShrink: 0, padding: '10px 12px', fontSize: 11, color: G.fa, borderRight: '1px solid #E5E7EB', display: 'flex', alignItems: 'center' }}>IKU 단가 单价</div>
-                <div style={{ flex: 1, padding: '6px 8px', display: 'flex', alignItems: 'center' }}>
-                  <input value={priceForm.ikuPrice}
-                    onChange={e => setPriceForm(p => ({ ...p, ikuPrice: e.target.value }))}
-                    placeholder="예: ¥45 · 输入单价"
-                    style={modalInputStyle} />
-                </div>
-              </div>
-
-              {/* 행 3: 외주 단가 1 */}
-              <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: '1px solid #E5E7EB' }}>
-                <div style={{ width: 140, flexShrink: 0, padding: '10px 12px', fontSize: 11, color: G.fa, borderRight: '1px solid #E5E7EB', display: 'flex', alignItems: 'center' }}>외주 단가 外发单价</div>
-                <div style={{ flex: 1, padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input value={priceForm.outsource1.factory}
-                    onChange={e => setPriceForm(p => ({ ...p, outsource1: { ...p.outsource1, factory: e.target.value } }))}
-                    placeholder="공장명 · 工厂名"
-                    style={{ ...modalInputStyle, width: '40%', flex: 'none' }} />
-                  <input value={priceForm.outsource1.price}
-                    onChange={e => setPriceForm(p => ({ ...p, outsource1: { ...p.outsource1, price: e.target.value } }))}
-                    placeholder="단가 · 单价"
-                    style={{ ...modalInputStyle, flex: 1 }} />
-                </div>
-              </div>
-
-              {/* 행 4: 외주 단가 2 */}
-              <div style={{ display: 'flex', alignItems: 'stretch', borderBottom: '1px solid #E5E7EB' }}>
-                <div style={{ width: 140, flexShrink: 0, padding: '10px 12px', fontSize: 11, color: G.fa, borderRight: '1px solid #E5E7EB', display: 'flex', alignItems: 'center' }}>외주 단가 外发单价</div>
-                <div style={{ flex: 1, padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input value={priceForm.outsource2.factory}
-                    onChange={e => setPriceForm(p => ({ ...p, outsource2: { ...p.outsource2, factory: e.target.value } }))}
-                    placeholder="공장명 · 工厂名"
-                    style={{ ...modalInputStyle, width: '40%', flex: 'none' }} />
-                  <input value={priceForm.outsource2.price}
-                    onChange={e => setPriceForm(p => ({ ...p, outsource2: { ...p.outsource2, price: e.target.value } }))}
-                    placeholder="단가 · 单价"
-                    style={{ ...modalInputStyle, flex: 1 }} />
-                </div>
-              </div>
-
-              {/* 행 5: 비고 */}
-              <div style={{ display: 'flex', alignItems: 'stretch' }}>
-                <div style={{ width: 140, flexShrink: 0, padding: '10px 12px', fontSize: 11, color: G.fa, borderRight: '1px solid #E5E7EB', display: 'flex', alignItems: 'center' }}>비고 备注</div>
-                <div style={{ flex: 1, padding: '6px 8px', display: 'flex', alignItems: 'center' }}>
-                  <input value={priceForm.note}
-                    onChange={e => setPriceForm(p => ({ ...p, note: e.target.value }))}
-                    placeholder="비고 입력 · 输入备注"
-                    style={modalInputStyle} />
-                </div>
-              </div>
-            </div>
-
-            {/* 모달 하단 버튼 */}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-              <button type="button" onClick={closePriceModal}
-                style={{ padding: '8px 18px', fontSize: 12, fontWeight: 500, borderRadius: 8, border: `1px solid ${G.border}`, background: 'transparent', color: G.tx, cursor: 'pointer', fontFamily: 'inherit' }}>
-                취소 取消
-              </button>
-              <button type="button" onClick={savePriceModal} disabled={priceSaving}
-                style={{ padding: '8px 18px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: '1px solid #EA580C', background: '#EA580C', color: '#fff', cursor: priceSaving ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-                {priceSaving ? '저장 중 · 保存中...' : '저장 保存'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <PriceTableModal
+          G={G}
+          sku={sku}
+          onClose={() => setPriceModal(false)}
+          onSavePrice={onSavePrice}
+        />
       )}
     </div>
   )

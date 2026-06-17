@@ -12,6 +12,7 @@ import {
   fetchMoFabric, saveMoFabric,
   fetchDeletions, deleteMo, deleteStyle,
   translateText,
+  saveStylePriceTable,
 } from '../api/client'
 import { getMoNumber, getMoSku, getMoFactory, getMonthKey } from '../utils/moHelpers'
 import { pick, F as SF, isOrdered as styleIsOrdered, styleKey, seasonOf, monthOf } from '../utils/styleFields'
@@ -1791,10 +1792,9 @@ export default function ProcessPage({ G }) {
     saveStyleOrderAlert(sku, next).catch(() => {})
   }, [styleMeta.order_alert])
 
-  // 예상단가 모달 저장 — editMode 무관 즉시 KV 저장
-  const onSaveStylePrice = useCallback(async (sku, jsonValue) => {
+  // 예상단가 표 저장 — PriceTableModal 이 KV 직접 저장 후 이 콜백으로 로컬 상태만 갱신
+  const onSaveStylePrice = useCallback((sku, jsonValue) => {
     setStyleMeta(prev => ({ ...prev, price: { ...prev.price, [sku]: jsonValue } }))
-    await saveStylePrice(sku, jsonValue)
   }, [])
 
   const styleDirty = Object.keys(styleDrafts).length > 0

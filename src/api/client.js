@@ -169,3 +169,15 @@ export async function saveFactoryConfig(lines, password) {
     body: JSON.stringify({ lines, password }),
   })
 }
+
+// ── 예상단가 표 (style_price:{SKU} — 전용 엔드포인트, 32KB 한도) ──
+export async function fetchStylePriceTable(sku) {
+  return apiFetch(`/api/style-price?sku=${encodeURIComponent(sku)}`)
+}
+export async function saveStylePriceTable(sku, data) {
+  return apiFetch('/api/style-price', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sku, data }),
+  })
+}
