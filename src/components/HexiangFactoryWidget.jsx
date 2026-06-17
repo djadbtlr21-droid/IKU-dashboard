@@ -20,12 +20,17 @@ const LINES = [
 ]
 
 // 작업복 팔레트 (8가지)
-const SUITS = ['#2563EB','#16A34A','#DC2626','#7C3AED','#EA580C','#0891B2','#B45309','#0F766E']
+const SUITS = ['#C0392B','#8BBEDB','#A8D5A2','#7C3AED','#F2A65A','#B8A9D9','#F4A7B9','#0F766E']
 // 다리 색상 — suit보다 한 톤 어둡게
 const LEG_DARK = {
-  '#2563EB':'#1D4ED8','#16A34A':'#15803D','#DC2626':'#B91C1C',
-  '#7C3AED':'#6D28D9','#EA580C':'#C2410C','#0891B2':'#0E7490',
-  '#B45309':'#92400E','#0F766E':'#0F5659'
+  '#C0392B':'#922B21',
+  '#8BBEDB':'#5A9AB8',
+  '#A8D5A2':'#6BAF65',
+  '#7C3AED':'#6D28D9',
+  '#F2A65A':'#C97A2E',
+  '#B8A9D9':'#8B78B8',
+  '#F4A7B9':'#D4758A',
+  '#0F766E':'#0F5659',
 }
 // 레고 표준 노란색
 const LEGO_YELLOW = '#F5CD2F'
@@ -40,7 +45,7 @@ const phase = (idx, lineIdx, mod) => `-${(idx * 41 + lineIdx * 97) % mod}ms`
 // 위젯 전용 CSS (전역 충돌 방지를 위해 hx 프리픽스).
 const WIDGET_CSS = `
 @keyframes hxNeedle { 0%,100%{transform:translateY(0)} 50%{transform:translateY(5px)} }
-@keyframes hxBob    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1.5px)} }
+@keyframes hxBob    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }
 @keyframes hxTilt   { 0%,100%{transform:rotate(-2deg)} 50%{transform:rotate(2deg)} }
 @keyframes hxFadein { from{opacity:0;transform:scale(0.7)} to{opacity:1;transform:scale(1)} }
 @keyframes hxFadeout{ from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(0.7)} }
@@ -68,7 +73,7 @@ function SewingWorker({ idx, lineIdx }) {
   const isPants  = ci % 2 === 1
 
   const nd = `-${(idx * 41 + lineIdx * 97) % 450}ms`
-  const bd = `-${(idx * 41 + lineIdx * 97 + 200) % 1200}ms`
+  const bd = `-${(idx * 41 + lineIdx * 97 + 200) % 450}ms`
   const ad = `-${(idx * 41 + lineIdx * 97 + 100) % 800}ms`
 
   const femaleHair = () => {
@@ -143,6 +148,9 @@ function SewingWorker({ idx, lineIdx }) {
       style={{ display: 'block', margin: '14px auto 0', overflow: 'visible' }}
       aria-hidden="true">
 
+      {/* ── 공인 전체 — bob 애니메이션 (재봉틀·옷감·바늘은 밖에 고정) ── */}
+      <g style={{ animation: `hxBob 0.45s ease-in-out ${bd} infinite`, transformBox: 'view-box', transformOrigin: '22px 36px' }}>
+
       {/* ── Layer 1: 헤어 (머리 뒤) ── */}
       {isFemale ? femaleHair() : maleHair()}
 
@@ -193,7 +201,9 @@ function SewingWorker({ idx, lineIdx }) {
       <rect x="29" y="50" width="4" height="1.5" rx="0.75" fill="rgba(255,255,255,0.1)"/>
       <rect x="8" y="42" width="28" height="1.5" rx="0.75" fill="#94A3B8" opacity="0.4"/>
 
-      {/* ── Layer 6: 재봉틀 본체 (세련된 버전) ── */}
+      </g>
+
+      {/* ── Layer 6: 재봉틀 본체 (bob 밖 — 고정) ── */}
       <rect x="2" y="55" width="40" height="14" rx="3.5" fill="#E2E8F0"/>
       <rect x="3" y="56" width="38" height="12" rx="3" fill="#CBD5E1"/>
       <rect x="4" y="54" width="36" height="9" rx="2.5" fill="#F1F5F9"/>
