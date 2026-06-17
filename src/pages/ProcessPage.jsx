@@ -1791,6 +1791,12 @@ export default function ProcessPage({ G }) {
     saveStyleOrderAlert(sku, next).catch(() => {})
   }, [styleMeta.order_alert])
 
+  // 예상단가 모달 저장 — editMode 무관 즉시 KV 저장
+  const onSaveStylePrice = useCallback(async (sku, jsonValue) => {
+    setStyleMeta(prev => ({ ...prev, price: { ...prev.price, [sku]: jsonValue } }))
+    await saveStylePrice(sku, jsonValue)
+  }, [])
+
   const styleDirty = Object.keys(styleDrafts).length > 0
   const exitStyleEdit = () => { setStyleEditMode(false); setStyleDrafts({}); setStyleExitConfirm(false) }
   // ① 미오더 일괄저장 — 편집모드 유지, 스피너
@@ -2172,10 +2178,9 @@ export default function ProcessPage({ G }) {
                   editMode={styleEditMode}
                   draftFactory={styleDrafts[sk]?.factory}
                   draftNote={styleDrafts[sk]?.note}
-                  draftPrice={styleDrafts[sk]?.price}
                   onChangeFactory={onChangeStyleFactory}
                   onChangeNote={onChangeStyleNote}
-                  onChangePrice={onChangeStylePrice}
+                  onSavePrice={onSaveStylePrice}
                   sampleAlert={styleMeta.sample_alert[sk] === '1'}
                   orderAlert={styleMeta.order_alert[sk] === '1'}
                   onToggleSampleAlert={onToggleSampleAlert}
