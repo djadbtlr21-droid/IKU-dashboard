@@ -261,7 +261,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                       <th style={thStyle}>공정명 工序名</th>
                       <th style={thStyle}>IKU 단가<br /><span style={{ fontWeight: 500, fontSize: 9.5 }}>公司单价</span></th>
                       <th style={thStyle}>
-                        <div>① HEXIANG合祥</div>
+                        <div>1, HEXIANG合祥</div>
                         <div style={{ fontSize: 9.5, fontWeight: 500, color: G.mu, marginTop: 2 }}>외주단가 · 外发价</div>
                       </th>
                       <th style={thStyle}>
