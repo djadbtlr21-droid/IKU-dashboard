@@ -263,9 +263,9 @@ function SewingWorker({ idx, lineIdx }) {
       <rect x="17" y="47" width="13" height="2" rx="1" fill="#64748B"/>
       <rect x="28" y="49" width="2.5" height="3" rx="1.25" fill="#64748B"/>
       <g style={{ animation: `hxNeedle 0.32s ease-in-out ${nd} infinite`, transformBox: 'view-box', transformOrigin: '29.25px 52px' }}>
-        <rect x="28.5" y="52" width="1.5" height="8" rx="0.75" fill="#C0C8D4"/>
-        <rect x="28.3" y="52" width="1.9" height="3" rx="0.75" fill="#D8DEE6"/>
-        <path d="M28.5,60 L29.25,62.5 L30,60" fill="#A8B4C0"/>
+        <rect x="28.5" y="52" width="1.5" height="8" rx="0.75" fill="#1E293B"/>
+        <rect x="28.3" y="52" width="1.9" height="3" rx="0.75" fill="#334155"/>
+        <path d="M28.5,60 L29.25,62.5 L30,60" fill="#0F172A"/>
         <circle cx="29.25" cy="61.5" r="0.9" fill="white" opacity="0.4"/>
       </g>
 
