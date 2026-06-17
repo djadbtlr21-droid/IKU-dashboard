@@ -6,7 +6,10 @@
 // (api.jera-iku.top/api/translate) 를 사용한다. 키가 별도로 있으면 직접 호출도 시도.
 import { json, preflight } from './_resp.js'
 
-const SYS_PROMPT = '다음 중국어 텍스트를 자연스러운 한국어로 번역해주세요. 번역 결과만 출력하고 다른 설명은 하지 마세요.'
+const SYS_PROMPT = `당신은 의류 제조업 및 의류 공장 전문 번역가입니다.
+봉제, 재단, 원단, 샘플, 패턴, 공정, 단가, 발주 등 의류 업계 전문 용어에 능통합니다.
+다음 중국어 텍스트를 의류 제조업 업계 용어를 기반으로 자연스러운 한국어로 번역해주세요.
+번역 결과만 출력하고 다른 설명, 주석, 부연은 절대 하지 마세요:`
 
 export async function onRequest({ request, env }) {
   if (request.method === 'OPTIONS') return preflight('POST, OPTIONS')
@@ -68,7 +71,7 @@ export async function onRequest({ request, env }) {
   if (apiKey) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`
     const body = {
-      contents: [{ parts: [{ text: `${SYS_PROMPT}\n\n${text}` }] }],
+      contents: [{ parts: [{ text: `${SYS_PROMPT}\n\n${text}` }] }],  // SYS_PROMPT ends with ':', so this appends \n\n{text}
       generationConfig: { temperature: 0.3, maxOutputTokens: 1000 },
     }
     try {

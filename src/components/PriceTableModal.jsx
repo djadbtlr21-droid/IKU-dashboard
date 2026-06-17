@@ -1,18 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { fetchStylePriceTable, saveStylePriceTable, translateText } from '../api/client'
 
-// 기본 공정 10개
-const DEFAULT_PROCESSES = [
-  '재단 裁剪', '시접 缝份', '어깨봉제 缝肩', '소매봉제 缝袖', '옆선봉제 缝侧缝',
-  '밑단봉제 缝下摆', '지퍼달기 装拉链', '라벨달기 钉标签', '마무리 整烫', '검품 检验',
-]
-
+// ④ 기본 공정 제거 — 신규 SKU는 빈 행 3개만 표시
 let _rowId = 0
 function makeRow(process = '') {
-  return { id: ++_rowId, process, iku: '', p1: '', p2: '', p3: '', note: '' }
+  return { id: ++_rowId, process, iku: '', p1: '', p2: '', p3: '', p4: '', note: '' }
 }
 function makeDefaultRows() {
-  return DEFAULT_PROCESSES.map(p => makeRow(p))
+  return [makeRow(), makeRow(), makeRow()]
 }
 
 // ── 번역 버튼이 달린 입력칸 ──
@@ -42,7 +37,7 @@ function TranslatableInput({ value, onChange, placeholder, G }) {
           onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
           style={{
-            flex: 1, minWidth: 0, padding: '4px 5px', fontSize: 11,
+            flex: 1, minWidth: 0, padding: '4px 5px', fontSize: 12.1,
             border: '1px solid #E5E7EB', borderRadius: 4,
             background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit',
           }}
@@ -52,7 +47,7 @@ function TranslatableInput({ value, onChange, placeholder, G }) {
           onClick={toggle}
           disabled={btnDisabled}
           style={{
-            flexShrink: 0, fontSize: 10, padding: '1px 5px', whiteSpace: 'nowrap',
+            flexShrink: 0, fontSize: 11, padding: '2px 6px', whiteSpace: 'nowrap',
             border: '1px solid #D1D5DB', borderRadius: 3, background: '#F9FAFB',
             color: '#6B7280', cursor: btnDisabled ? 'default' : 'pointer',
             fontFamily: 'inherit', opacity: btnDisabled && !open ? 0.45 : 1,
@@ -72,12 +67,12 @@ function TranslatableInput({ value, onChange, placeholder, G }) {
           marginTop: 3, padding: '3px 6px', borderRadius: 4,
           background: '#EFF6FF', display: 'flex', alignItems: 'flex-start', gap: 4,
         }}>
-          <span style={{ fontSize: 10, flexShrink: 0, lineHeight: 1.7 }}>🇰🇷</span>
-          <span style={{ fontSize: 11, flex: 1, color: '#1E40AF', lineHeight: 1.5 }}>{translation}</span>
+          <span style={{ fontSize: 11, flexShrink: 0, lineHeight: 1.7 }}>🇰🇷</span>
+          <span style={{ fontSize: 12.1, flex: 1, color: '#1E40AF', lineHeight: 1.5 }}>{translation}</span>
           <button
             type="button"
             onClick={() => setOpen(false)}
-            style={{ flexShrink: 0, fontSize: 12, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, fontFamily: 'inherit' }}
+            style={{ flexShrink: 0, fontSize: 13.2, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, fontFamily: 'inherit' }}
           >×</button>
         </div>
       </div>
@@ -89,14 +84,14 @@ function TranslatableInput({ value, onChange, placeholder, G }) {
 function PriceInput({ value, onChange, G }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-      <span style={{ fontSize: 10, color: '#EA580C', flexShrink: 0 }}>¥</span>
+      <span style={{ fontSize: 11, color: '#EA580C', flexShrink: 0 }}>¥</span>
       <input
         type="text"
         inputMode="decimal"
         value={value}
         onChange={e => onChange(e.target.value)}
         style={{
-          flex: 1, minWidth: 0, padding: '4px 3px', fontSize: 11,
+          flex: 1, minWidth: 0, padding: '4px 3px', fontSize: 12.1,
           border: '1px solid #E5E7EB', borderRadius: 4,
           background: G.bg, color: '#EA580C', outline: 'none',
           fontFamily: 'inherit', textAlign: 'right',
@@ -116,6 +111,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
   const [rows, setRows] = useState(makeDefaultRows)
   const [factory2, setFactory2] = useState('')
   const [factory3, setFactory3] = useState('')
+  const [factory4, setFactory4] = useState('')   // ③ 신규
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
@@ -130,7 +126,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
 
   useEffect(() => () => clearTimeout(toastRef.current), [])
 
-  // KV 로드
+  // KV 로드 — factory4/p4 없으면 빈값으로 호환 처리
   useEffect(() => {
     let alive = true
     setLoading(true)
@@ -139,9 +135,19 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
         if (!alive) return
         const d = res?.data
         if (d && Array.isArray(d.rows) && d.rows.length > 0) {
-          setRows(d.rows.map((r, i) => ({ ...r, id: ++_rowId })))
+          setRows(d.rows.map((r) => ({
+            id: ++_rowId,
+            process: r.process || '',
+            iku: r.iku || '',
+            p1: r.p1 || '',
+            p2: r.p2 || '',
+            p3: r.p3 || '',
+            p4: r.p4 || '',      // ③ 호환: 없으면 빈값
+            note: r.note || '',
+          })))
           if (d.factory2) setFactory2(d.factory2)
           if (d.factory3) setFactory3(d.factory3)
+          if (d.factory4) setFactory4(d.factory4)   // ③ 호환
         }
       })
       .catch(() => {})
@@ -175,6 +181,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
       const data = {
         factory2: factory2.trim(),
         factory3: factory3.trim(),
+        factory4: factory4.trim(),    // ③ 신규
         rows: rows.map(({ id, ...r }) => r),
         updatedAt: new Date().toISOString(),
       }
@@ -194,8 +201,9 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
     }
   }
 
+  // ⑥ font × 1.10
   const thStyle = {
-    padding: '7px 5px', fontSize: 10.5, fontWeight: 700, color: G.tx,
+    padding: '7px 5px', fontSize: 11.6, fontWeight: 700, color: G.tx,
     background: G.cardAlt || '#F9FAFB', borderBottom: `1px solid ${G.border || '#E5E7EB'}`,
     textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'bottom',
   }
@@ -204,7 +212,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
     verticalAlign: 'top',
   }
   const headerInputStyle = {
-    width: '100%', boxSizing: 'border-box', padding: '2px 4px', fontSize: 10,
+    width: '100%', boxSizing: 'border-box', padding: '2px 4px', fontSize: 11,
     border: 'none', borderBottom: '1px dashed #9CA3AF', marginTop: 3,
     background: 'transparent', color: G.tx, outline: 'none', fontFamily: 'inherit',
   }
@@ -212,46 +220,47 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
   return (
     <div
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 }}
     >
       <div
         onClick={e => e.stopPropagation()}
         style={{
           background: G.card, borderRadius: 12,
-          width: '90%', maxWidth: 1100, maxHeight: '93vh',
+          width: '92%', maxWidth: 1265, maxHeight: '92vh',  // ⑥ × 1.15
           display: 'flex', flexDirection: 'column',
           boxShadow: '0 8px 40px rgba(0,0,0,0.28)',
           border: `1px solid ${G.border}`,
         }}
       >
         {/* ── 헤더 ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 18px', borderBottom: `1px solid ${G.border}`, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '15px 21px', borderBottom: `1px solid ${G.border}`, flexShrink: 0 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: G.tx }}>예상단가 입력 · 预算单价输入</div>
-            <div style={{ fontSize: 10.5, color: G.fa, marginTop: 2 }}>{sku}</div>
+            <div style={{ fontSize: 15.4, fontWeight: 700, color: G.tx }}>예상단가 입력 · 预算单价输入</div>
+            <div style={{ fontSize: 11.6, color: G.fa, marginTop: 2 }}>{sku}</div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.tx, cursor: 'pointer', fontSize: 14, fontFamily: 'inherit' }}
+            style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: `1px solid ${G.border}`, background: 'transparent', color: G.tx, cursor: 'pointer', fontSize: 15.4, fontFamily: 'inherit' }}
           >✕</button>
         </div>
 
         {/* ── 스크롤 영역 ── */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '12px 16px' }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: '14px 18px' }}>
           {loading ? (
-            <div style={{ padding: 28, textAlign: 'center', color: G.fa, fontSize: 12 }}>불러오는 중 · 加载中…</div>
+            <div style={{ padding: 28, textAlign: 'center', color: G.fa, fontSize: 13.2 }}>불러오는 중 · 加载中…</div>
           ) : (
             <>
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                <table style={{ width: '100%', minWidth: 820, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                   <colgroup>
                     <col style={{ width: 28 }} />
-                    <col style={{ width: '22%' }} />
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '9%' }} />
+                    <col style={{ width: '9%' }} />
                     <col style={{ width: '10%' }} />
                     <col style={{ width: '10%' }} />
-                    <col style={{ width: '12%' }} />
-                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '10%' }} />
                     <col />
                     <col style={{ width: 26 }} />
                   </colgroup>
@@ -259,13 +268,12 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                     <tr>
                       <th style={thStyle}>#</th>
                       <th style={thStyle}>공정명 工序名</th>
-                      <th style={thStyle}>IKU 단가<br /><span style={{ fontWeight: 500, fontSize: 9.5 }}>公司单价</span></th>
+                      <th style={thStyle}>IKU 단가<br /><span style={{ fontWeight: 500, fontSize: 10.5 }}>公司单价</span></th>
+                      {/* ② HEXIANG 고정 — 서브라벨 없음, 공장명 입력 없음 */}
+                      <th style={thStyle}>1. HEXIANG 合祥单价</th>
+                      {/* ③ 외주단가 2 */}
                       <th style={thStyle}>
-                        <div>1, HEXIANG合祥</div>
-                        <div style={{ fontSize: 9.5, fontWeight: 500, color: G.mu, marginTop: 2 }}>외주단가 · 外发价</div>
-                      </th>
-                      <th style={thStyle}>
-                        <div>② 외주단가 · 外发价</div>
+                        <div>2. 외주단가 外发单价</div>
                         <input
                           value={factory2}
                           onChange={e => setFactory2(e.target.value)}
@@ -273,11 +281,22 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                           style={headerInputStyle}
                         />
                       </th>
+                      {/* ③ 외주단가 3 */}
                       <th style={thStyle}>
-                        <div>③ 외주단가 · 外发价</div>
+                        <div>3. 외주단가 外发单价</div>
                         <input
                           value={factory3}
                           onChange={e => setFactory3(e.target.value)}
+                          placeholder="공장명 · 工厂名"
+                          style={headerInputStyle}
+                        />
+                      </th>
+                      {/* ③ 외주단가 4 — 신규 */}
+                      <th style={thStyle}>
+                        <div>4. 외주단가 外发单价</div>
+                        <input
+                          value={factory4}
+                          onChange={e => setFactory4(e.target.value)}
                           placeholder="공장명 · 工厂名"
                           style={headerInputStyle}
                         />
@@ -289,7 +308,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                   <tbody>
                     {rows.map((row, i) => (
                       <tr key={row.id}>
-                        <td style={{ ...tdStyle, textAlign: 'center', fontSize: 10.5, color: G.fa, paddingTop: 6 }}>{i + 1}</td>
+                        <td style={{ ...tdStyle, textAlign: 'center', fontSize: 11.6, color: G.fa, paddingTop: 6 }}>{i + 1}</td>
                         <td style={tdStyle}>
                           <TranslatableInput
                             value={row.process}
@@ -310,6 +329,10 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                         <td style={tdStyle}>
                           <PriceInput value={row.p3} onChange={v => updateRow(row.id, 'p3', v)} G={G} />
                         </td>
+                        {/* ③ p4 신규 */}
+                        <td style={tdStyle}>
+                          <PriceInput value={row.p4} onChange={v => updateRow(row.id, 'p4', v)} G={G} />
+                        </td>
                         <td style={tdStyle}>
                           <TranslatableInput
                             value={row.note}
@@ -322,7 +345,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                           <button
                             type="button"
                             onClick={() => deleteRow(row.id)}
-                            style={{ fontSize: 13, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px', fontFamily: 'inherit', lineHeight: 1 }}
+                            style={{ fontSize: 14.3, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px', fontFamily: 'inherit', lineHeight: 1 }}
                           >×</button>
                         </td>
                       </tr>
@@ -330,19 +353,23 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                     {/* 합계 행 */}
                     <tr style={{ background: G.cardAlt || '#F9FAFB' }}>
                       <td colSpan={2} style={{ ...tdStyle, borderBottom: 'none', paddingLeft: 8 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: G.tx }}>합계 合計</span>
+                        <span style={{ fontSize: 12.1, fontWeight: 700, color: G.tx }}>합계 合計</span>
                       </td>
                       <td style={{ ...tdStyle, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#EA580C' }}>¥{sumField('iku')}</span>
+                        <span style={{ fontSize: 12.1, fontWeight: 700, color: '#EA580C' }}>¥{sumField('iku')}</span>
                       </td>
                       <td style={{ ...tdStyle, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#EA580C' }}>¥{sumField('p1')}</span>
+                        <span style={{ fontSize: 12.1, fontWeight: 700, color: '#EA580C' }}>¥{sumField('p1')}</span>
                       </td>
                       <td style={{ ...tdStyle, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#EA580C' }}>¥{sumField('p2')}</span>
+                        <span style={{ fontSize: 12.1, fontWeight: 700, color: '#EA580C' }}>¥{sumField('p2')}</span>
                       </td>
                       <td style={{ ...tdStyle, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#EA580C' }}>¥{sumField('p3')}</span>
+                        <span style={{ fontSize: 12.1, fontWeight: 700, color: '#EA580C' }}>¥{sumField('p3')}</span>
+                      </td>
+                      {/* ③ p4 합계 */}
+                      <td style={{ ...tdStyle, borderBottom: 'none', textAlign: 'right', paddingRight: 6 }}>
+                        <span style={{ fontSize: 12.1, fontWeight: 700, color: '#EA580C' }}>¥{sumField('p4')}</span>
                       </td>
                       <td colSpan={2} style={{ ...tdStyle, borderBottom: 'none' }}></td>
                     </tr>
@@ -355,8 +382,8 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
                 type="button"
                 onClick={addRow}
                 style={{
-                  marginTop: 8, width: '100%', padding: '8px 0',
-                  fontSize: 12, fontWeight: 600, color: G.mu,
+                  marginTop: 8, width: '100%', padding: '9px 0',
+                  fontSize: 13.2, fontWeight: 600, color: G.mu,
                   background: 'transparent', border: `1px dashed ${G.border || '#D1D5DB'}`,
                   borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit',
                 }}
@@ -368,11 +395,11 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
         </div>
 
         {/* ── 하단 버튼 ── */}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', padding: '11px 16px', borderTop: `1px solid ${G.border}`, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', padding: '13px 18px', borderTop: `1px solid ${G.border}`, flexShrink: 0 }}>
           <button
             type="button"
             onClick={onClose}
-            style={{ padding: '8px 18px', fontSize: 12, fontWeight: 500, borderRadius: 8, border: `1px solid ${G.border}`, background: 'transparent', color: G.tx, cursor: 'pointer', fontFamily: 'inherit' }}
+            style={{ padding: '9px 21px', fontSize: 13.2, fontWeight: 500, borderRadius: 8, border: `1px solid ${G.border}`, background: 'transparent', color: G.tx, cursor: 'pointer', fontFamily: 'inherit' }}
           >
             취소 取消
           </button>
@@ -380,7 +407,7 @@ export default function PriceTableModal({ G, sku, onClose, onSavePrice }) {
             type="button"
             onClick={handleSave}
             disabled={saving}
-            style={{ padding: '8px 18px', fontSize: 12, fontWeight: 700, borderRadius: 8, border: '1px solid #EA580C', background: '#EA580C', color: '#fff', cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: saving ? 0.7 : 1 }}
+            style={{ padding: '9px 21px', fontSize: 13.2, fontWeight: 700, borderRadius: 8, border: '1px solid #EA580C', background: '#EA580C', color: '#fff', cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: saving ? 0.7 : 1 }}
           >
             {saving ? '저장 중 · 保存中...' : '저장 保存'}
           </button>

@@ -45,7 +45,7 @@ const phase = (idx, lineIdx, mod) => `-${(idx * 41 + lineIdx * 97) % mod}ms`
 // 위젯 전용 CSS (전역 충돌 방지를 위해 hx 프리픽스).
 const WIDGET_CSS = `
 @keyframes hxNeedle { 0%,100%{transform:translateY(0)} 50%{transform:translateY(5px)} }
-@keyframes hxBob    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }
+@keyframes hxBob    { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1.8px)} }
 @keyframes hxTilt   { 0%,100%{transform:rotate(-2deg)} 50%{transform:rotate(2deg)} }
 @keyframes hxFadein { from{opacity:0;transform:scale(0.7)} to{opacity:1;transform:scale(1)} }
 @keyframes hxFadeout{ from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(0.7)} }
@@ -73,7 +73,7 @@ function SewingWorker({ idx, lineIdx }) {
   const isPants  = ci % 2 === 1
 
   const nd = `-${(idx * 41 + lineIdx * 97) % 450}ms`
-  const bd = `-${(idx * 41 + lineIdx * 97 + 200) % 450}ms`
+  const bd = `-${(idx * 41 + lineIdx * 97 + 300) % 1400}ms`
   const ad = `-${(idx * 41 + lineIdx * 97 + 100) % 800}ms`
 
   const femaleHair = () => {
@@ -149,7 +149,7 @@ function SewingWorker({ idx, lineIdx }) {
       aria-hidden="true">
 
       {/* ── 공인 전체 — bob 애니메이션 (재봉틀·옷감·바늘은 밖에 고정) ── */}
-      <g style={{ animation: `hxBob 0.45s ease-in-out ${bd} infinite`, transformBox: 'view-box', transformOrigin: '22px 36px' }}>
+      <g style={{ animation: `hxBob 1.4s ease-in-out ${bd} infinite`, transformBox: 'view-box', transformOrigin: '22px 36px' }}>
 
       {/* ── Layer 1: 헤어 (머리 뒤) ── */}
       {isFemale ? femaleHair() : maleHair()}
