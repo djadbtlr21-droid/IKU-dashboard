@@ -10,8 +10,10 @@ import {
 const BLINK_CSS = `
 @keyframes mioBlink { 0%,100%{opacity:1} 50%{opacity:0.45} }
 @keyframes mioBlinkSlow { 0%,100%{opacity:1} 50%{opacity:0.3} }
+@keyframes mioPriceBlink { 0%,100%{opacity:1} 50%{opacity:0.4} }
 .mio-blink { animation: mioBlink 0.75s ease-in-out infinite; }
 .mio-blink-slow { animation: mioBlinkSlow 1.6s ease-in-out infinite; }
+.mio-price-blink { animation: mioPriceBlink 1.4s ease-in-out infinite; }
 `
 
 // ① sampleDone: true=샘플완료그룹, false=샘플제작중그룹
@@ -44,8 +46,11 @@ export default function UnorderedStyleCard({
     fetchStylePriceTable(sku)
       .then(res => {
         if (cancelled) return
-        const rows = res?.data?.rows
-        const hasVal = rows?.length > 0 && rows.some(r => r.iku || r.p1 || r.p2 || r.p3)
+        const d = res?.data
+        const rows = d?.rows
+        // ① 어떠한 데이터라도 존재하면 완료
+        const hasVal = (Array.isArray(rows) && rows.length >= 1) ||
+          !!(d?.factory2 || d?.factory3 || d?.factory4)
         setPriceKvStatus(hasVal ? 'ok' : 'empty')
       })
       .catch(() => { if (!cancelled) setPriceKvStatus('empty') })
@@ -55,12 +60,13 @@ export default function UnorderedStyleCard({
   const openPriceModal = (e) => { e.stopPropagation(); setPriceModal(true) }
   const stop = (e) => e.stopPropagation()
 
-  // ④ 예상단가 버튼 상태
+  // ② 예상단가 버튼 상태
   const priceLoading = priceKvStatus === null
   const priceOk = priceKvStatus === 'ok'
   const priceIcon = priceOk ? '✅' : '⚠'
   const priceColor = priceLoading ? G.tx : priceOk ? '#16A34A' : '#DC2626'
-  const priceBorderColor = priceLoading ? G.border : priceOk ? '#16A34A' : '#DC2626'
+  const priceBg = priceLoading ? G.bg : priceOk ? '#EAF3DE' : '#FCEBEB'
+  const priceBorderColor = priceLoading ? G.border : priceOk ? '#97C459' : '#F09595'
   const priceBlink = !priceLoading && !priceOk
 
   // ③ 알림 버튼 공통 스타일
@@ -77,9 +83,10 @@ export default function UnorderedStyleCard({
     cursor: 'pointer', fontFamily: 'inherit',
   })
 
-  // ⑤ 강조 라벨 스타일 (샘플상태/공장 라벨 ×1.5)
+  // ③ 강조 라벨 스타일 (샘플상태/공장 라벨 ×1.2, center)
   const bigLabelStyle = {
-    fontSize: 14, fontWeight: 700, color: G.fa,
+    fontSize: 11.2, fontWeight: 700, color: G.fa,
+    textAlign: 'center',
     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
   }
 
@@ -127,21 +134,22 @@ export default function UnorderedStyleCard({
         {row('분류', '分类', category)}
         {row('원단', '面料', fabric)}
 
-        {/* ⑤ 샘플 상태 — 강조 ×1.5 */}
+        {/* ③ 샘플 상태 — 강조 ×1.2, center */}
         <div style={{ marginTop: 2 }}>
           <div style={bigLabelStyle}>샘플 상태 打样状态</div>
           <div
             className={!sampleDone ? 'mio-blink-slow' : undefined}
             title={sampleSt || ''}
             style={{
-              fontSize: 14.3, fontWeight: 700, color: sampleValColor,
+              fontSize: 11.4, fontWeight: 700, color: sampleValColor,
+              textAlign: 'center',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35,
             }}
           >{sampleSt || ''}</div>
         </div>
 
-        {/* ⑤ 오더예정공장 — 강조 ×1.5 */}
-        <div style={{ marginTop: 2 }}>
+        {/* ③ 오더예정공장 — 강조 ×1.2, center, 그룹간 14px gap */}
+        <div style={{ marginTop: 14 }}>
           <div style={bigLabelStyle}>오더예정공장 预计下单工厂</div>
           {editMode ? (
             <input
@@ -151,8 +159,17 @@ export default function UnorderedStyleCard({
               style={{ width: '100%', boxSizing: 'border-box', padding: '4px 6px', fontSize: 10, border: `1px solid ${G.border}`, borderRadius: 5, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }}
             />
           ) : (
-            <div style={{ fontSize: 15.45, fontWeight: factory ? 700 : 400, color: factory ? G.tx : G.fa, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={factory || ''}>
-              {factory || <span style={{ fontSize: 12, color: G.fa }}>미입력 · 未填写</span>}
+            <div
+              className={!factory ? 'mio-blink-slow' : undefined}
+              title={factory || ''}
+              style={{
+                fontSize: 12.4, fontWeight: 700,
+                color: factory ? '#16A34A' : '#DC2626',
+                textAlign: 'center',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}
+            >
+              {factory || '미입력 · 未填写'}
             </div>
           )}
         </div>
@@ -161,14 +178,14 @@ export default function UnorderedStyleCard({
         <button
           type="button"
           onClick={openPriceModal}
-          className={priceBlink ? 'mio-blink' : undefined}
+          className={priceBlink ? 'mio-price-blink' : undefined}
           style={{
             marginTop: 12, width: '100%', minHeight: 33,
             padding: '7px 5px', fontSize: 11.3, fontWeight: 700,
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
             whiteSpace: 'nowrap', borderRadius: 999,
             border: `1px solid ${priceBorderColor}`,
-            background: G.bg, color: priceColor,
+            background: priceBg, color: priceColor,
             cursor: 'pointer', fontFamily: 'inherit',
           }}
         >
