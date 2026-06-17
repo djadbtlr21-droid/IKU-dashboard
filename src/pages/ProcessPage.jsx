@@ -2207,6 +2207,7 @@ export default function ProcessPage({ G }) {
                         onChangeFactory={onChangeStyleFactory}
                         onChangeNote={onChangeStyleNote}
                         onSavePrice={onSaveStylePrice}
+                        sampleDone={true}
                         sampleAlert={styleMeta.sample_alert[sk] === '1'}
                         orderAlert={styleMeta.order_alert[sk] === '1'}
                         onToggleSampleAlert={onToggleSampleAlert}
@@ -2246,6 +2247,7 @@ export default function ProcessPage({ G }) {
                         onChangeFactory={onChangeStyleFactory}
                         onChangeNote={onChangeStyleNote}
                         onSavePrice={onSaveStylePrice}
+                        sampleDone={false}
                         sampleAlert={styleMeta.sample_alert[sk] === '1'}
                         orderAlert={styleMeta.order_alert[sk] === '1'}
                         onToggleSampleAlert={onToggleSampleAlert}

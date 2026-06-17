@@ -4,23 +4,20 @@ import ZohoImage from './ZohoImage'
 import PriceTableModal from './PriceTableModal'
 import { fetchStylePriceTable } from '../api/client'
 import {
-  F, pick, styleKey, imageField, styleImageUrl, statusInfo,
+  F, pick, styleKey, imageField, styleImageUrl,
 } from '../utils/styleFields'
 
-// alertBlink 애니메이션 (전역 충돌 방지 위해 mio 접두어)
-const ALERT_BLINK_CSS = `
-@keyframes mioAlertBlink { 0%,100%{opacity:1} 50%{opacity:0.5} }
-.mio-alert-blink { animation: mioAlertBlink 0.8s ease-in-out infinite; }
+const BLINK_CSS = `
+@keyframes mioBlink { 0%,100%{opacity:1} 50%{opacity:0.45} }
+@keyframes mioBlinkSlow { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.mio-blink { animation: mioBlink 0.75s ease-in-out infinite; }
+.mio-blink-slow { animation: mioBlinkSlow 1.6s ease-in-out infinite; }
 `
 
-// ──────────────────────────────────────────────────────────
-// 미오더 스타일 카드 (未下单)
-// 수정 모드는 섹션 단위로 통합 제어(editMode prop). 카드 내 개별 수정 버튼 없음.
-// 이미지 오버레이 없음 — 모든 정보는 이미지 아래 텍스트 영역에 표시.
-// 예상단가는 editMode 무관, 버튼 클릭으로 언제든 모달 입력 가능.
-// ──────────────────────────────────────────────────────────
+// ① sampleDone: true=샘플완료그룹, false=샘플제작중그룹
 export default function UnorderedStyleCard({
   G, style, factory, note, price,
+  sampleDone,
   sampleAlert, orderAlert,
   editMode, draftFactory, draftNote,
   onChangeFactory, onChangeNote,
@@ -35,16 +32,11 @@ export default function UnorderedStyleCard({
   const gender = pick(style, F.gender)
   const category = pick(style, F.category)
   const fabric = pick(style, F.fabric)
-  // 승인 상태(sampleStatus) 값을 "샘플 상태 打样状态" 행에 표시
   const sampleSt = pick(style, F.sampleStatus)
-  const aInfo = statusInfo(G, sampleSt)
   const imgUrl = styleImageUrl(style)
 
   const [confirmDelete, setConfirmDelete] = useState(false)
-
-  // ── 예상단가 모달 상태 ──
   const [priceModal, setPriceModal] = useState(false)
-  // KV 가격 데이터 존재 여부 (null=로딩 중, 'ok'=있음, 'empty'=없음)
   const [priceKvStatus, setPriceKvStatus] = useState(null)
 
   useEffect(() => {
@@ -60,69 +52,64 @@ export default function UnorderedStyleCard({
     return () => { cancelled = true }
   }, [sku])
 
-  const openPriceModal = (e) => {
-    e.stopPropagation()
-    setPriceModal(true)
+  const openPriceModal = (e) => { e.stopPropagation(); setPriceModal(true) }
+  const stop = (e) => e.stopPropagation()
+
+  // ④ 예상단가 버튼 상태
+  const priceLoading = priceKvStatus === null
+  const priceOk = priceKvStatus === 'ok'
+  const priceIcon = priceOk ? '✅' : '⚠'
+  const priceColor = priceLoading ? G.tx : priceOk ? '#16A34A' : '#DC2626'
+  const priceBorderColor = priceLoading ? G.border : priceOk ? '#16A34A' : '#DC2626'
+  const priceBlink = !priceLoading && !priceOk
+
+  // ③ 알림 버튼 공통 스타일
+  const alertBtnStyle = (active) => ({
+    marginTop: 4, width: '100%', minHeight: 33,
+    padding: '7px 5px', fontSize: 11.3,
+    fontWeight: active ? 700 : 500,
+    whiteSpace: 'nowrap',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+    borderRadius: 999,
+    border: `1px solid ${active ? '#DC2626' : '#D1D5DB'}`,
+    background: active ? '#DC2626' : G.bg,
+    color: active ? '#fff' : G.tx,
+    cursor: 'pointer', fontFamily: 'inherit',
+  })
+
+  // ⑤ 강조 라벨 스타일 (샘플상태/공장 라벨 ×1.5)
+  const bigLabelStyle = {
+    fontSize: 14, fontWeight: 700, color: G.fa,
+    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
   }
 
-  const priceBtnLabel = priceKvStatus === null ? '...' : priceKvStatus === 'ok' ? '예상단가 预算单价 ✅' : '예상단가 预算单价 ⚠'
+  // ⑤ 샘플 상태 값 색상
+  const sampleValColor = sampleDone ? '#16A34A' : '#DC2626'
 
-  const inputStyle = { width: '100%', boxSizing: 'border-box', padding: '4px 6px', fontSize: 10, border: `1px solid ${G.border}`, borderRadius: 5, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }
-
-  // 상태: 라벨(뮤트) 줄 + 값 줄(1줄 고정 nowrap+ellipsis+tooltip, 상태색/깜빡) — 폰트 +3%
-  const statusBlock = (kr, cn, val, info) => (
-    <div style={{ marginTop: 2 }}>
-      <div style={{ fontSize: 9.3, color: G.fa, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{kr} {cn}</div>
-      <div className={info?.blink ? 'mio-blink' : undefined} title={val || ''}
-        style={{ fontSize: 9.5, color: info?.color || G.tx, fontWeight: info ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35 }}>{val || ''}</div>
-    </div>
-  )
-
-  // ③ 항목명(뮤트) : 값(기본) — Style 탭 카드와 동일 패턴 (폰트 +3%, 빈값 빈칸)
+  // 일반 정보 행
   const row = (kr, cn, val) => (
     <div style={{ fontSize: 9.8, lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
       <span style={{ color: G.fa }}>{kr} {cn}: </span>
       <span style={{ color: val ? G.tx : G.fa, fontWeight: val ? 600 : 400 }}>{val || ''}</span>
     </div>
   )
-  const stop = (e) => e.stopPropagation()
-
-  // 알림 버튼 공통 스타일
-  const alertBtnStyle = (active) => ({
-    marginTop: 4,
-    width: '100%',
-    minHeight: 33,
-    padding: '7px 5px',
-    fontSize: 11.3,
-    fontWeight: active ? 700 : 500,
-    whiteSpace: 'nowrap',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    borderRadius: 999,
-    border: `1px solid ${active ? '#DC2626' : '#D1D5DB'}`,
-    background: active ? '#DC2626' : G.bg,
-    color: active ? '#fff' : G.tx,
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-  })
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'visible', display: 'flex', flexDirection: 'column', position: 'relative', ...(borderColor ? { border: `1px solid ${borderColor}` } : {}) }}>
-      {/* alertBlink 인라인 CSS */}
-      <style>{ALERT_BLINK_CSS}</style>
+      <style>{BLINK_CSS}</style>
 
-      {/* ③ 이미지 — 오버레이 없음, 고정 높이, object-fit cover, 클릭 시 라이트박스 */}
+      {/* 이미지 */}
       <div style={{ width: '100%', height: 185, background: G.cardAlt, borderTopLeftRadius: 12, borderTopRightRadius: 12, overflow: 'hidden', cursor: imgUrl ? 'zoom-in' : 'default' }}
         onClick={() => { if (imgUrl) onZoom(imgUrl) }}>
         <ZohoImage mo={style} field={imageField(style) || 'Style_Image'} G={G} alt={sku} placeholderText="" iconSize={22} />
       </div>
 
-      {/* ④ 텍스트 영역 — ⑥ 읽기 모드 클릭 시 Style 상세 모달 */}
-      <div onClick={() => { if (!editMode && onOpenDetail) onOpenDetail(style) }}
-        style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 2.5, flex: 1, cursor: (!editMode && onOpenDetail) ? 'pointer' : 'default' }}>
-        {/* 1. SKU (+ 수정 모드 시 삭제 버튼) */}
+      {/* 텍스트 영역 */}
+      <div
+        onClick={() => { if (!editMode && onOpenDetail) onOpenDetail(style) }}
+        style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 2.5, flex: 1, cursor: (!editMode && onOpenDetail) ? 'pointer' : 'default' }}
+      >
+        {/* SKU + 삭제 버튼 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span className="syne" style={{ fontSize: 11, fontWeight: 700, color: G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{pick(style, F.sku) || sku}</span>
           {editMode && (
@@ -132,43 +119,82 @@ export default function UnorderedStyleCard({
             </button>
           )}
         </div>
-        {/* ② 아이템명 货号 · ③ 항목명 뮤트 / 값 기본 (빈값 빈칸) */}
+
+        {/* 일반 정보 행 (비강조) */}
         {row('아이템명', '货号', chi)}
         {row('브랜드', '品牌', brand)}
         {row('성별', '性别', gender)}
         {row('분류', '分类', category)}
         {row('원단', '面料', fabric)}
-        {/* ③ 샘플 상태 (통합 1줄 — 승인 상태 값 표시) */}
-        {statusBlock('샘플 상태', '打样状态', sampleSt, aInfo)}
-        {/* 8. 오더예정공장 预计下单工厂 */}
+
+        {/* ⑤ 샘플 상태 — 강조 ×1.5 */}
         <div style={{ marginTop: 2 }}>
-          <div style={{ fontSize: 9.3, color: G.fa, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>오더예정공장 预计下单工厂</div>
+          <div style={bigLabelStyle}>샘플 상태 打样状态</div>
+          <div
+            className={!sampleDone ? 'mio-blink-slow' : undefined}
+            title={sampleSt || ''}
+            style={{
+              fontSize: 14.3, fontWeight: 700, color: sampleValColor,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35,
+            }}
+          >{sampleSt || ''}</div>
+        </div>
+
+        {/* ⑤ 오더예정공장 — 강조 ×1.5 */}
+        <div style={{ marginTop: 2 }}>
+          <div style={bigLabelStyle}>오더예정공장 预计下单工厂</div>
           {editMode ? (
-            <input value={draftFactory ?? (factory || '')} maxLength={60} onClick={stop} onChange={e => onChangeFactory(sku, e.target.value)} placeholder="공장명 工厂名" style={inputStyle} />
+            <input
+              value={draftFactory ?? (factory || '')} maxLength={60}
+              onClick={stop} onChange={e => onChangeFactory(sku, e.target.value)}
+              placeholder="공장명 工厂名"
+              style={{ width: '100%', boxSizing: 'border-box', padding: '4px 6px', fontSize: 10, border: `1px solid ${G.border}`, borderRadius: 5, background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }}
+            />
           ) : (
-            <div style={{ fontSize: 10.3, color: G.tx, fontWeight: factory ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={factory || ''}>{factory || ''}</div>
+            <div style={{ fontSize: 15.45, fontWeight: factory ? 700 : 400, color: factory ? G.tx : G.fa, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={factory || ''}>
+              {factory || <span style={{ fontSize: 12, color: G.fa }}>미입력 · 未填写</span>}
+            </div>
           )}
         </div>
 
-        {/* ⑤ 예상단가 버튼 — editMode 무관 항상 클릭 가능 */}
-        <button type="button" onClick={openPriceModal}
-          style={{ ...alertBtnStyle(false), fontWeight: 700 }}>
-          {priceBtnLabel}
+        {/* ② 예상단가 버튼 — 아이콘 좌측, margin-top 12px */}
+        <button
+          type="button"
+          onClick={openPriceModal}
+          className={priceBlink ? 'mio-blink' : undefined}
+          style={{
+            marginTop: 12, width: '100%', minHeight: 33,
+            padding: '7px 5px', fontSize: 11.3, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+            whiteSpace: 'nowrap', borderRadius: 999,
+            border: `1px solid ${priceBorderColor}`,
+            background: G.bg, color: priceColor,
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}
+        >
+          {!priceLoading && <span>{priceIcon}</span>}
+          <span>예상단가 预算单价</span>
+          {priceLoading && <span style={{ fontSize: 10, color: G.fa }}>...</span>}
         </button>
 
-        {/* ⑥ 샘플 완성 알림 버튼 */}
-        <button type="button" onClick={(e) => { stop(e); onToggleSampleAlert?.(sku) }}
-          className={sampleAlert ? 'mio-alert-blink' : undefined}
-          style={alertBtnStyle(sampleAlert)}>
-          🔔 {sampleAlert ? '샘플 완성 알림 ON · 提醒开启' : '샘플 완성 알림 · 提醒样品完成'}
-        </button>
-
-        {/* ⑦ 오더 전환 알림 버튼 */}
-        <button type="button" onClick={(e) => { stop(e); onToggleOrderAlert?.(sku) }}
-          className={orderAlert ? 'mio-alert-blink' : undefined}
-          style={alertBtnStyle(orderAlert)}>
-          📦 {orderAlert ? '오더 전환 알림 ON · 提醒开启' : '오더 전환 알림 · 提醒已下单'}
-        </button>
+        {/* ① 그룹별 알림 버튼 1개 */}
+        {sampleDone ? (
+          /* 샘플 완료 그룹 → 오더 전환 알림만 */
+          <button type="button" onClick={(e) => { stop(e); onToggleOrderAlert?.(sku) }}
+            className={orderAlert ? 'mio-blink' : undefined}
+            style={alertBtnStyle(orderAlert)}>
+            <span>{orderAlert ? '⚠' : '🔔'}</span>
+            <span>{orderAlert ? '오더 전환 알림 ON · 提醒开启' : '오더 전환 알림 · 提醒已下单'}</span>
+          </button>
+        ) : (
+          /* 샘플 제작 중 그룹 → 샘플 완성 알림만 */
+          <button type="button" onClick={(e) => { stop(e); onToggleSampleAlert?.(sku) }}
+            className={sampleAlert ? 'mio-blink' : undefined}
+            style={alertBtnStyle(sampleAlert)}>
+            <span>{sampleAlert ? '⚠' : '🔔'}</span>
+            <span>{sampleAlert ? '샘플 완성 알림 ON · 提醒开启' : '샘플 완성 알림 · 提醒样品完成'}</span>
+          </button>
+        )}
       </div>
 
       {/* 삭제 확인 모달 */}
