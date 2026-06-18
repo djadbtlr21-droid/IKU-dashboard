@@ -615,7 +615,7 @@ const PAGE_CSS = `
 @media(max-width:860px){.proc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.proc-grid{grid-template-columns:repeat(1,minmax(0,1fr))}}
 /* ⑥ 미오더 카드 그리드 — 1줄 10개 (Style 탭과 동일) */
-.mio-grid{display:grid;gap:10px;align-items:stretch;grid-template-columns:repeat(10,minmax(0,1fr))}
+.mio-grid{display:grid;gap:10px;align-items:start;grid-template-columns:repeat(10,minmax(0,1fr))}
 @media(max-width:1500px){.mio-grid{grid-template-columns:repeat(8,minmax(0,1fr))}}
 @media(max-width:1200px){.mio-grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
 @media(max-width:900px){.mio-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
@@ -1830,6 +1830,9 @@ export default function ProcessPage({ G }) {
   const onMemoSaved = useCallback((sku, val) => {
     setStyleMeta(prev => ({ ...prev, memo: { ...prev.memo, [sku]: val } }))
   }, [])
+  const onFactorySaved = useCallback((sku, val) => {
+    setStyleMeta(prev => ({ ...prev, factory: { ...prev.factory, [sku]: val } }))
+  }, [])
 
   const styleDirty = Object.keys(styleDrafts).length > 0
   const exitStyleEdit = () => { setStyleEditMode(false); setStyleDrafts({}); setStyleExitConfirm(false) }
@@ -2227,6 +2230,7 @@ export default function ProcessPage({ G }) {
                         onSavePrice={onSaveStylePrice}
                         onProgressSaved={onProgressSaved}
                         onMemoSaved={onMemoSaved}
+                        onFactorySaved={onFactorySaved}
                         sampleDone={true}
                         waiting={false}
                         sampleAlert={styleMeta.sample_alert[sk] === '1'}
@@ -2272,6 +2276,7 @@ export default function ProcessPage({ G }) {
                         onSavePrice={onSaveStylePrice}
                         onProgressSaved={onProgressSaved}
                         onMemoSaved={onMemoSaved}
+                        onFactorySaved={onFactorySaved}
                         sampleDone={false}
                         waiting={false}
                         sampleAlert={styleMeta.sample_alert[sk] === '1'}
@@ -2315,6 +2320,7 @@ export default function ProcessPage({ G }) {
                         onSavePrice={onSaveStylePrice}
                         onProgressSaved={onProgressSaved}
                         onMemoSaved={onMemoSaved}
+                        onFactorySaved={onFactorySaved}
                         sampleDone={false}
                         waiting={true}
                         sampleAlert={styleMeta.sample_alert[sk] === '1'}
