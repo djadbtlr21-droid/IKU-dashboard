@@ -252,7 +252,7 @@ export default function UnorderedStyleCard({
       {/* 텍스트 영역 */}
       <div
         onClick={() => { if (!editMode && !cardEditMode && onOpenDetail) onOpenDetail(style) }}
-        style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 2.5, flex: 1, cursor: (!editMode && !cardEditMode && onOpenDetail) ? 'pointer' : 'default', overflow: 'hidden' }}
+        style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 2.5, flex: 1, cursor: (!editMode && !cardEditMode && onOpenDetail) ? 'pointer' : 'default' }}
       >
         {/* SKU + 버튼 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
