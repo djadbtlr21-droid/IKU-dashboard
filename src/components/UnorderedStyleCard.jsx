@@ -208,22 +208,22 @@ export default function UnorderedStyleCard({
         </div>
 
         {/* 현재 진행상황 */}
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginTop: 14 }}>
           <div style={bigLabelStyle}>현재 진행상황 目前情况</div>
           {cardEditMode ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
               {PROGRESS_OPTIONS.map(opt => {
                 const on = draftProgress === opt
                 return (
                   <button key={opt} type="button"
                     onClick={e => { stop(e); setDraftProgress(on ? '' : opt) }}
                     style={{
-                      padding: '3px 7px', fontSize: 9.2, borderRadius: 999,
+                      padding: '4px 8px', fontSize: 11, borderRadius: 12,
                       border: `1px solid ${on ? '#1D4ED8' : G.border}`,
-                      background: on ? '#1D4ED8' : 'transparent',
+                      background: on ? '#1D4ED8' : G.cardAlt,
                       color: on ? '#fff' : G.mu,
                       cursor: 'pointer', fontFamily: 'inherit',
-                      fontWeight: on ? 700 : 400, whiteSpace: 'nowrap',
+                      fontWeight: on ? 500 : 400, whiteSpace: 'nowrap',
                     }}>
                     {opt}
                   </button>
@@ -232,7 +232,7 @@ export default function UnorderedStyleCard({
             </div>
           ) : (
             <div style={{
-              fontSize: 11, fontWeight: progress ? 600 : 400,
+              fontSize: 11, fontWeight: progress ? 700 : 400,
               color: progress ? G.tx : G.fa,
               textAlign: 'center',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
@@ -278,14 +278,14 @@ export default function UnorderedStyleCard({
                 onClick={stop}
                 onChange={e => setDraftMemo(e.target.value)}
                 maxLength={2000}
-                rows={3}
-                placeholder="메모 입력 · 输入备注"
+                placeholder="현황 메모 입력 · 输入状况备注"
                 style={{
                   width: '100%', boxSizing: 'border-box',
-                  padding: '5px 6px', fontSize: 10,
-                  border: `1px solid ${G.border}`, borderRadius: 5,
+                  padding: '6px 8px', fontSize: 12,
+                  border: `1px solid ${G.border}`, borderRadius: 6,
                   background: G.bg, color: G.tx, outline: 'none',
-                  fontFamily: 'inherit', resize: 'vertical', minHeight: 60,
+                  fontFamily: 'inherit', resize: 'vertical',
+                  minHeight: 60, maxHeight: 120,
                   marginTop: 3,
                 }}
               />
