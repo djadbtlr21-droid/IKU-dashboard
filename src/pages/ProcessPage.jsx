@@ -1472,7 +1472,7 @@ export default function ProcessPage({ G }) {
   const [styleList, setStyleList] = useState([])
   const [styleLoading, setStyleLoading] = useState(true)
   const [styleErr, setStyleErr] = useState(null)
-  const [styleMeta, setStyleMeta] = useState({ factory: {}, note: {}, hidden: [], price: {}, sample_alert: {}, order_alert: {} })
+  const [styleMeta, setStyleMeta] = useState({ factory: {}, note: {}, hidden: [], price: {}, sample_alert: {}, order_alert: {}, progress: {}, memo: {} })
 
   // ⑥ MO 원단명 오버라이드 (key fabric:{MO_ID}) — KV값 우선
   const [moFabric, setMoFabric] = useState({})
@@ -1524,10 +1524,10 @@ export default function ProcessPage({ G }) {
     setStyleLoading(true); setStyleErr(null)
     Promise.all([
       fetchStyleList({ maxRecords: 200 }),
-      fetchStyleMeta().catch(() => ({ factory: {}, note: {}, hidden: [], price: {}, sample_alert: {}, order_alert: {} })),
+      fetchStyleMeta().catch(() => ({ factory: {}, note: {}, hidden: [], price: {}, sample_alert: {}, order_alert: {}, progress: {}, memo: {} })),
     ]).then(([list, meta]) => {
       setStyleList(list?.data || list?.records || list?.result || [])
-      setStyleMeta({ factory: meta?.factory || {}, note: meta?.note || {}, hidden: meta?.hidden || [], price: meta?.price || {}, sample_alert: meta?.sample_alert || {}, order_alert: meta?.order_alert || {} })
+      setStyleMeta({ factory: meta?.factory || {}, note: meta?.note || {}, hidden: meta?.hidden || [], price: meta?.price || {}, sample_alert: meta?.sample_alert || {}, order_alert: meta?.order_alert || {}, progress: meta?.progress || {}, memo: meta?.memo || {} })
     }).catch(err => { console.error('[ProcessPage] styles', err); setStyleErr(err.message || String(err)) })
       .finally(() => setStyleLoading(false))
   }, [])
@@ -1821,6 +1821,14 @@ export default function ProcessPage({ G }) {
   // 예상단가 표 저장 — PriceTableModal 이 KV 직접 저장 후 이 콜백으로 로컬 상태만 갱신
   const onSaveStylePrice = useCallback((sku, jsonValue) => {
     setStyleMeta(prev => ({ ...prev, price: { ...prev.price, [sku]: jsonValue } }))
+  }, [])
+
+  // 카드별 진행상황/메모 저장 콜백 — 카드가 KV 직접 저장 후 로컬 상태 갱신
+  const onProgressSaved = useCallback((sku, val) => {
+    setStyleMeta(prev => ({ ...prev, progress: { ...prev.progress, [sku]: val } }))
+  }, [])
+  const onMemoSaved = useCallback((sku, val) => {
+    setStyleMeta(prev => ({ ...prev, memo: { ...prev.memo, [sku]: val } }))
   }, [])
 
   const styleDirty = Object.keys(styleDrafts).length > 0
@@ -2209,12 +2217,16 @@ export default function ProcessPage({ G }) {
                         factory={styleMeta.factory[sk] || ''}
                         note={styleMeta.note[sk] || ''}
                         price={styleMeta.price[sk] || ''}
+                        progress={styleMeta.progress[sk] || ''}
+                        memo={styleMeta.memo[sk] || ''}
                         editMode={styleEditMode}
                         draftFactory={styleDrafts[sk]?.factory}
                         draftNote={styleDrafts[sk]?.note}
                         onChangeFactory={onChangeStyleFactory}
                         onChangeNote={onChangeStyleNote}
                         onSavePrice={onSaveStylePrice}
+                        onProgressSaved={onProgressSaved}
+                        onMemoSaved={onMemoSaved}
                         sampleDone={true}
                         waiting={false}
                         sampleAlert={styleMeta.sample_alert[sk] === '1'}
@@ -2250,12 +2262,16 @@ export default function ProcessPage({ G }) {
                         factory={styleMeta.factory[sk] || ''}
                         note={styleMeta.note[sk] || ''}
                         price={styleMeta.price[sk] || ''}
+                        progress={styleMeta.progress[sk] || ''}
+                        memo={styleMeta.memo[sk] || ''}
                         editMode={styleEditMode}
                         draftFactory={styleDrafts[sk]?.factory}
                         draftNote={styleDrafts[sk]?.note}
                         onChangeFactory={onChangeStyleFactory}
                         onChangeNote={onChangeStyleNote}
                         onSavePrice={onSaveStylePrice}
+                        onProgressSaved={onProgressSaved}
+                        onMemoSaved={onMemoSaved}
                         sampleDone={false}
                         waiting={false}
                         sampleAlert={styleMeta.sample_alert[sk] === '1'}
@@ -2289,12 +2305,16 @@ export default function ProcessPage({ G }) {
                         factory={styleMeta.factory[sk] || ''}
                         note={styleMeta.note[sk] || ''}
                         price={styleMeta.price[sk] || ''}
+                        progress={styleMeta.progress[sk] || ''}
+                        memo={styleMeta.memo[sk] || ''}
                         editMode={styleEditMode}
                         draftFactory={styleDrafts[sk]?.factory}
                         draftNote={styleDrafts[sk]?.note}
                         onChangeFactory={onChangeStyleFactory}
                         onChangeNote={onChangeStyleNote}
                         onSavePrice={onSaveStylePrice}
+                        onProgressSaved={onProgressSaved}
+                        onMemoSaved={onMemoSaved}
                         sampleDone={false}
                         waiting={true}
                         sampleAlert={styleMeta.sample_alert[sk] === '1'}

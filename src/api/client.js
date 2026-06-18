@@ -50,6 +50,8 @@ export const saveStyleNote = (sku, value) => postStyleMeta({ action: 'note', sku
 export const saveStylePrice = (sku, value) => postStyleMeta({ action: 'price', sku, value })
 export const saveStyleSampleAlert = (sku, value) => postStyleMeta({ action: 'sample_alert', sku, value })
 export const saveStyleOrderAlert = (sku, value) => postStyleMeta({ action: 'order_alert', sku, value })
+export const saveStyleProgress = (sku, value) => postStyleMeta({ action: 'progress', sku, value })
+export const saveStyleMemo = (sku, value) => postStyleMeta({ action: 'memo', sku, value })
 export const hideStyle = (sku) => postStyleMeta({ action: 'hide', sku })
 export const unhideStyle = (sku) => postStyleMeta({ action: 'unhide', sku })
 

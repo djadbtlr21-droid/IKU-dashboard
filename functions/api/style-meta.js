@@ -29,7 +29,10 @@ const PRICE_PREFIX = 'style_price:';
 const SAMPLE_ALERT_PREFIX = 'style_sample_alert:';
 const ORDER_ALERT_PREFIX = 'style_order_alert:';
 const HIDDEN_KEY = 'style_hidden';
+const PROGRESS_PREFIX = 'style_progress:';
+const MEMO_PREFIX = 'style_memo:';
 const MAX_VAL = 300;
+const MAX_MEMO = 2000;
 
 function validSku(s) { return typeof s === 'string' && s.length > 0 && s.length <= 160; }
 
@@ -58,26 +61,30 @@ export async function onRequest(context) {
   if (request.method === 'GET') {
     if (!kv) return json({ ok: true, factory: {}, note: {}, price: {}, sample_alert: {}, order_alert: {}, hidden: [], _warn: 'PROCESS_KV not bound' });
     try {
-      const factory = {}, note = {}, price = {}, sample_alert = {}, order_alert = {};
+      const factory = {}, note = {}, price = {}, sample_alert = {}, order_alert = {}, progress = {}, memo = {};
       let hidden = [];
-      let fKeys = [], nKeys = [], pKeys = [], saKeys = [], oaKeys = [];
-      try { fKeys  = await listKeys(kv, FACTORY_PREFIX);      } catch (e) { console.error('[style-meta] list factory', e); }
-      try { nKeys  = await listKeys(kv, NOTE_PREFIX);         } catch (e) { console.error('[style-meta] list note', e); }
-      try { pKeys  = await listKeys(kv, PRICE_PREFIX);        } catch (e) { console.error('[style-meta] list price', e); }
-      try { saKeys = await listKeys(kv, SAMPLE_ALERT_PREFIX); } catch (e) { console.error('[style-meta] list sample_alert', e); }
-      try { oaKeys = await listKeys(kv, ORDER_ALERT_PREFIX);  } catch (e) { console.error('[style-meta] list order_alert', e); }
-      const all = [...fKeys, ...nKeys, ...pKeys, ...saKeys, ...oaKeys, HIDDEN_KEY];
+      let fKeys = [], nKeys = [], pKeys = [], saKeys = [], oaKeys = [], pgKeys = [], memoKeys = [];
+      try { fKeys    = await listKeys(kv, FACTORY_PREFIX);      } catch (e) { console.error('[style-meta] list factory', e); }
+      try { nKeys    = await listKeys(kv, NOTE_PREFIX);         } catch (e) { console.error('[style-meta] list note', e); }
+      try { pKeys    = await listKeys(kv, PRICE_PREFIX);        } catch (e) { console.error('[style-meta] list price', e); }
+      try { saKeys   = await listKeys(kv, SAMPLE_ALERT_PREFIX); } catch (e) { console.error('[style-meta] list sample_alert', e); }
+      try { oaKeys   = await listKeys(kv, ORDER_ALERT_PREFIX);  } catch (e) { console.error('[style-meta] list order_alert', e); }
+      try { pgKeys   = await listKeys(kv, PROGRESS_PREFIX);     } catch (e) { console.error('[style-meta] list progress', e); }
+      try { memoKeys = await listKeys(kv, MEMO_PREFIX);         } catch (e) { console.error('[style-meta] list memo', e); }
+      const all = [...fKeys, ...nKeys, ...pKeys, ...saKeys, ...oaKeys, ...pgKeys, ...memoKeys, HIDDEN_KEY];
       const vals = await Promise.all(all.map(async (k) => { try { return [k, await kv.get(k)]; } catch { return [k, null]; } }));
       for (const [k, raw] of vals) {
         if (raw == null) continue;
         if (k === HIDDEN_KEY) { try { const a = JSON.parse(raw); if (Array.isArray(a)) hidden = a; } catch { /* ignore */ } continue; }
-        if (k.startsWith(FACTORY_PREFIX))      factory[k.slice(FACTORY_PREFIX.length)] = raw;
-        else if (k.startsWith(NOTE_PREFIX))    note[k.slice(NOTE_PREFIX.length)] = raw;
-        else if (k.startsWith(PRICE_PREFIX))   price[k.slice(PRICE_PREFIX.length)] = raw;
+        if (k.startsWith(FACTORY_PREFIX))           factory[k.slice(FACTORY_PREFIX.length)] = raw;
+        else if (k.startsWith(NOTE_PREFIX))         note[k.slice(NOTE_PREFIX.length)] = raw;
+        else if (k.startsWith(PRICE_PREFIX))        price[k.slice(PRICE_PREFIX.length)] = raw;
         else if (k.startsWith(SAMPLE_ALERT_PREFIX)) sample_alert[k.slice(SAMPLE_ALERT_PREFIX.length)] = raw;
         else if (k.startsWith(ORDER_ALERT_PREFIX))  order_alert[k.slice(ORDER_ALERT_PREFIX.length)] = raw;
+        else if (k.startsWith(PROGRESS_PREFIX))     progress[k.slice(PROGRESS_PREFIX.length)] = raw;
+        else if (k.startsWith(MEMO_PREFIX))         memo[k.slice(MEMO_PREFIX.length)] = raw;
       }
-      return json({ ok: true, factory, note, price, sample_alert, order_alert, hidden }, 200, { 'Cache-Control': 'no-store' });
+      return json({ ok: true, factory, note, price, sample_alert, order_alert, hidden, progress, memo }, 200, { 'Cache-Control': 'no-store' });
     } catch (err) {
       console.error('[style-meta] GET error', err);
       return json({ ok: false, error: 'read_failed', message: 'KV 읽기 실패 · KV 读取失败' }, 500);
@@ -98,11 +105,12 @@ export async function onRequest(context) {
   const action = body?.action;
   const sku = body?.sku;
   try {
-    if (action === 'factory' || action === 'note' || action === 'price' || action === 'sample_alert' || action === 'order_alert') {
+    if (action === 'factory' || action === 'note' || action === 'price' || action === 'sample_alert' || action === 'order_alert' || action === 'progress' || action === 'memo') {
       if (!validSku(sku)) return json({ ok: false, error: 'invalid_sku' }, 400);
       let value = typeof body.value === 'string' ? body.value : '';
-      if (value.length > MAX_VAL) value = value.slice(0, MAX_VAL);
-      const PREFIX_MAP = { factory: FACTORY_PREFIX, note: NOTE_PREFIX, price: PRICE_PREFIX, sample_alert: SAMPLE_ALERT_PREFIX, order_alert: ORDER_ALERT_PREFIX };
+      const maxLen = action === 'memo' ? MAX_MEMO : MAX_VAL;
+      if (value.length > maxLen) value = value.slice(0, maxLen);
+      const PREFIX_MAP = { factory: FACTORY_PREFIX, note: NOTE_PREFIX, price: PRICE_PREFIX, sample_alert: SAMPLE_ALERT_PREFIX, order_alert: ORDER_ALERT_PREFIX, progress: PROGRESS_PREFIX, memo: MEMO_PREFIX };
       const key = PREFIX_MAP[action] + sku;
       if (value) await kv.put(key, value); else await kv.delete(key);
       return json({ ok: true, action, sku, value });

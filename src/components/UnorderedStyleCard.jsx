@@ -1,13 +1,21 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Pencil } from 'lucide-react'
 import ZohoImage from './ZohoImage'
 import PriceTableModal from './PriceTableModal'
-import { fetchStylePriceTable } from '../api/client'
+import { fetchStylePriceTable, saveStyleProgress, saveStyleMemo } from '../api/client'
 import {
   F, pick, styleKey, imageField, styleImageUrl,
 } from '../utils/styleFields'
 
 const PRICE_FIELDS = ['process', 'iku', 'p1', 'p2', 'p3', 'p4', 'note']
+
+const PROGRESS_OPTIONS = [
+  '자체제작 중 公司制作中',
+  '자체수정 중 公司修改中',
+  '공장제작 중 工厂制作中',
+  '공장수정 중 工厂修改中',
+  '단가산출 중 单价算出中',
+]
 
 function hasRealData(d) {
   const rows = d?.rows
@@ -17,6 +25,7 @@ function hasRealData(d) {
 
 export default function UnorderedStyleCard({
   G, style, factory, note, price,
+  progress, memo,
   sampleDone,
   waiting,
   sampleAlert, orderAlert,
@@ -24,6 +33,7 @@ export default function UnorderedStyleCard({
   onChangeFactory, onChangeNote,
   onToggleSampleAlert, onToggleOrderAlert,
   onSavePrice,
+  onProgressSaved, onMemoSaved,
   onDelete, onZoom, onOpenDetail,
   borderColor,
 }) {
@@ -39,6 +49,11 @@ export default function UnorderedStyleCard({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [priceModal, setPriceModal] = useState(false)
   const [priceKvStatus, setPriceKvStatus] = useState(null)
+
+  const [cardEditMode, setCardEditMode] = useState(false)
+  const [draftProgress, setDraftProgress] = useState('')
+  const [draftMemo, setDraftMemo] = useState('')
+  const [cardSaving, setCardSaving] = useState(false)
 
   const fetchPriceStatus = useCallback(() => {
     fetchStylePriceTable(sku)
@@ -62,6 +77,36 @@ export default function UnorderedStyleCard({
   const openPriceModal = (e) => { e.stopPropagation(); setPriceModal(true) }
   const stop = (e) => e.stopPropagation()
 
+  const enterCardEdit = (e) => {
+    stop(e)
+    setDraftProgress(progress || '')
+    setDraftMemo(memo || '')
+    setCardEditMode(true)
+  }
+
+  const cancelCardEdit = (e) => {
+    stop(e)
+    setCardEditMode(false)
+  }
+
+  const saveCard = async (e) => {
+    stop(e)
+    setCardSaving(true)
+    try {
+      await Promise.all([
+        saveStyleProgress(sku, draftProgress),
+        saveStyleMemo(sku, draftMemo),
+      ])
+      onProgressSaved?.(sku, draftProgress)
+      onMemoSaved?.(sku, draftMemo)
+      setCardEditMode(false)
+    } catch (err) {
+      console.error('[UnorderedStyleCard] save failed', err)
+    } finally {
+      setCardSaving(false)
+    }
+  }
+
   const priceLoading = priceKvStatus === null
   const priceOk = priceKvStatus === 'ok'
   const priceIcon = priceOk ? '✅' : '⚠'
@@ -72,15 +117,15 @@ export default function UnorderedStyleCard({
 
   const alertBtnStyle = (active) => ({
     marginTop: 4, width: '100%', minHeight: 33,
-    padding: '7px 5px', fontSize: 11.3,
+    padding: '7px 5px', fontSize: 10.74,
     fontWeight: active ? 700 : 500,
-    whiteSpace: 'nowrap',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
     borderRadius: 999,
     border: `1px solid ${active ? '#DC2626' : '#D1D5DB'}`,
     background: active ? '#DC2626' : G.bg,
     color: active ? '#fff' : G.tx,
     cursor: 'pointer', fontFamily: 'inherit',
+    overflow: 'hidden', minWidth: 0,
   })
 
   const bigLabelStyle = {
@@ -109,17 +154,35 @@ export default function UnorderedStyleCard({
 
       {/* 텍스트 영역 */}
       <div
-        onClick={() => { if (!editMode && onOpenDetail) onOpenDetail(style) }}
-        style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 2.5, flex: 1, cursor: (!editMode && onOpenDetail) ? 'pointer' : 'default' }}
+        onClick={() => { if (!editMode && !cardEditMode && onOpenDetail) onOpenDetail(style) }}
+        style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 2.5, flex: 1, cursor: (!editMode && !cardEditMode && onOpenDetail) ? 'pointer' : 'default', overflow: 'hidden' }}
       >
-        {/* SKU + 삭제 버튼 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {/* SKU + 버튼들 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <span className="syne" style={{ fontSize: 11, fontWeight: 700, color: G.tx, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{pick(style, F.sku) || sku}</span>
           {editMode && (
             <button type="button" onClick={(e) => { stop(e); setConfirmDelete(true) }} title="삭제 · 删除"
               style={{ flexShrink: 0, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, cursor: 'pointer', border: `1px solid ${G.bad}`, background: 'transparent', color: G.bad }}>
               <Trash2 size={12} />
             </button>
+          )}
+          {!editMode && !cardEditMode && (
+            <button type="button" onClick={enterCardEdit} title="수정 修改"
+              style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 5, cursor: 'pointer', border: `1px solid ${G.border}`, background: 'transparent', color: G.mu, fontSize: 9.5, fontWeight: 500, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+              <Pencil size={9} /> 수정 修改
+            </button>
+          )}
+          {!editMode && cardEditMode && (
+            <>
+              <button type="button" onClick={saveCard} disabled={cardSaving}
+                style={{ flexShrink: 0, padding: '2px 7px', borderRadius: 5, cursor: cardSaving ? 'default' : 'pointer', border: '1px solid #1D4ED8', background: '#1D4ED8', color: '#fff', fontSize: 9.5, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap', opacity: cardSaving ? 0.6 : 1 }}>
+                {cardSaving ? '…' : '저장 保存'}
+              </button>
+              <button type="button" onClick={cancelCardEdit}
+                style={{ flexShrink: 0, padding: '2px 6px', borderRadius: 5, cursor: 'pointer', border: `1px solid ${G.border}`, background: 'transparent', color: G.mu, fontSize: 9.5, fontWeight: 500, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                취소 取消
+              </button>
+            </>
           )}
         </div>
 
@@ -142,6 +205,41 @@ export default function UnorderedStyleCard({
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.35,
             }}
           >{sampleSt || ''}</div>
+        </div>
+
+        {/* 현재 진행상황 */}
+        <div style={{ marginTop: 10 }}>
+          <div style={bigLabelStyle}>현재 진행상황 目前情况</div>
+          {cardEditMode ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+              {PROGRESS_OPTIONS.map(opt => {
+                const on = draftProgress === opt
+                return (
+                  <button key={opt} type="button"
+                    onClick={e => { stop(e); setDraftProgress(on ? '' : opt) }}
+                    style={{
+                      padding: '3px 7px', fontSize: 9.2, borderRadius: 999,
+                      border: `1px solid ${on ? '#1D4ED8' : G.border}`,
+                      background: on ? '#1D4ED8' : 'transparent',
+                      color: on ? '#fff' : G.mu,
+                      cursor: 'pointer', fontFamily: 'inherit',
+                      fontWeight: on ? 700 : 400, whiteSpace: 'nowrap',
+                    }}>
+                    {opt}
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <div style={{
+              fontSize: 11, fontWeight: progress ? 600 : 400,
+              color: progress ? G.tx : G.fa,
+              textAlign: 'center',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              {progress || '미설정 · 未设置'}
+            </div>
+          )}
         </div>
 
         {/* 오더예정공장 */}
@@ -170,6 +268,40 @@ export default function UnorderedStyleCard({
           )}
         </div>
 
+        {/* 현황 메모 — 카드 편집 모드이거나 메모가 있을 때만 표시 */}
+        {(cardEditMode || memo) && (
+          <div style={{ marginTop: 8 }}>
+            <div style={bigLabelStyle}>현황 메모 状况备注</div>
+            {cardEditMode ? (
+              <textarea
+                value={draftMemo}
+                onClick={stop}
+                onChange={e => setDraftMemo(e.target.value)}
+                maxLength={2000}
+                rows={3}
+                placeholder="메모 입력 · 输入备注"
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  padding: '5px 6px', fontSize: 10,
+                  border: `1px solid ${G.border}`, borderRadius: 5,
+                  background: G.bg, color: G.tx, outline: 'none',
+                  fontFamily: 'inherit', resize: 'vertical', minHeight: 60,
+                  marginTop: 3,
+                }}
+              />
+            ) : (
+              <div style={{
+                fontSize: 10.5, color: G.mu, lineHeight: 1.45,
+                display: '-webkit-box', WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                wordBreak: 'break-all',
+              }}>
+                {memo}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 예상단가 버튼 */}
         <button
           type="button"
@@ -183,6 +315,7 @@ export default function UnorderedStyleCard({
             border: `1px solid ${priceBorderColor}`,
             background: priceBg, color: priceColor,
             cursor: 'pointer', fontFamily: 'inherit',
+            overflow: 'hidden', minWidth: 0,
           }}
         >
           {!priceLoading && <span>{priceIcon}</span>}
@@ -195,15 +328,15 @@ export default function UnorderedStyleCard({
           <button type="button" onClick={(e) => { stop(e); onToggleOrderAlert?.(sku) }}
             className={orderAlert ? 'g-blink' : undefined}
             style={alertBtnStyle(orderAlert)}>
-            <span>{orderAlert ? '⚠' : '🔔'}</span>
-            <span>{orderAlert ? '오더 전환 알림 ON · 提醒开启' : '오더 전환 알림 · 提醒已下单'}</span>
+            <span style={{ flexShrink: 0 }}>{orderAlert ? '⚠' : '🔔'}</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{orderAlert ? '오더 전환 알림 ON · 提醒开启' : '오더 전환 알림 · 提醒已下单'}</span>
           </button>
         ) : (
           <button type="button" onClick={(e) => { stop(e); onToggleSampleAlert?.(sku) }}
             className={sampleAlert ? 'g-blink' : undefined}
             style={alertBtnStyle(sampleAlert)}>
-            <span>{sampleAlert ? '⚠' : '🔔'}</span>
-            <span>{sampleAlert ? '샘플 완성 알림 ON · 提醒开启' : '샘플 완성 알림 · 提醒样品完成'}</span>
+            <span style={{ flexShrink: 0 }}>{sampleAlert ? '⚠' : '🔔'}</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{sampleAlert ? '샘플 완성 알림 ON · 提醒开启' : '샘플 완성 알림 · 提醒样品完成'}</span>
           </button>
         )}
       </div>
