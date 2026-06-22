@@ -70,9 +70,9 @@ export default function UnorderedStyleCard({
   const [priceKvStatus, setPriceKvStatus] = useState(null)
 
   const [cardEditMode, setCardEditMode] = useState(false)
-  const [draftProgress, setDraftProgress] = useState('')
-  const [draftDueDate, setDraftDueDate] = useState('')
-  const [draftMemoText, setDraftMemoText] = useState('')
+  const [progressStatus, setProgressStatus] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [memoText, setMemoText] = useState('')
   const [draftFactoryCard, setDraftFactoryCard] = useState('')
   const [cardSaving, setCardSaving] = useState(false)
   const [exitConfirm, setExitConfirm] = useState(false)
@@ -110,9 +110,9 @@ export default function UnorderedStyleCard({
   const enterCardEdit = (e) => {
     stop(e)
     const parsed = parseMemo(memo)
-    setDraftProgress(progress || '')
-    setDraftDueDate(parsed.date)
-    setDraftMemoText(parsed.text)
+    setProgressStatus(progress || '')
+    setDueDate(parsed.date)
+    setMemoText(parsed.text)
     setDraftFactoryCard(factory || '')
     setExitConfirm(false)
     setCardEditMode(true)
@@ -120,22 +120,22 @@ export default function UnorderedStyleCard({
 
   const checkDirty = useCallback(() => {
     const { date: origDate, text: origText } = parseMemo(memo)
-    return draftProgress !== (progress || '') ||
-      draftDueDate !== origDate ||
-      draftMemoText !== origText ||
+    return progressStatus !== (progress || '') ||
+      dueDate !== origDate ||
+      memoText !== origText ||
       draftFactoryCard !== (factory || '')
-  }, [memo, progress, factory, draftProgress, draftDueDate, draftMemoText, draftFactoryCard])
+  }, [memo, progress, factory, progressStatus, dueDate, memoText, draftFactoryCard])
 
   const doSave = useCallback(async () => {
     setCardSaving(true)
     try {
-      const combined = serializeMemo(draftDueDate, draftMemoText)
+      const combined = serializeMemo(dueDate, memoText)
       await Promise.all([
-        saveStyleProgress(sku, draftProgress),
+        saveStyleProgress(sku, progressStatus),
         saveStyleMemo(sku, combined),
         saveStyleFactory(sku, draftFactoryCard),
       ])
-      onProgressSaved?.(sku, draftProgress)
+      onProgressSaved?.(sku, progressStatus)
       onMemoSaved?.(sku, combined)
       onFactorySaved?.(sku, draftFactoryCard)
       setCardEditMode(false)
@@ -146,7 +146,7 @@ export default function UnorderedStyleCard({
     } finally {
       setCardSaving(false)
     }
-  }, [sku, draftProgress, draftDueDate, draftMemoText, draftFactoryCard, onProgressSaved, onMemoSaved, onFactorySaved])
+  }, [sku, progressStatus, dueDate, memoText, draftFactoryCard, onProgressSaved, onMemoSaved, onFactorySaved])
 
   const saveCard = (e) => { stop(e); doSave() }
 
@@ -314,13 +314,13 @@ export default function UnorderedStyleCard({
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                 <input
                   type="date"
-                  value={draftDueDate}
-                  onChange={e => setDraftDueDate(e.target.value)}
+                  value={dueDate}
+                  onChange={e => setDueDate(e.target.value)}
                   onClick={stop}
                   style={{ flex: 1, fontSize: 12, border: `1px solid ${G.border}`, borderRadius: 6, padding: '4px 8px', background: G.bg, color: G.tx, outline: 'none', fontFamily: 'inherit' }}
                 />
-                {draftDueDate && (
-                  <button type="button" onClick={(e) => { stop(e); setDraftDueDate('') }}
+                {dueDate && (
+                  <button type="button" onClick={(e) => { stop(e); setDueDate('') }}
                     style={{ flexShrink: 0, fontSize: 13, color: G.mu, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', fontFamily: 'inherit', lineHeight: 1 }}>
                     ×
                   </button>
@@ -349,12 +349,12 @@ export default function UnorderedStyleCard({
           {cardEditMode ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
               {PROGRESS_OPTIONS.map(opt => {
-                const active = draftProgress === opt
+                const active = progressStatus === opt
                 return (
                   <button
                     key={opt}
                     type="button"
-                    onClick={(e) => { stop(e); setDraftProgress(active ? '' : opt) }}
+                    onClick={(e) => { stop(e); setProgressStatus(active ? '' : opt) }}
                     style={{
                       fontSize: 11, padding: '4px 8px', borderRadius: 12,
                       border: `1px solid ${active ? '#1D4ED8' : G.border}`,
@@ -420,8 +420,8 @@ export default function UnorderedStyleCard({
             <>
               <div style={bigLabelStyle}>현황 메모 状况备注</div>
               <textarea
-                value={draftMemoText}
-                onChange={e => setDraftMemoText(e.target.value)}
+                value={memoText}
+                onChange={e => setMemoText(e.target.value)}
                 onClick={stop}
                 placeholder="현황 메모 입력 · 输入状况备注"
                 style={{
