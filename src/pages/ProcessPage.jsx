@@ -1528,6 +1528,21 @@ export default function ProcessPage({ G }) {
     ]).then(([styles, meta]) => {
       setStyleList(Array.isArray(styles) ? styles : [])
       setStyleMeta({ factory: meta?.factory || {}, note: meta?.note || {}, hidden: meta?.hidden || [], price: meta?.price || {}, sample_alert: meta?.sample_alert || {}, order_alert: meta?.order_alert || {}, progress: meta?.progress || {}, memo: meta?.memo || {} })
+
+      // ─────── 임시 진단 시작 (원인 확인 후 제거) ───────
+      const TARGET = '26-06-fw26-w-s-rslz-l9-038'
+      console.log('═══ [loadStyles 진단] ═══')
+      console.log('1. 로드된 전체 스타일 수:', styles.length)
+      const hit = styles.find(s => (pick(s, SF.sku) || '').trim().toLowerCase() === TARGET)
+      console.log('2. 대상 SKU 로드 여부:', !!hit)
+      if (hit) {
+        console.log('3. Order_Status 값:', pick(hit, SF.orderStatus))
+        console.log('4. styleIsOrdered 결과:', styleIsOrdered(hit))
+        console.log('5. Sample_Status 값:', pick(hit, SF.sampleStatus))
+        console.log('6. hidden KV 포함?:', (meta?.hidden || []).map(x => String(x).toLowerCase()).includes(TARGET))
+        console.log('   대상 SKU 레코드 전체:', hit)
+      }
+      // ─────── 임시 진단 끝 ───────
     }).catch(err => { console.error('[ProcessPage] styles', err); setStyleErr(err.message || String(err)) })
       .finally(() => setStyleLoading(false))
   }, [])
@@ -1562,6 +1577,19 @@ export default function ProcessPage({ G }) {
   const moSkuSet = useMemo(() => {
     const s = new Set()
     moList.forEach(m => { const sku = getMoSku(m); if (sku && sku !== '—') s.add(sku.trim().toLowerCase()) })
+
+    // ─────── 임시 진단 (원인 확인 후 제거) ───────
+    const TARGET = '26-06-fw26-w-s-rslz-l9-038'
+    console.log('═══ [moSkuSet 진단] ═══')
+    console.log('7. moList 개수:', moList.length)
+    console.log('8. moSkuSet 크기:', s.size)
+    console.log('9. moSkuSet에 대상 SKU 포함?:', s.has(TARGET))
+    if (s.has(TARGET)) {
+      const matches = moList.filter(m => { const sku = getMoSku(m); return sku && sku.trim().toLowerCase() === TARGET })
+      console.log('10. 매칭된 MO 레코드(들):', matches)
+    }
+    // ─────── 진단 끝 ───────
+
     return s
   }, [moList])
 
