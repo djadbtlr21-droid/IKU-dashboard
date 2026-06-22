@@ -9,12 +9,15 @@ import {
 
 const PRICE_FIELDS = ['process', 'iku', 'p1', 'p2', 'p3', 'p4', 'note']
 
+const SAMPLE_DONE_LABEL = '샘플완료 样品完成'
+
 const PROGRESS_OPTIONS = [
   '자체제작 중 公司制作中',
   '자체수정 중 公司修改中',
   '공장제작 중 工厂制作中',
   '공장수정 중 工厂修改中',
   '단가산출 중 单价算出中',
+  SAMPLE_DONE_LABEL,
 ]
 
 function hasRealData(d) {
@@ -187,10 +190,20 @@ export default function UnorderedStyleCard({
 
   const sampleValColor = sampleDone ? '#16A34A' : waiting ? '#7C3AED' : '#DC2626'
 
+  // 완성 판단: sampleDone(Zoho) OR 진행상황이 "샘플완료"
+  const isCompletedRead = sampleDone || progress === SAMPLE_DONE_LABEL
+  const isCompletedEdit = sampleDone || progressStatus === SAMPLE_DONE_LABEL
+
   // due date 표시 로직
-  const dueDateLabel = (savedDate && sampleDone) ? '완성 날짜 完成日期' : '예상 완성 날짜 预计完成日期'
-  const dueDateColor = savedDate ? (sampleDone ? '#16A34A' : '#DC2626') : G.fa
-  const dueDateBlink = !!(savedDate && !sampleDone)
+  const dueDateLabel = isCompletedRead ? '완성 날짜 完成日期' : '예상 완성 날짜 预计完成日期'
+  const editDateLabel = isCompletedEdit ? '완성 날짜 完成日期' : '예상 완성 날짜 预计完成日期'
+  const dueDateColor = savedDate ? (isCompletedRead ? '#16A34A' : '#DC2626') : G.fa
+  const dueDateBlink = !!(savedDate && !isCompletedRead)
+
+  // 진행상황 읽기 모드 색상
+  const progressIsComplete = progress === SAMPLE_DONE_LABEL
+  const progressReadColor = progress ? (progressIsComplete ? '#16A34A' : '#DC2626') : G.fa
+  const progressReadBlink = !!(progress && !progressIsComplete)
 
   const row = (kr, cn, val) => (
     <div style={{ fontSize: 9.8, lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -310,10 +323,16 @@ export default function UnorderedStyleCard({
         <div style={{ marginTop: 8 }}>
           {cardEditMode ? (
             <>
-              <div style={bigLabelStyle}>예상 완성 날짜 预计完成日期</div>
+              <div style={bigLabelStyle}>{editDateLabel}</div>
+              {dueDate && (
+                <div style={{ fontSize: 11, color: '#374151', textAlign: 'center', marginBottom: 2, marginTop: 2 }}>
+                  {dueDate}
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                 <input
                   type="date"
+                  lang="zh-CN"
                   value={dueDate}
                   onChange={e => setDueDate(e.target.value)}
                   onClick={stop}
@@ -350,17 +369,22 @@ export default function UnorderedStyleCard({
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
               {PROGRESS_OPTIONS.map(opt => {
                 const active = progressStatus === opt
+                const isDone = opt === SAMPLE_DONE_LABEL
+                const btnBg = active ? (isDone ? '#EAF3DE' : '#FCEBEB') : '#F9FAFB'
+                const btnBorder = active ? (isDone ? '#16A34A' : '#DC2626') : '#D1D5DB'
+                const btnColor = active ? (isDone ? '#16A34A' : '#DC2626') : '#6B7280'
                 return (
                   <button
                     key={opt}
                     type="button"
+                    className={active && !isDone ? 'g-blink' : undefined}
                     onClick={(e) => { stop(e); setProgressStatus(active ? '' : opt) }}
                     style={{
                       fontSize: 11, padding: '4px 8px', borderRadius: 12,
-                      border: `1px solid ${active ? '#1D4ED8' : G.border}`,
-                      background: active ? '#1D4ED8' : G.cardAlt || '#F9FAFB',
-                      color: active ? '#fff' : G.mu,
-                      fontWeight: active ? 500 : 400,
+                      border: `1px solid ${btnBorder}`,
+                      background: btnBg,
+                      color: btnColor,
+                      fontWeight: active ? 600 : 400,
                       cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
                     }}
                   >
@@ -370,12 +394,15 @@ export default function UnorderedStyleCard({
               })}
             </div>
           ) : (
-            <div style={{
-              fontSize: 11.4, fontWeight: progress ? 700 : 400,
-              color: progress ? G.tx : G.fa,
-              textAlign: 'center', lineHeight: 1.35,
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>
+            <div
+              className={progressReadBlink ? 'g-blink' : undefined}
+              style={{
+                fontSize: 11.4, fontWeight: progress ? 700 : 400,
+                color: progressReadColor,
+                textAlign: 'center', lineHeight: 1.35,
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}
+            >
               {progress || '미설정 · 未设置'}
             </div>
           )}
