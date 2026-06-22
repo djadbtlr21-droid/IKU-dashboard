@@ -8,7 +8,7 @@ import { fetchMoList } from '../api/client'
 import {
   fetchProcessData, verifyProcessPassword, saveProcessItem,
   fetchAllStyles, fetchStyleMeta, saveStyleFactory, saveStyleNote, saveStylePrice,
-  saveStyleSampleAlert, saveStyleOrderAlert, hideStyle,
+  saveStyleSampleAlert, saveStyleOrderAlert,
   fetchMoFabric, saveMoFabric,
   fetchDeletions, deleteMo, deleteStyle,
   translateText,
@@ -1430,7 +1430,6 @@ export default function ProcessPage({ G }) {
   const [selectedStyle, setSelectedStyle] = useState(null)  // 미오더 Style 상세 모달
   const [authorErrorItems, setAuthorErrorItems] = useState(new Set())
   const editorRef = useRef(null)
-  const fabricDiagRef = useRef(false)
 
   // Section collapse — owned here so the print feature can read expanded sections.
   // Shape: { [itemNo]: { [secId]: bool } }. Default (absent) = collapsed (item ②).
@@ -1528,21 +1527,6 @@ export default function ProcessPage({ G }) {
     ]).then(([styles, meta]) => {
       setStyleList(Array.isArray(styles) ? styles : [])
       setStyleMeta({ factory: meta?.factory || {}, note: meta?.note || {}, hidden: meta?.hidden || [], price: meta?.price || {}, sample_alert: meta?.sample_alert || {}, order_alert: meta?.order_alert || {}, progress: meta?.progress || {}, memo: meta?.memo || {} })
-
-      // ─────── 임시 진단 시작 (원인 확인 후 제거) ───────
-      const TARGET = '26-06-fw26-w-s-rslz-l9-038'
-      console.log('═══ [loadStyles 진단] ═══')
-      console.log('1. 로드된 전체 스타일 수:', styles.length)
-      const hit = styles.find(s => (pick(s, SF.sku) || '').trim().toLowerCase() === TARGET)
-      console.log('2. 대상 SKU 로드 여부:', !!hit)
-      if (hit) {
-        console.log('3. Order_Status 값:', pick(hit, SF.orderStatus))
-        console.log('4. styleIsOrdered 결과:', styleIsOrdered(hit))
-        console.log('5. Sample_Status 값:', pick(hit, SF.sampleStatus))
-        console.log('6. hidden KV 포함?:', (meta?.hidden || []).map(x => String(x).toLowerCase()).includes(TARGET))
-        console.log('   대상 SKU 레코드 전체:', hit)
-      }
-      // ─────── 임시 진단 끝 ───────
     }).catch(err => { console.error('[ProcessPage] styles', err); setStyleErr(err.message || String(err)) })
       .finally(() => setStyleLoading(false))
   }, [])
@@ -1554,21 +1538,6 @@ export default function ProcessPage({ G }) {
     return () => window.removeEventListener('iku:refresh', h)
   }, [loadMo, loadProc, loadStyles, loadMoFabric, loadDeletions])
 
-  // One-shot diagnostic: report which fabric fields (if any) are absent from the
-  // MO data so a missing field is visible in the console (item ①).
-  useEffect(() => {
-    if (fabricDiagRef.current || !moList.length) return
-    fabricDiagRef.current = true
-    const FIELDS = ['Material_Type', 'Fabric_Weight', 'blended']
-    const missing = FIELDS.filter(f => !moList.some(m => fieldStr(m?.[f])))
-    if (missing.length) {
-      console.warn('[ProcessPage] 원단 정보 필드 없음/빈값 · fabric fields missing or empty in MO data:', missing,
-        '— 표시는 가능한 필드만 노출하고 나머지 작업은 계속합니다.')
-    } else {
-      console.log('[ProcessPage] 원단 정보 필드 확인 · fabric fields present:', FIELDS)
-    }
-  }, [moList])
-
   const deletedMo = useMemo(() => new Set(deletions.mo || []), [deletions.mo])
   const deletedStyle = useMemo(() => new Set(deletions.style || []), [deletions.style])
   const searching = search.trim().length > 0
@@ -1577,19 +1546,6 @@ export default function ProcessPage({ G }) {
   const moSkuSet = useMemo(() => {
     const s = new Set()
     moList.forEach(m => { const sku = getMoSku(m); if (sku && sku !== '—') s.add(sku.trim().toLowerCase()) })
-
-    // ─────── 임시 진단 (원인 확인 후 제거) ───────
-    const TARGET = '26-06-fw26-w-s-rslz-l9-038'
-    console.log('═══ [moSkuSet 진단] ═══')
-    console.log('7. moList 개수:', moList.length)
-    console.log('8. moSkuSet 크기:', s.size)
-    console.log('9. moSkuSet에 대상 SKU 포함?:', s.has(TARGET))
-    if (s.has(TARGET)) {
-      const matches = moList.filter(m => { const sku = getMoSku(m); return sku && sku.trim().toLowerCase() === TARGET })
-      console.log('10. 매칭된 MO 레코드(들):', matches)
-    }
-    // ─────── 진단 끝 ───────
-
     return s
   }, [moList])
 
@@ -1649,20 +1605,18 @@ export default function ProcessPage({ G }) {
   }, [baseList, category, subFactory, factorySel, month, search, procFilterFn, proc.items])
 
   // ── 미오더(Style) 파생값 ──
-  const styleHiddenSet = useMemo(() => new Set(styleMeta.hidden || []), [styleMeta.hidden])
   // ① 오더완료 MO 의 SKU 와 일치하는 Style 은 미오더에서 제외 (대소문자/공백 무시)
-  // ③ 삭제된 Style(deleted_style) 도 제외 · 기존 오더전환(style_hidden)도 유지
+  // ③ 삭제된 Style(deleted_style) 도 제외
   const unorderedStyles = useMemo(
     () => styleList.filter(s => {
       if (styleIsOrdered(s)) return false
       const sku = styleKey(s)
-      if (styleHiddenSet.has(sku)) return false
       if (deletedStyle.has(sku)) return false
       const skuNorm = pick(s, SF.sku).trim().toLowerCase()
       if (skuNorm && moSkuSet.has(skuNorm)) return false   // 오더완료에 있는 SKU 제외
       return true
     }),
-    [styleList, styleHiddenSet, deletedStyle, moSkuSet]
+    [styleList, deletedStyle, moSkuSet]
   )
   // 월별/시즌 탭 (Style 데이터에서 동적 추출 + 건수)
   const unorderedTabs = useMemo(() => {
@@ -1895,13 +1849,6 @@ export default function ProcessPage({ G }) {
       setStyleSaving(false); showToast('저장 실패 · 保存失败, 다시 시도해주세요', 'bad'); return false
     }
   }, [styleDrafts, styleMeta, showToast])
-  const onConvertStyle = useCallback((sku) => {
-    setStyleMeta(prev => ({ ...prev, hidden: [...new Set([...(prev.hidden || []), sku])] }))
-    hideStyle(sku)
-      .then(r => showToast(r?.ok ? '오더 전환됨 · 已转为下单' : '실패 · 失败', r?.ok ? 'ok' : 'bad'))
-      .catch(() => showToast('실패 · 失败', 'bad'))
-  }, [showToast])
-
   // 미오더 프린트 — 오더완료와 동일한 A4 카드 레이아웃으로 출력
   const doStylePrint = useCallback(() => {
     if (!visibleStyles.length) { showToast('표시할 스타일이 없습니다 · 无款式', 'bad'); return }
