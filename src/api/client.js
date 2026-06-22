@@ -34,6 +34,30 @@ export async function fetchStyleList({ cursor = '', maxRecords = 50 } = {}) {
   return apiFetch(`/api/style-list?${qs}`)
 }
 
+// All_Styles 전체 로딩 — cursor 페이지네이션을 끝까지 반복해 모든 레코드를 모은다.
+// 응답 구조는 style-list.js 기준: 데이터=result.data, 다음 커서=result.record_cursor.
+// (StylesPage 의 loadMore 와 동일한 필드명/패턴)
+export async function fetchAllStyles() {
+  let all = []
+  let cursor = ''
+  let iterations = 0
+  const MAX_ITER = 20  // 안전장치 (200 × 20 = 최대 4000개)
+
+  do {
+    const result = await fetchStyleList({ cursor, maxRecords: 200 })
+    const items = result?.data || result?.records || result?.result || []
+    all = all.concat(items)
+    cursor = result?.record_cursor || ''
+    iterations++
+    if (iterations >= MAX_ITER) {
+      console.warn('fetchAllStyles: MAX_ITER 도달 · 達到最大迭代次数')
+      break
+    }
+  } while (cursor)
+
+  return all
+}
+
 // ── Style 미오더 메타 (오더 예정 공장 / 비고 / 숨김) — 비밀번호 불필요 ──
 export async function fetchStyleMeta() {
   return apiFetch('/api/style-meta')

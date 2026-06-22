@@ -7,7 +7,7 @@ import {
 import { fetchMoList } from '../api/client'
 import {
   fetchProcessData, verifyProcessPassword, saveProcessItem,
-  fetchStyleList, fetchStyleMeta, saveStyleFactory, saveStyleNote, saveStylePrice,
+  fetchAllStyles, fetchStyleMeta, saveStyleFactory, saveStyleNote, saveStylePrice,
   saveStyleSampleAlert, saveStyleOrderAlert, hideStyle,
   fetchMoFabric, saveMoFabric,
   fetchDeletions, deleteMo, deleteStyle,
@@ -1523,10 +1523,10 @@ export default function ProcessPage({ G }) {
   const loadStyles = useCallback(() => {
     setStyleLoading(true); setStyleErr(null)
     Promise.all([
-      fetchStyleList({ maxRecords: 200 }),
+      fetchAllStyles(),
       fetchStyleMeta().catch(() => ({ factory: {}, note: {}, hidden: [], price: {}, sample_alert: {}, order_alert: {}, progress: {}, memo: {} })),
-    ]).then(([list, meta]) => {
-      setStyleList(list?.data || list?.records || list?.result || [])
+    ]).then(([styles, meta]) => {
+      setStyleList(Array.isArray(styles) ? styles : [])
       setStyleMeta({ factory: meta?.factory || {}, note: meta?.note || {}, hidden: meta?.hidden || [], price: meta?.price || {}, sample_alert: meta?.sample_alert || {}, order_alert: meta?.order_alert || {}, progress: meta?.progress || {}, memo: meta?.memo || {} })
     }).catch(err => { console.error('[ProcessPage] styles', err); setStyleErr(err.message || String(err)) })
       .finally(() => setStyleLoading(false))

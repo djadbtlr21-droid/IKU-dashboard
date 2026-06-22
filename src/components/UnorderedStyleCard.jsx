@@ -460,18 +460,18 @@ export default function UnorderedStyleCard({
                 }}
               />
             </>
-          ) : savedMemoText ? (
+          ) : (
             <>
               <div style={bigLabelStyle}>현황 메모 状况备注</div>
               <div style={{
-                marginTop: 3, fontSize: 11, color: G.tx, textAlign: 'center',
+                marginTop: 3, fontSize: 11, color: savedMemoText ? G.tx : '#9CA3AF', textAlign: 'center',
                 display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
                 overflow: 'hidden', lineHeight: 1.4,
               }}>
-                {savedMemoText}
+                {savedMemoText || '-'}
               </div>
             </>
-          ) : null}
+          )}
         </div>
 
         {/* ── 예상단가 버튼 ── */}
